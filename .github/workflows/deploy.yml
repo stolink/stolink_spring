@@ -59,7 +59,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_S3FULL_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_SSMFULL_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
       - name: Deploy to EC2 via SSM
