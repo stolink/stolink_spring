@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
+import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -25,8 +26,8 @@ public class RabbitMQProducerService {
         log.info("Analysis task sent to queue: {}", task.getJobId());
     }
 
-    public void sendImageGenerationTask(Object task) {
+    public void sendImageGenerationTask(ImageGenerationTaskDTO task) {
         rabbitTemplate.convertAndSend(imageQueue, task);
-        log.info("Image generation task sent to queue");
+        log.info("Image generation task sent to queue for character: {}", task.getCharacterName());
     }
 }
