@@ -1,19 +1,34 @@
 package com.stolink.backend.global.common.dto;
 
-import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import org.springframework.http.HttpStatus;
 
 @Getter
-@AllArgsConstructor
 public class ApiResponse<T> {
-    private boolean success;
-    private T data;
 
-    public static <T> ApiResponse<T> success(T data) {
-        return new ApiResponse<>(true, data);
+    private final int code;
+    private final HttpStatus status;
+    private final String message;
+    private final T data;
+
+    @Builder
+    private ApiResponse(HttpStatus status, String message, T data) {
+        this.code = status.value();
+        this.status = status;
+        this.message = message;
+        this.data = data;
     }
 
-    public static ApiResponse<Void> success() {
-        return new ApiResponse<>(true, null);
+    public static <T> ApiResponse<T> ok(T data) {
+        return new ApiResponse<>(HttpStatus.OK, "OK", data);
+    }
+
+    public static <T> ApiResponse<T> created(T data) {
+        return new ApiResponse<>(HttpStatus.CREATED, "Created", data);
+    }
+
+    public static ApiResponse<Void> ok() {
+        return new ApiResponse<>(HttpStatus.OK, "OK", null);
     }
 }

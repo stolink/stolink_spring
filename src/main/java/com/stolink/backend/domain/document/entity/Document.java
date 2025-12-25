@@ -10,9 +10,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "documents")
 @Getter
-@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor
 public class Document extends BaseEntity {
 
     @Id
@@ -35,20 +33,16 @@ public class Document extends BaseEntity {
     private String title;
 
     @Column(columnDefinition = "TEXT")
-    @Builder.Default
     private String content = "";
 
     @Column(columnDefinition = "TEXT")
-    @Builder.Default
     private String synopsis = "";
 
     @Column(name = "\"order\"", nullable = false)
-    @Builder.Default
     private Integer order = 0;
 
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    @Builder.Default
     private DocumentStatus status = DocumentStatus.DRAFT;
 
     @Column(length = 50)
@@ -58,13 +52,11 @@ public class Document extends BaseEntity {
     private String labelColor;
 
     @Column(nullable = false)
-    @Builder.Default
     private Integer wordCount = 0;
 
     private Integer targetWordCount;
 
     @Column(nullable = false)
-    @Builder.Default
     private Boolean includeInCompile = true;
 
     @Column(columnDefinition = "text")
@@ -72,6 +64,26 @@ public class Document extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Builder
+    public Document(UUID id, Project project, Document parent, DocumentType type, String title, String content, String synopsis, Integer order, DocumentStatus status, String label, String labelColor, Integer wordCount, Integer targetWordCount, Boolean includeInCompile, String keywords, String notes) {
+        this.id = id;
+        this.project = project;
+        this.parent = parent;
+        this.type = type;
+        this.title = title;
+        this.content = content;
+        this.synopsis = synopsis;
+        this.order = order;
+        this.status = status;
+        this.label = label;
+        this.labelColor = labelColor;
+        this.wordCount = wordCount;
+        this.targetWordCount = targetWordCount;
+        this.includeInCompile = includeInCompile;
+        this.keywords = keywords;
+        this.notes = notes;
+    }
 
     public void updateContent(String content) {
         this.content = content;

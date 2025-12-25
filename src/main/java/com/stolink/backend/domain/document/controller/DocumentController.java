@@ -25,7 +25,7 @@ public class DocumentController {
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID pid) {
         List<DocumentTreeResponse> tree = documentService.getDocumentTree(userId, pid);
-        return ApiResponse.success(tree);
+        return ApiResponse.ok(tree);
     }
 
     @PostMapping("/projects/{pid}/documents")
@@ -34,7 +34,7 @@ public class DocumentController {
             @RequestHeader("X-User-Id") UUID userId,
             @RequestBody CreateDocumentRequest request) {
         DocumentTreeResponse document = documentService.createDocument(userId, request);
-        return ApiResponse.success(document);
+        return ApiResponse.created(document);
     }
 
     @GetMapping("/documents/{id}")
@@ -42,7 +42,7 @@ public class DocumentController {
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID id) {
         Document document = documentService.getDocument(userId, id);
-        return ApiResponse.success(document);
+        return ApiResponse.ok(document);
     }
 
     @PatchMapping("/documents/{id}/content")
@@ -53,7 +53,7 @@ public class DocumentController {
         String content = body.get("content");
         Document document = documentService.updateDocumentContent(userId, id, content);
 
-        return ApiResponse.success(Map.of(
+        return ApiResponse.ok(Map.of(
                 "id", document.getId(),
                 "wordCount", document.getWordCount(),
                 "updatedAt", document.getUpdatedAt()));

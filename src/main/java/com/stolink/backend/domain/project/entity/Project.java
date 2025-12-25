@@ -14,7 +14,6 @@ import java.util.UUID;
 @Entity
 @Table(name = "projects")
 @Getter
-@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 public class Project extends BaseEntity {
@@ -42,7 +41,6 @@ public class Project extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @Builder.Default
     private ProjectStatus status = ProjectStatus.WRITING;
 
     @Column(length = 100)
@@ -50,8 +48,19 @@ public class Project extends BaseEntity {
 
     @Type(JsonType.class)
     @Column(columnDefinition = "jsonb")
-    @Builder.Default
     private Map<String, Object> extras = new HashMap<>();
+
+    @Builder
+    public Project(String author, ProjectStatus status, String coverImage, String description, Genre genre, String title, User user, UUID id) {
+        this.author = author;
+        this.status = status;
+        this.coverImage = coverImage;
+        this.description = description;
+        this.genre = genre;
+        this.title = title;
+        this.user = user;
+        this.id = id;
+    }
 
     public void update(String title, Genre genre, String description, String author, ProjectStatus status) {
         if (title != null)
