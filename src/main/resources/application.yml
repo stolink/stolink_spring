@@ -46,6 +46,16 @@ server:
     include-message: always
     include-binding-errors: always
 
+# Actuator Configuration (for Docker healthcheck)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
 # Application Configuration
 app:
   storage:
