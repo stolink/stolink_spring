@@ -23,7 +23,7 @@ public class CharacterController {
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID pid) {
         List<Character> characters = characterService.getCharacters(userId, pid);
-        return ApiResponse.success(characters);
+        return ApiResponse.ok(characters);
     }
 
     @GetMapping("/projects/{pid}/relationships")
@@ -31,7 +31,7 @@ public class CharacterController {
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID pid) {
         List<Character> characters = characterService.getCharactersWithRelationships(userId, pid);
-        return ApiResponse.success(characters);
+        return ApiResponse.ok(characters);
     }
 
     @PostMapping("/projects/{pid}/characters")
@@ -41,7 +41,7 @@ public class CharacterController {
             @PathVariable UUID pid,
             @RequestBody Character character) {
         Character created = characterService.createCharacter(userId, pid, character);
-        return ApiResponse.success(created);
+        return ApiResponse.created(created);
     }
 
     @PostMapping("/relationships")
@@ -56,7 +56,7 @@ public class CharacterController {
                 (String) body.get("type"),
                 (Integer) body.get("strength"),
                 (String) body.get("description"));
-        return ApiResponse.success();
+        return ApiResponse.created(null);
     }
 
     @DeleteMapping("/characters/{id}")

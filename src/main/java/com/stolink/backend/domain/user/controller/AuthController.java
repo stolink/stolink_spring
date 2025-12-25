@@ -22,19 +22,19 @@ public class AuthController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UserResponse> register(@RequestBody RegisterRequest request) {
         UserResponse user = authService.register(request);
-        return ApiResponse.success(user);
+        return ApiResponse.created(user);
     }
 
     @PostMapping("/login")
     public ApiResponse<UserResponse> login(@RequestBody LoginRequest request) {
         UserResponse user = authService.login(request);
-        return ApiResponse.success(user);
+        return ApiResponse.ok(user);
     }
 
     @GetMapping("/me")
     public ApiResponse<UserResponse> getMe(@RequestHeader("X-User-Id") UUID userId) {
         UserResponse user = authService.getUser(userId);
-        return ApiResponse.success(user);
+        return ApiResponse.ok(user);
     }
 
     @PatchMapping("/me")
@@ -43,6 +43,6 @@ public class AuthController {
             @RequestParam(required = false) String nickname,
             @RequestParam(required = false) String avatarUrl) {
         UserResponse user = authService.updateUser(userId, nickname, avatarUrl);
-        return ApiResponse.success(user);
+        return ApiResponse.ok(user);
     }
 }

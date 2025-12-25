@@ -16,7 +16,9 @@ curl -X POST http://localhost:8080/api/auth/register \
 
 # 응답 예시:
 # {
-#   "success": true,
+#   "code": 201,
+#   "status": "CREATED",
+#   "message": "Created",
 #   "data": {
 #     "id": "123e4567-e89b-12d3-a456-426614174000",
 #     "email": "writer@example.com",
@@ -149,7 +151,9 @@ curl -X POST "http://localhost:8080/api/ai/analyze" \
 
 # 응답:
 # {
-#   "success": true,
+#   "code": 202,
+#   "status": "ACCEPTED",
+#   "message": "Analysis started",
 #   "data": {
 #     "jobId": "abc-123",
 #     "status": "processing"

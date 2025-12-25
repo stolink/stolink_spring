@@ -43,7 +43,7 @@ public class ProjectController {
                 "total", projects.getTotalElements(),
                 "totalPages", projects.getTotalPages()));
 
-        return ApiResponse.success(response);
+        return ApiResponse.ok(response);
     }
 
     @PostMapping
@@ -52,7 +52,7 @@ public class ProjectController {
             @RequestHeader("X-User-Id") UUID userId,
             @RequestBody CreateProjectRequest request) {
         ProjectResponse project = projectService.createProject(userId, request);
-        return ApiResponse.success(project);
+        return ApiResponse.created(project);
     }
 
     @GetMapping("/{id}")
@@ -60,7 +60,7 @@ public class ProjectController {
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID id) {
         ProjectResponse project = projectService.getProject(userId, id);
-        return ApiResponse.success(project);
+        return ApiResponse.ok(project);
     }
 
     @PatchMapping("/{id}")
@@ -69,7 +69,7 @@ public class ProjectController {
             @PathVariable UUID id,
             @RequestBody CreateProjectRequest request) {
         ProjectResponse project = projectService.updateProject(userId, id, request);
-        return ApiResponse.success(project);
+        return ApiResponse.ok(project);
     }
 
     @DeleteMapping("/{id}")

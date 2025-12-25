@@ -49,9 +49,13 @@ public class AIController {
 
         producerService.sendAnalysisTask(task);
 
-        return ApiResponse.success(Map.of(
-                "jobId", jobId,
-                "status", "processing"));
+        return ApiResponse.<Map<String, String>>builder()
+                .status(HttpStatus.ACCEPTED)
+                .message("Analysis started")
+                .data(Map.of(
+                        "jobId", jobId,
+                        "status", "processing"))
+                .build();
     }
 
     /**
@@ -60,7 +64,7 @@ public class AIController {
     @GetMapping("/ai/jobs/{jobId}")
     public ApiResponse<Map<String, String>> getJobStatus(@PathVariable String jobId) {
         // TODO: Query job status from database
-        return ApiResponse.success(Map.of(
+        return ApiResponse.ok(Map.of(
                 "jobId", jobId,
                 "status", "processing"));
     }
@@ -72,7 +76,7 @@ public class AIController {
     public ApiResponse<Void> handleAnalysisCallback(@RequestBody AnalysisCallbackDTO callback) {
         log.info("Received analysis callback for job: {}", callback.getJobId());
         callbackService.handleAnalysisCallback(callback);
-        return ApiResponse.success();
+        return ApiResponse.ok();
     }
 
     /**
@@ -83,6 +87,6 @@ public class AIController {
         log.info("Received image callback for job: {}, character: {}",
                 callback.getJobId(), callback.getCharacterId());
         callbackService.handleImageCallback(callback);
-        return ApiResponse.success();
+        return ApiResponse.ok();
     }
 }

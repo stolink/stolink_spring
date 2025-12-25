@@ -1,5 +1,6 @@
 package com.stolink.backend.global.common.exception;
 
+import com.stolink.backend.global.common.dto.ApiResponse;
 import com.stolink.backend.global.common.dto.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -16,15 +17,18 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleResourceNotFound(ResourceNotFoundException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
         log.error("Resource not found: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
-                .body(ErrorResponse.of("RESOURCE_NOT_FOUND", ex.getMessage()));
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.NOT_FOUND)
+                        .message(ex.getMessage())
+                        .build());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
@@ -34,22 +38,31 @@ public class GlobalExceptionHandler {
         log.error("Validation error: {}", message);
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("VALIDATION_ERROR", message));
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.BAD_REQUEST)
+                        .message(message)
+                        .build());
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
         log.error("Illegal argument: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(ErrorResponse.of("INVALID_REQUEST", ex.getMessage()));
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.BAD_REQUEST)
+                        .message(ex.getMessage())
+                        .build());
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+    public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         log.error("Internal server error", ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ErrorResponse.of("INTERNAL_ERROR", "서버 내부 오류가 발생했습니다."));
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .message("서버 내부 오류가 발생했습니다.")
+                        .build());
     }
 }
