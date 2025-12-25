@@ -1,6 +1,45 @@
 version: '3.8'
 
 services:
+  # Spring Boot Application
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stolink-backend
+    environment:
+      # PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/stolink
+      SPRING_DATASOURCE_USERNAME: stolink
+      SPRING_DATASOURCE_PASSWORD: stolink123
+      # Neo4j
+      SPRING_NEO4J_URI: bolt://neo4j:7687
+      SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
+      SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
+      # RabbitMQ
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      # AI Callback URL (update for fastapi service if needed)
+      APP_AI_CALLBACK_BASE_URL: http://backend:8080/api/internal/ai
+      # Storage path
+      APP_STORAGE_BASE_PATH: /app/storage/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - backend_storage:/app/storage/uploads
+    networks:
+      - stolink-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
   # PostgreSQL
   postgres:
     image: postgres:16-alpine
@@ -15,6 +54,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - stolink-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U stolink -d stolink" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   # Neo4j
   neo4j:
@@ -32,6 +77,12 @@ services:
       - neo4j_logs:/logs
     networks:
       - stolink-network
+    healthcheck:
+      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:7474" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   # RabbitMQ
   rabbitmq:
@@ -47,12 +98,19 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - stolink-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   neo4j_data:
   neo4j_logs:
   rabbitmq_data:
+  backend_storage:
 
 
 networks:

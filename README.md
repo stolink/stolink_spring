@@ -50,18 +50,40 @@ AI 기반 작가용 스토리 관리 플랫폼의 Spring Boot 백엔드 서버�
 - Java 21+
 - Docker & Docker Compose
 
-### 1. 데이터베이스 시작
+### 1. Docker로 전체 실행 (권장)
+
+모든 서비스(백엔드 + 데이터베이스)를 한 번에 실행합니다:
 
 ```bash
-docker-compose up -d
+docker-compose up -d --build
 ```
 
 다음 서비스가 시작됩니다:
-- PostgreSQL: `localhost:5432`
-- Neo4j: `localhost:7474` (브라우저), `localhost:7687` (Bolt)
-- RabbitMQ: `localhost:15672` (Management UI)
+- **Spring Boot Backend**: `localhost:8080`
+- **PostgreSQL**: `localhost:5432`
+- **Neo4j**: `localhost:7474` (브라우저), `localhost:7687` (Bolt)
+- **RabbitMQ**: `localhost:15672` (Management UI)
 
-### 2. 애플리케이션 실행
+서비스 상태 확인:
+```bash
+docker-compose ps
+docker-compose logs -f backend  # 백엔드 로그 확인
+```
+
+서비스 중지:
+```bash
+docker-compose down        # 컨테이너만 중지
+docker-compose down -v     # 볼륨까지 삭제 (데이터 초기화)
+```
+
+### 2. 로컬 개발 (데이터베이스만 Docker)
+
+데이터베이스 서비스만 Docker로 실행하고 백엔드는 로컬에서 실행:
+
+```bash
+# 데이터베이스만 시작
+docker-compose up -d postgres neo4j rabbitmq
+```
 
 #### Gradle Wrapper 사용 (권장)
 
@@ -77,8 +99,6 @@ Linux/Mac:
 
 #### IDE에서 실행
 `BackendApplication.java`의 `main` 메서드를 실행합니다.
-
-### 3. API 테스트
 
 서버가 `http://localhost:8080`에서 실행됩니다.
 
