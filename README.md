@@ -4,9 +4,9 @@ AI 기반 작가용 스토리 관리 플랫폼의 Spring Boot 백엔드 서버�
 
 ## 기술 스택
 
-- **Spring Boot**: 4.0.1
+- **Spring Boot**: 3.4.1
 - **Java**: 21 (AWS Amazon Corretto)
-- **Database**: PostgreSQL 16 (정형 데이터), Neo4j 5.15 (그래프 관계)
+- **Database**: PostgreSQL 16.11 (정형 데이터), Neo4j 5.26 (그래프 관계)
 - **Message Queue**: RabbitMQ 3.13
 - **Storage**: 로컬 파일 시스템 (개발), AWS S3 (프로덕션)
 

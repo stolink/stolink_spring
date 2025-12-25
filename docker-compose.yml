@@ -42,7 +42,7 @@ services:
 
   # PostgreSQL
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.11-alpine
     container_name: stolink-postgres
     environment:
       POSTGRES_DB: stolink
@@ -63,7 +63,7 @@ services:
 
   # Neo4j
   neo4j:
-    image: neo4j:5.15-community
+    image: neo4j:5.26-community
     container_name: stolink-neo4j
     environment:
       NEO4J_AUTH: neo4j/stolink123
