@@ -1,0 +1,65 @@
+spring:
+  application:
+    name: sto-link-backend
+
+  # PostgreSQL Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/stolink
+    username: stolink
+    driver-class-name: org.postgresql.Driver
+    password: stolink123
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Neo4j Configuration
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: stolink123
+
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+  # Multipart file upload
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# Server Configuration
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Application Configuration
+app:
+  storage:
+    base-path: ./storage/uploads
+  rabbitmq:
+    queues:
+      analysis: stolink.analysis.queue
+      image: stolink.image.queue
+  ai:
+    callback-base-url: http://localhost:8080/api/internal/ai
+
+# Logging
+logging:
+  level:
+    com.stolink: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG

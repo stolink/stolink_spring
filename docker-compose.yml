@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: stolink-postgres
+    environment:
+      POSTGRES_DB: stolink
+      POSTGRES_USER: stolink
+      POSTGRES_PASSWORD: stolink123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - stolink-network
+
+  # Neo4j
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: stolink-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/stolink123
+      NEO4J_dbms_memory_pagecache_size: 512M
+      NEO4J_dbms_memory_heap_max__size: 512M
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - stolink-network
+
+  # RabbitMQ
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: stolink-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - stolink-network
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  rabbitmq_data:
+
+
+networks:
+  stolink-network:
+    driver: bridge
