@@ -106,7 +106,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:tag,Values=stolink-spring" \
             --parameters 'commands=[
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project || mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project && if [ -d .git ]; then git pull; else git clone https://github.com/stolink/stolink_spring.git .; fi'\''",
+              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project || mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout deploytest && git pull origin deploytest; else git clone -b deploytest https://github.com/stolink/stolink_spring.git .; fi'\''",
               "cd /home/ubuntu/stolink-project && sudo tee .env > /dev/null << EOF",
               "POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}",
               "POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}",

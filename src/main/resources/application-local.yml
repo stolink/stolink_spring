@@ -4,7 +4,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/stolink
     username: stolink
-    password: stolink123
+    password: stolink1234
     driver-class-name: org.postgresql.Driver
 
   # Neo4j Configuration
@@ -12,7 +12,7 @@ spring:
     uri: bolt://localhost:7687
     authentication:
       username: neo4j
-      password: stolink123
+      password: stolink1234
 
   # RabbitMQ Configuration
   rabbitmq:
