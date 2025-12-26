@@ -4,7 +4,7 @@ spring:
 
   # PostgreSQL Configuration
   datasource:
-    url: ${POSTGRESQL_URL:jdbc:postgresql://localhost:5432/stolink}
+    url: jdbc:postgresql://${POSTGRESQL_HOST:localhost}:${POSTGRESQL_PORT:5432}/${POSTGRESQL_DATABASE:stolink}
     username: ${POSTGRESQL_USERNAME:stolink}
     password: ${POSTGRESQL_PASSWORD:stolink123}
     driver-class-name: org.postgresql.Driver

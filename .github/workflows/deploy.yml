@@ -108,10 +108,11 @@ jobs:
             --parameters 'commands=[
               "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project || mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git reset --hard origin/deploytest; else git clone -b deploytest https://github.com/stolink/stolink_spring.git .; fi'\''",
               "cd /home/ubuntu/stolink-project && sudo tee .env > /dev/null << EOF",
-              "POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}",
+              "POSTGRESQL_HOST=${{ secrets.POSTGRESQL_HOST }}",
+              "POSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT }}",
+              "POSTGRESQL_DATABASE=${{ vars.POSTGRESQL_DATABASE }}",
               "POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}",
               "POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}",
-              "POSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT }}",
               "NEO4J_URI=${{ secrets.NEO4J_URI }}",
               "NEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}",
               "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}",
