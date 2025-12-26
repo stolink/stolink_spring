@@ -2,6 +2,9 @@ package com.stolink.backend.domain.document.service;
 
 import com.stolink.backend.domain.document.dto.CreateDocumentRequest;
 import com.stolink.backend.domain.document.dto.DocumentTreeResponse;
+import com.stolink.backend.domain.document.dto.UpdateDocumentRequest;
+import com.stolink.backend.domain.document.dto.ReorderDocumentsRequest;
+import com.stolink.backend.domain.document.dto.BulkUpdateRequest;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.project.entity.Project;
@@ -59,9 +62,13 @@ public class DocumentService {
                 .parent(parent)
                 .type(type)
                 .title(request.getTitle())
+                .content("")
                 .synopsis(request.getSynopsis() != null ? request.getSynopsis() : "")
-                .targetWordCount(request.getTargetWordCount())
                 .order(getNextOrder(project, parent))
+                .status(Document.DocumentStatus.DRAFT)
+                .wordCount(0)
+                .includeInCompile(true)
+                .targetWordCount(request.getTargetWordCount())
                 .build();
 
         document = documentRepository.save(document);
@@ -92,10 +99,68 @@ public class DocumentService {
     }
 
     @Transactional
+    public Document updateDocument(UUID userId, UUID documentId, UpdateDocumentRequest request) {
+        Document document = getDocument(userId, documentId);
+
+        if (request.getContent() != null) {
+            document.updateContent(request.getContent());
+        }
+
+        if (request.getKeywords() != null) {
+            String keywords = String.join(",", request.getKeywords());
+            document.updateKeywords(keywords);
+        }
+
+        document.update(
+            request.getTitle(),
+            request.getSynopsis(),
+            request.getOrder(),
+            request.getStatus(),
+            request.getTargetWordCount(),
+            request.getIncludeInCompile(),
+            request.getNotes()
+        );
+
+        document.updateLabel(request.getLabel(), request.getLabelColor());
+
+        log.info("Document updated: {}", documentId);
+        return document;
+    }
+
+    @Transactional
     public void deleteDocument(UUID userId, UUID documentId) {
         Document document = getDocument(userId, documentId);
         documentRepository.delete(document);
         log.info("Document deleted: {}", documentId);
+    }
+
+    @Transactional
+    public void reorderDocuments(UUID userId, ReorderDocumentsRequest request) {
+        User user = getUserOrThrow(userId);
+
+        for (int i = 0; i < request.getOrderedIds().size(); i++) {
+            UUID documentId = request.getOrderedIds().get(i);
+            Document document = getDocument(userId, documentId);
+
+            // Verify the document belongs to the same parent
+            UUID currentParentId = document.getParent() != null ? document.getParent().getId() : null;
+            if ((request.getParentId() == null && currentParentId != null) ||
+                (request.getParentId() != null && !request.getParentId().equals(currentParentId))) {
+                throw new IllegalArgumentException("Document " + documentId + " does not belong to parent " + request.getParentId());
+            }
+
+            document.update(null, null, i, null, null, null, null);
+        }
+
+        log.info("Reordered {} documents under parent {}", request.getOrderedIds().size(), request.getParentId());
+    }
+
+    @Transactional
+    public void bulkUpdateDocuments(UUID userId, BulkUpdateRequest request) {
+        for (BulkUpdateRequest.DocumentUpdate update : request.getUpdates()) {
+            updateDocument(userId, update.getId(), update.getChanges());
+        }
+        log.info("Bulk updated {} documents", request.getUpdates().size());
     }
 
     private List<DocumentTreeResponse> buildTree(List<Document> documents) {
