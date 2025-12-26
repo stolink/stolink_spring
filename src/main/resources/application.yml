@@ -37,6 +37,9 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+  health:
+    rabbit:
+      enabled: false
 
 # Logging
 logging:
