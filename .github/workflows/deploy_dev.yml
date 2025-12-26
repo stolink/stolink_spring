@@ -135,15 +135,27 @@ jobs:
           echo "Waiting for application to start..."
           sleep 30
 
+          HEALTH_URL="https://${{ vars.CLOUDFRONT_URL_DEV }}/actuator/health"
+          echo "Health check URL: $HEALTH_URL"
+
           for i in {1..5}; do
             echo "Health check attempt $i/5..."
-            if curl -sf --max-time 10 "https://${{ vars.CLOUDFRONT_URL_DEV }}/actuator/health" > /dev/null 2>&1; then
+            HTTP_CODE=$(curl -s -o /tmp/health_response.txt -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>&1)
+            
+            if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Health check passed!"
+              cat /tmp/health_response.txt
               exit 0
             fi
-            echo "Attempt $i failed, retrying in 10 seconds..."
+            
+            echo "❌ Attempt $i failed with HTTP code: $HTTP_CODE"
+            echo "Response body:"
+            cat /tmp/health_response.txt 2>/dev/null || echo "(no response body)"
+            echo ""
+            echo "Retrying in 10 seconds..."
             sleep 10
           done
 
           echo "❌ Health check failed after 5 attempts"
+          echo "Last HTTP code: $HTTP_CODE"
           exit 1
