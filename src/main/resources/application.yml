@@ -4,10 +4,10 @@ spring:
 
   # PostgreSQL Configuration
   datasource:
-    url: jdbc:postgresql://localhost:5432/stolink
-    username: stolink
+    url: ${POSTGRESQL_URL:jdbc:postgresql://localhost:5432/stolink}
+    username: ${POSTGRESQL_USERNAME:stolink}
+    password: ${POSTGRESQL_PASSWORD:stolink123}
     driver-class-name: org.postgresql.Driver
-    password: stolink123
 
   # JPA Configuration
   jpa:
@@ -21,17 +21,17 @@ spring:
 
   # Neo4j Configuration
   neo4j:
-    uri: bolt://localhost:7687
+    uri: ${NEO4J_URI:bolt://localhost:7687}
     authentication:
-      username: neo4j
-      password: stolink123
+      username: ${NEO4J_USERNAME:neo4j}
+      password: ${NEO4J_PASSWORD:stolink123}
 
   # RabbitMQ Configuration
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
 
   # Multipart file upload
   servlet:
