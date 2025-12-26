@@ -108,6 +108,17 @@ public class Document extends BaseEntity {
             this.notes = notes;
     }
 
+    public void updateLabel(String label, String labelColor) {
+        if (label != null)
+            this.label = label;
+        if (labelColor != null)
+            this.labelColor = labelColor;
+    }
+
+    public void updateKeywords(String keywords) {
+        this.keywords = keywords;
+    }
+
     private int calculateWordCount(String text) {
         if (text == null || text.isEmpty()) {
             return 0;

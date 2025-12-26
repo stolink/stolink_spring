@@ -2,6 +2,9 @@ package com.stolink.backend.domain.document.controller;
 
 import com.stolink.backend.domain.document.dto.CreateDocumentRequest;
 import com.stolink.backend.domain.document.dto.DocumentTreeResponse;
+import com.stolink.backend.domain.document.dto.UpdateDocumentRequest;
+import com.stolink.backend.domain.document.dto.ReorderDocumentsRequest;
+import com.stolink.backend.domain.document.dto.BulkUpdateRequest;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.service.DocumentService;
 import com.stolink.backend.global.common.dto.ApiResponse;
@@ -45,6 +48,23 @@ public class DocumentController {
         return ApiResponse.ok(document);
     }
 
+    @GetMapping("/documents/{id}/content")
+    public ApiResponse<Map<String, String>> getContent(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID id) {
+        Document document = documentService.getDocument(userId, id);
+        return ApiResponse.ok(Map.of("content", document.getContent() != null ? document.getContent() : ""));
+    }
+
+    @PatchMapping("/documents/{id}")
+    public ApiResponse<Document> updateDocument(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID id,
+            @RequestBody UpdateDocumentRequest request) {
+        Document document = documentService.updateDocument(userId, id, request);
+        return ApiResponse.ok(document);
+    }
+
     @PatchMapping("/documents/{id}/content")
     public ApiResponse<Map<String, Object>> updateContent(
             @RequestHeader("X-User-Id") UUID userId,
@@ -65,5 +85,21 @@ public class DocumentController {
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID id) {
         documentService.deleteDocument(userId, id);
+    }
+
+    @PostMapping("/documents/reorder")
+    public ApiResponse<Void> reorderDocuments(
+            @RequestHeader("X-User-Id") UUID userId,
+            @RequestBody ReorderDocumentsRequest request) {
+        documentService.reorderDocuments(userId, request);
+        return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/documents/bulk-update")
+    public ApiResponse<Void> bulkUpdateDocuments(
+            @RequestHeader("X-User-Id") UUID userId,
+            @RequestBody BulkUpdateRequest request) {
+        documentService.bulkUpdateDocuments(userId, request);
+        return ApiResponse.ok(null);
     }
 }
