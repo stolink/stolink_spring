@@ -137,7 +137,7 @@ jobs:
 
           for i in {1..5}; do
             echo "Health check attempt $i/5..."
-            if curl -sf --max-time 10 "${{ vars.CLOUDFRONT_URL_DEV }}/health" > /dev/null 2>&1; then
+            if curl -sf --max-time 10 "${{ vars.CLOUDFRONT_URL_DEV }}/actuator/health" > /dev/null 2>&1; then
               echo "✅ Health check passed!"
               exit 0
             fi
