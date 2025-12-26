@@ -1,8 +1,8 @@
-name: Deploy Production
+name: Deploy Development
 
 on:
   push:
-    branches: ["deploytest", "main"]
+    branches: ["develop"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -74,7 +74,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/stolink/stolink-spring
+          images: ghcr.io/stolink/stolink-spring-dev
           tags: |
             type=raw,value=latest
             type=sha,prefix=
@@ -104,10 +104,10 @@ jobs:
         run: |
           aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:tag,Values=stolink-spring" \
+            --targets "Key=tag:tag,Values=stolink-spring-dev" \
             --parameters 'commands=[
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project || mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git reset --hard origin/deploytest; else git clone -b deploytest https://github.com/stolink/stolink_spring.git .; fi'\''",
-              "cd /home/ubuntu/stolink-project && sudo tee .env > /dev/null << EOF",
+              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project-dev || mkdir -p /home/ubuntu/stolink-project-dev && cd /home/ubuntu/stolink-project-dev && if [ -d .git ]; then git pull origin develop; else git clone -b develop https://github.com/stolink/stolink_spring.git .; fi'\''",
+              "cd /home/ubuntu/stolink-project-dev && sudo tee .env > /dev/null << EOF",
               "POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}",
               "POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}",
               "POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}",
@@ -116,12 +116,12 @@ jobs:
               "NEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}",
               "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}",
               "NEO4J_PORT=${{ vars.NEO4J_PORT }}",
-              "IMAGE_NAME=ghcr.io/stolink/stolink-spring:latest",
+              "IMAGE_NAME=ghcr.io/stolink/stolink-spring-dev:latest",
               "EOF",
               "echo ${{ secrets.GH_PAT }} | sudo docker login ghcr.io -u stolink --password-stdin",
-              "cd /home/ubuntu/stolink-project && sudo docker compose down --remove-orphans",
-              "cd /home/ubuntu/stolink-project && sudo docker compose pull",
-              "cd /home/ubuntu/stolink-project && sudo docker compose up -d",
+              "cd /home/ubuntu/stolink-project-dev && sudo docker compose down --remove-orphans",
+              "cd /home/ubuntu/stolink-project-dev && sudo docker compose pull",
+              "cd /home/ubuntu/stolink-project-dev && sudo docker compose up -d",
               "sudo docker image prune -f"
             ]' \
             --timeout-seconds 300 \
@@ -136,7 +136,7 @@ jobs:
 
           for i in {1..5}; do
             echo "Health check attempt $i/5..."
-            if curl -sf --max-time 10 "${{ vars.CLOUDFRONT_URL }}/health" > /dev/null 2>&1; then
+            if curl -sf --max-time 10 "${{ vars.CLOUDFRONT_URL_DEV }}/health" > /dev/null 2>&1; then
               echo "✅ Health check passed!"
               exit 0
             fi
