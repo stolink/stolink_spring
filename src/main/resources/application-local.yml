@@ -1,0 +1,35 @@
+# Local Development Profile
+spring:
+  # PostgreSQL Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/stolink
+    username: stolink
+    password: stolink123
+    driver-class-name: org.postgresql.Driver
+
+  # Neo4j Configuration
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: stolink123
+
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
+# Application Configuration
+app:
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:5173,http://localhost:5174
+  storage:
+    base-path: ./storage/uploads
+  rabbitmq:
+    queues:
+      analysis: stolink.analysis.queue
+      image: stolink.image.queue
+  ai:
+    callback-base-url: http://localhost:8080/api/internal/ai
