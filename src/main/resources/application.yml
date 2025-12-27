@@ -2,12 +2,8 @@ spring:
   application:
     name: sto-link-backend
 
-  # PostgreSQL Configuration
-  datasource:
-    url: jdbc:postgresql://localhost:5432/stolink
-    username: stolink
-    driver-class-name: org.postgresql.Driver
-    password: stolink123
+  profiles:
+    active: local
 
   # JPA Configuration
   jpa:
@@ -18,20 +14,6 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  # Neo4j Configuration
-  neo4j:
-    uri: bolt://localhost:7687
-    authentication:
-      username: neo4j
-      password: stolink123
-
-  # RabbitMQ Configuration
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
 
   # Multipart file upload
   servlet:
@@ -55,17 +37,9 @@ management:
   endpoint:
     health:
       show-details: when_authorized
-
-# Application Configuration
-app:
-  storage:
-    base-path: ./storage/uploads
-  rabbitmq:
-    queues:
-      analysis: stolink.analysis.queue
-      image: stolink.image.queue
-  ai:
-    callback-base-url: http://localhost:8080/api/internal/ai
+  health:
+    rabbit:
+      enabled: false
 
 # Logging
 logging:
