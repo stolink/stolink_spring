@@ -22,21 +22,13 @@ public class CharacterController {
     public ApiResponse<List<Character>> getCharacters(
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID pid) {
-        List<Character> characters = characterService.getCharacters(userId, pid);
+        List<Character> characters = characterService.getCharactersWithRelationships(userId, pid);
         return ApiResponse.ok(characters);
     }
 
     @GetMapping("/characters")
     public ApiResponse<List<Character>> getAllCharacters() {
         List<Character> characters = characterService.getAllCharacters();
-        return ApiResponse.ok(characters);
-    }
-
-    @GetMapping("/projects/{pid}/relationships")
-    public ApiResponse<List<Character>> getRelationships(
-            @RequestHeader("X-User-Id") UUID userId,
-            @PathVariable UUID pid) {
-        List<Character> characters = characterService.getCharactersWithRelationships(userId, pid);
         return ApiResponse.ok(characters);
     }
 
