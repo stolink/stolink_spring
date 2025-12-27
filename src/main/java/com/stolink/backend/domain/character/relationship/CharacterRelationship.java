@@ -17,6 +17,7 @@ public class CharacterRelationship {
     private Long id;
 
     @TargetNode
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties("relationships")
     private Character target;
 
     private String type; // friendly, hostile, neutral, romantic, family

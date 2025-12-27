@@ -26,6 +26,12 @@ public class CharacterController {
         return ApiResponse.ok(characters);
     }
 
+    @GetMapping("/characters")
+    public ApiResponse<List<Character>> getAllCharacters() {
+        List<Character> characters = characterService.getAllCharacters();
+        return ApiResponse.ok(characters);
+    }
+
     @GetMapping("/projects/{pid}/relationships")
     public ApiResponse<List<Character>> getRelationships(
             @RequestHeader("X-User-Id") UUID userId,
@@ -56,6 +62,13 @@ public class CharacterController {
                 (String) body.get("type"),
                 (Integer) body.get("strength"),
                 (String) body.get("description"));
+        return ApiResponse.created(null);
+    }
+
+    @PostMapping("/characters/seed")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<Void> seedCharacters() {
+        characterService.seedDummyData();
         return ApiResponse.created(null);
     }
 
