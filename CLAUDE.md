@@ -298,8 +298,8 @@ db: 데이터베이스 스키마/마이그레이션 변경
 - Spring Boot 3.4.1 기반 REST API 서버
 - PostgreSQL 16 + Neo4j 5.26 이중 데이터베이스 구조
 - FastAPI AI 서비스와 RabbitMQ 비동기 연동
-- 기술 스택: Java 21, Spring Data JPA, QueryDSL, Hibernate 6.x
-- 핵심 엔티티: User, Project, Document, Character, Foreshadowing
+- 기술 스택: Java 21, Spring Boot 3.4.1, Spring Data JPA, QueryDSL, Hibernate 6.x
+- 핵심 엔티티: User, Project, Document, Character, CharacterRelationship
 
 ### 리뷰 우선순위
 
@@ -316,6 +316,8 @@ db: 데이터베이스 스키마/마이그레이션 변경
 - 데드락 가능성 있는 코드
 - 동시성 이슈 (낙관적/비관적 락 미적용)
 - 메모리 누수 (Stream close 누락, 대용량 데이터 로딩)
+- 캐릭터 관계성 준수: Neo4j 관계 타입은 반드시 `friend`, `lover`, `enemy` 중 하나여야 함
+- CharacterRelationship의 JSON 매핑: `source`, `target`이 ID 문자열로 출력되는지 확인
 - 인증/인가 우회 가능성
 
 ## ⚠️ 경고 (권장 수정)

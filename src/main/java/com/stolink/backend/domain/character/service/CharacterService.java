@@ -43,7 +43,19 @@ public class CharacterService {
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
 
-        return characterRepository.findAllWithRelationshipsByProjectId(project.getId().toString());
+        List<Character> characters = characterRepository
+                .findAllWithRelationshipsByProjectId(project.getId().toString());
+
+        // Populate source ID for each relationship to help frontend graph mapping
+        for (Character character : characters) {
+            if (character.getRelationships() != null) {
+                for (var rel : character.getRelationships()) {
+                    rel.setSource(character.getId());
+                }
+            }
+        }
+
+        return characters;
     }
 
     @Transactional
@@ -77,22 +89,24 @@ public class CharacterService {
     @org.springframework.transaction.annotation.Transactional
     public void seedDummyData() {
         try {
-            log.info("Starting PostgreSQL data seeding...");
+            log.info("Starting PostgreSQL data seeding for target user...");
 
-            // 1. Seed/Fetch User
-            String email = "dummy@stolink.com";
-            com.stolink.backend.domain.user.entity.User user = userRepository.findByEmail(email)
+            // 1. Fetch User (using the ID provided by the user)
+            UUID targetUserId = UUID.fromString("00c4b012-d8e1-4265-8a2e-08be3eba0198");
+            com.stolink.backend.domain.user.entity.User user = userRepository.findById(targetUserId)
                     .orElseGet(() -> userRepository.save(com.stolink.backend.domain.user.entity.User.builder()
-                            .email(email)
+                            .id(targetUserId)
+                            .email("dongha@example.com")
                             .password("password")
-                            .nickname("Victor Hugo")
-                            .avatarUrl("https://api.dicebear.com/7.x/pixel-art/svg?seed=Victor")
+                            .nickname("Dongha")
                             .build()));
             log.info("User ready: {}", user.getId());
 
             // 2. Cleanup existing dummy project by title if it exists
             String projectTitle = "Les Misérables";
-            projectRepository.findByTitleAndUser(projectTitle, user).ifPresent(p -> {
+            UUID targetProjectId = UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+
+            projectRepository.findById(targetProjectId).ifPresent(p -> {
                 log.info("Cleaning up existing '{}' project...", projectTitle);
                 documentRepository.deleteAllByProject(p);
                 projectRepository.delete(p);
@@ -100,9 +114,10 @@ public class CharacterService {
                 entityManager.clear();
             });
 
-            // 3. Create fresh Project with generated ID
+            // 3. Create fresh Project with FIXED ID
             com.stolink.backend.domain.project.entity.Project project = projectRepository
                     .save(com.stolink.backend.domain.project.entity.Project.builder()
+                            .id(targetProjectId)
                             .user(user)
                             .title(projectTitle)
                             .description("A historical novel by Victor Hugo.")
@@ -113,16 +128,14 @@ public class CharacterService {
                                     "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Les_Miserables_1862_Clive_Farrar.jpg/440px-Les_Miserables_1862_Clive_Farrar.jpg")
                             .build());
 
-            UUID realProjectId = project.getId();
-            log.info("Seeded Project ID: {}", realProjectId);
+            log.info("Seeded Project ID: {}", project.getId());
 
             // 4. Seed Documents for this project
             documentRepository.saveAll(java.util.List.of(
                     com.stolink.backend.domain.document.entity.Document.builder()
                             .project(project)
                             .title("Chapter 1: Jean Valjean")
-                            .content(
-                                    "In 1815, M. Charles-François-Bienvenu Myriel was Bishop of Digne. He was an old man of about seventy-five years of age; he had occupied the see of Digne since 1806.")
+                            .content("In 1815, M. Charles-François-Bienvenu Myriel was Bishop of Digne...")
                             .type(com.stolink.backend.domain.document.entity.Document.DocumentType.TEXT)
                             .status(com.stolink.backend.domain.document.entity.Document.DocumentStatus.DRAFT)
                             .order(1)
@@ -132,140 +145,74 @@ public class CharacterService {
                     com.stolink.backend.domain.document.entity.Document.builder()
                             .project(project)
                             .title("Chapter 2: The Fall")
-                            .content("The evening before, Jean Valjean had entered Digne. He was an outcast.")
+                            .content("The evening before, Jean Valjean had entered Digne.")
                             .type(com.stolink.backend.domain.document.entity.Document.DocumentType.TEXT)
                             .status(com.stolink.backend.domain.document.entity.Document.DocumentStatus.DRAFT)
                             .order(2)
                             .wordCount(150)
                             .includeInCompile(true)
-                            .build(),
-                    com.stolink.backend.domain.document.entity.Document.builder()
-                            .project(project)
-                            .title("Notes & Ideas")
-                            .type(com.stolink.backend.domain.document.entity.Document.DocumentType.FOLDER)
-                            .status(com.stolink.backend.domain.document.entity.Document.DocumentStatus.DRAFT)
-                            .order(3)
-                            .wordCount(0)
-                            .includeInCompile(true)
                             .build()));
             log.info("Seeded Documents successfully.");
 
-            // 5. Seed Neo4j Data (Characters) using the generated realProjectId
+            // 5. Seed Neo4j Data (20 Characters)
             try (var session = driver.session()) {
-                log.info("Seeding dummy character data for project: {}...", realProjectId);
+                String pid = targetProjectId.toString();
+                log.info("Seeding 20 characters for project: {}...", pid);
 
-                // Clear existing dummy data for this project to ensure fresh seed
                 session.writeTransaction(tx -> {
-                    tx.run("MATCH (n:Character {projectId: $pid}) DETACH DELETE n",
-                            java.util.Map.of("pid", realProjectId.toString()));
+                    tx.run("MATCH (n:Character {projectId: $pid}) DETACH DELETE n", java.util.Map.of("pid", pid));
                     return null;
                 });
 
-                // Create characters and relationships
                 session.writeTransaction(tx -> {
                     tx.run("""
-                            CREATE (valjean:Character {
-                                id: randomUUID(),
-                                projectId: $pid,
-                                name: 'Jean Valjean',
-                                role: 'protagonist',
-                                imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=JeanValjean',
-                                `extras.age`: 55,
-                                `extras.gender`: 'Male',
-                                `extras.description`: 'A former convict seeking redemption.',
-                                createdAt: datetime(),
-                                updatedAt: datetime()
-                            })
-                            CREATE (javert:Character {
-                                id: randomUUID(),
-                                projectId: $pid,
-                                name: 'Javert',
-                                role: 'antagonist',
-                                imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Javert',
-                                `extras.age`: 50,
-                                `extras.gender`: 'Male',
-                                `extras.description`: 'A police inspector obsessed with justice.',
-                                createdAt: datetime(),
-                                updatedAt: datetime()
-                            })
-                            CREATE (fantine:Character {
-                                id: randomUUID(),
-                                projectId: $pid,
-                                name: 'Fantine',
-                                role: 'supporting',
-                                imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Fantine',
-                                `extras.age`: 26,
-                                `extras.gender`: 'Female',
-                                `extras.description`: 'A struggling mother who sacrifices everything.',
-                                createdAt: datetime(),
-                                updatedAt: datetime()
-                            })
-                            CREATE (cosette:Character {
-                                id: randomUUID(),
-                                projectId: $pid,
-                                name: 'Cosette',
-                                role: 'supporting',
-                                imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Cosette',
-                                `extras.age`: 18,
-                                `extras.gender`: 'Female',
-                                `extras.description`: 'Fantine’s daughter, adopted by Valjean.',
-                                createdAt: datetime(),
-                                updatedAt: datetime()
-                            })
-                            CREATE (marius:Character {
-                                id: randomUUID(),
-                                projectId: $pid,
-                                name: 'Marius Pontmercy',
-                                role: 'sidekick',
-                                imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Marius',
-                                `extras.age`: 20,
-                                `extras.gender`: 'Male',
-                                `extras.description`: 'A young revolutionary who falls in love with Cosette.',
-                                createdAt: datetime(),
-                                updatedAt: datetime()
-                            })
-                            CREATE (thenardier:Character {
-                                id: randomUUID(),
-                                projectId: $pid,
-                                name: 'Thénardier',
-                                role: 'other',
-                                imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Thenardier',
-                                `extras.age`: 50,
-                                `extras.gender`: 'Male',
-                                `extras.description`: 'A greedy and treacherous innkeeper.',
-                                createdAt: datetime(),
-                                updatedAt: datetime()
-                            })
+                            // 20 Characters
+                            CREATE (v:Character {id: randomUUID(), projectId: $pid, name: 'Jean Valjean', role: 'protagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Valjean'})
+                            CREATE (j:Character {id: randomUUID(), projectId: $pid, name: 'Javert', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Javert'})
+                            CREATE (f:Character {id: randomUUID(), projectId: $pid, name: 'Fantine', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Fantine'})
+                            CREATE (c:Character {id: randomUUID(), projectId: $pid, name: 'Cosette', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Cosette'})
+                            CREATE (m:Character {id: randomUUID(), projectId: $pid, name: 'Marius', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Marius'})
+                            CREATE (e:Character {id: randomUUID(), projectId: $pid, name: 'Eponine', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Eponine'})
+                            CREATE (t:Character {id: randomUUID(), projectId: $pid, name: 'Thenardier', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Thenardier'})
+                            CREATE (mt:Character {id: randomUUID(), projectId: $pid, name: 'Mme Thenardier', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=MmeThenardier'})
+                            CREATE (g:Character {id: randomUUID(), projectId: $pid, name: 'Gavroche', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Gavroche'})
+                            CREATE (en:Character {id: randomUUID(), projectId: $pid, name: 'Enjolras', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Enjolras'})
+                            CREATE (gr:Character {id: randomUUID(), projectId: $pid, name: 'Grantaire', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Grantaire'})
+                            CREATE (bm:Character {id: randomUUID(), projectId: $pid, name: 'Bishop Myriel', role: 'mentor', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bishop'})
+                            CREATE (co:Character {id: randomUUID(), projectId: $pid, name: 'Combeferre', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Combeferre'})
+                            CREATE (cu:Character {id: randomUUID(), projectId: $pid, name: 'Courfeyrac', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Courfeyrac'})
+                            CREATE (jp:Character {id: randomUUID(), projectId: $pid, name: 'Jean Prouvaire', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Prouvaire'})
+                            CREATE (fe:Character {id: randomUUID(), projectId: $pid, name: 'Feuilly', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Feuilly'})
+                            CREATE (ba:Character {id: randomUUID(), projectId: $pid, name: 'Bahorel', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bahorel'})
+                            CREATE (jo:Character {id: randomUUID(), projectId: $pid, name: 'Joly', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Joly'})
+                            CREATE (bo:Character {id: randomUUID(), projectId: $pid, name: 'Bossuet', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bossuet'})
+                            CREATE (az:Character {id: randomUUID(), projectId: $pid, name: 'Azelma', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Azelma'})
 
                             // Relationships
-                            CREATE (valjean)-[:RELATED_TO {type: 'enemy', weight: -10, description: 'Pursuer'}]->(javert)
-                            CREATE (javert)-[:RELATED_TO {type: 'enemy', weight: -10, description: 'Prey'}]->(valjean)
-
-                            CREATE (valjean)-[:RELATED_TO {type: 'friendly', weight: 10, description: 'Adopted Daughter'}]->(cosette)
-                            CREATE (cosette)-[:RELATED_TO {type: 'friendly', weight: 10, description: 'Father Figure'}]->(valjean)
-
-                            CREATE (fantine)-[:RELATED_TO {type: 'family', weight: 10, description: 'Daughter'}]->(cosette)
-
-                            CREATE (marius)-[:RELATED_TO {type: 'romantic', weight: 8, description: 'Lover'}]->(cosette)
-                            CREATE (cosette)-[:RELATED_TO {type: 'romantic', weight: 8, description: 'Lover'}]->(marius)
-
-                            CREATE (thenardier)-[:RELATED_TO {type: 'hostile', weight: -5, description: 'Exploited'}]->(fantine)
-                            CREATE (thenardier)-[:RELATED_TO {type: 'hostile', weight: -5, description: 'Exploited'}]->(cosette)
+                            CREATE (v)-[:RELATED_TO {type: 'enemy', strength: 9, description: 'Obsessive Pursuer'}]->(j)
+                            CREATE (j)-[:RELATED_TO {type: 'enemy', strength: 9, description: 'Target'}]->(v)
+                            CREATE (m)-[:RELATED_TO {type: 'lover', strength: 10, description: 'True Love'}]->(c)
+                            CREATE (c)-[:RELATED_TO {type: 'lover', strength: 10, description: 'True Love'}]->(m)
+                            CREATE (v)-[:RELATED_TO {type: 'friend', strength: 10, description: 'Guardian'}]->(c)
+                            CREATE (f)-[:RELATED_TO {type: 'lover', strength: 10, description: 'Biological Mother'}]->(c)
+                            CREATE (e)-[:RELATED_TO {type: 'lover', strength: 7, description: 'Unrequited Love'}]->(m)
+                            CREATE (t)-[:RELATED_TO {type: 'enemy', strength: 8, description: 'Blackmailer'}]->(v)
+                            CREATE (en)-[:RELATED_TO {type: 'friend', strength: 9, description: 'Leader and Follower'}]->(gr)
+                            CREATE (g)-[:RELATED_TO {type: 'friend', strength: 8, description: 'Street Ally'}]->(en)
+                            CREATE (bm)-[:RELATED_TO {type: 'friend', strength: 10, description: 'Spiritual Savior'}]->(v)
+                            CREATE (co)-[:RELATED_TO {type: 'friend', strength: 8, description: 'ABC Friends'}]->(en)
+                            CREATE (cu)-[:RELATED_TO {type: 'friend', strength: 8, description: 'ABC Friends'}]->(m)
+                            CREATE (t)-[:RELATED_TO {type: 'friend', strength: 5, description: 'Spouse/Partner'}]->(mt)
+                            CREATE (t)-[:RELATED_TO {type: 'friend', strength: 7, description: 'Father'}]->(e)
+                            CREATE (mt)-[:RELATED_TO {type: 'friend', strength: 7, description: 'Mother'}]->(az)
                             """,
-                            java.util.Map.of("pid", realProjectId.toString()));
+                            java.util.Map.of("pid", pid));
                     return null;
                 });
-
-                log.info("Les Misérables character data seeded successfully.");
-            } catch (Exception e) {
-                log.error("Failed to seed Neo4j data: {}", e.getMessage(), e);
-                // We don't necessarily want to fail the whole transaction if only Neo4j fails,
-                // but for seeding it's better to know.
-                throw new RuntimeException("Neo4j Seeding Failed", e);
+                log.info("Comprehensive Les Misérables data seeded successfully.");
             }
-
         } catch (Exception e) {
-            log.error("Seeding process failed: {}", e.getMessage(), e);
+            log.error("Seeding Failed: {}", e.getMessage(), e);
             throw new RuntimeException("Seeding Failed", e);
         }
     }
