@@ -31,7 +31,7 @@ public class Character {
     private String role; // protagonist, antagonist, supporting, mentor, sidekick, other
     private String imageUrl;
 
-    @Relationship
+    @Relationship(type = "RELATED_TO", direction = Relationship.Direction.OUTGOING)
     @Builder.Default
     private List<CharacterRelationship> relationships = new ArrayList<>();
 
