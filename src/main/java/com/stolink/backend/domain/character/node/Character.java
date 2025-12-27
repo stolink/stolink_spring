@@ -28,6 +28,7 @@ public class Character {
 
     private String projectId;
     private String name;
+    private String faction;
     private String role; // protagonist, antagonist, supporting, mentor, sidekick, other
     private String imageUrl;
 
