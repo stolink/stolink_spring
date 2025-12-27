@@ -38,6 +38,13 @@ app:
     queues:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
+    # 이미지 생성용 RabbitMQ (별도 인스턴스)
+    image:
+      host: ${RABBITMQ_IMAGE_HOST:localhost}
+      port: ${RABBITMQ_IMAGE_PORT:5672}
+      username: ${RABBITMQ_IMAGE_USER:guest}
+      password: ${RABBITMQ_IMAGE_PASSWORD:guest}
+      virtual-host: ${RABBITMQ_IMAGE_VHOST:stolink}
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://localhost:8080/api/internal/ai}
 

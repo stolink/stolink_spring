@@ -3,6 +3,8 @@ package com.stolink.backend.domain.ai.controller;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
+import com.stolink.backend.domain.ai.dto.ImageGenerationRequest;
+import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
 import com.stolink.backend.domain.ai.service.AICallbackService;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
 import com.stolink.backend.global.common.dto.ApiResponse;
@@ -67,6 +69,43 @@ public class AIController {
         return ApiResponse.ok(Map.of(
                 "jobId", jobId,
                 "status", "processing"));
+    }
+
+    /**
+     * 이미지 생성 요청
+     * RabbitMQ에 이미지 생성 작업을 발행합니다.
+     */
+    @PostMapping("/ai/image/generate")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<Map<String, String>> generateImage(
+            @RequestHeader("X-User-Id") UUID userId,
+            @RequestBody ImageGenerationRequest request) {
+        
+        String jobId = UUID.randomUUID().toString();
+        
+        ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
+                .jobId(jobId)
+                .projectId(request.getProjectId())
+                .characterId(request.getCharacterId())
+                .action(request.getAction())
+                .message(request.getMessage())
+                .imageUrl(request.getImageUrl())
+                .editRequest(request.getEditRequest())
+                .callbackUrl(callbackBaseUrl + "/image/callback")
+                .build();
+        
+        producerService.sendImageGenerationTask(task);
+        
+        log.info("Image generation task submitted: jobId={}, action={}, characterId={}",
+                jobId, request.getAction(), request.getCharacterId());
+        
+        return ApiResponse.<Map<String, String>>builder()
+                .status(HttpStatus.ACCEPTED)
+                .message("Image generation started")
+                .data(Map.of(
+                        "jobId", jobId,
+                        "status", "processing"))
+                .build();
     }
 
     /**

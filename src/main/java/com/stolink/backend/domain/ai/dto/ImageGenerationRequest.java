@@ -8,16 +8,14 @@ import lombok.NoArgsConstructor;
 import java.util.UUID;
 
 /**
- * Image Worker로 전송되는 이미지 생성 요청 DTO
- * gitsecrets.md 메시지 형식과 동일 (UUID는 Jackson이 자동으로 String 직렬화)
+ * 이미지 생성 API 요청 DTO (클라이언트 → Spring)
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ImageGenerationTaskDTO {
+public class ImageGenerationRequest {
 
-    private String jobId;
     private UUID projectId;
     private UUID characterId;
     
@@ -31,22 +29,17 @@ public class ImageGenerationTaskDTO {
     private String action = "create";
     
     /**
-     * 이미지 생성 프롬프트
+     * 이미지 생성 프롬프트 (메시지)
      */
     private String message;
     
     /**
-     * 기존 이미지 URL (수정 시)
+     * 기존 이미지 URL (수정 시 사용)
      */
     private String imageUrl;
     
     /**
-     * 수정 요청 내용
+     * 수정 요청 내용 (edit, reflect_time 시 사용)
      */
     private String editRequest;
-    
-    /**
-     * 처리 완료 후 콜백 URL
-     */
-    private String callbackUrl;
 }
