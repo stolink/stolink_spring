@@ -1,0 +1,6 @@
+# Troubleshooting Log
+
+| Date       | Topic                           | Status    | Link                                                                                                       |
+| ---------- | ------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------- |
+| 2025-12-28 | Character Relationship Type Fix | ✅ Solved | [.troubles/2025-12-28_Character-Relationship-Type.md](.troubles/2025-12-28_Character-Relationship-Type.md) |
+| 2025-12-28 | AI Review Workflow Security     | ✅ Solved | [.troubles/2025-12-28_Workflow-Secret-Handling.md](.troubles/2025-12-28_Workflow-Secret-Handling.md)       |
