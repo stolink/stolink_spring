@@ -12,3 +12,4 @@
 | 2025-12-28 | Share Link N+1 Fix              | ✅ Solved   | Optimized with `JOIN FETCH`(Share/Project/User)                                                              |
 | 2025-12-28 | Document Tree Performance       | ⏸️ Deferred | [.troubles/2025-12-28_Document-Tree-Performance.md](.troubles/2025-12-28_Document-Tree-Performance.md)       |
 | 2025-12-28 | Round 4 AI Review Refinement    | ✅ Solved   | [.troubles/2025-12-28_Round4-Cleanup.md](.troubles/2025-12-28_Round4-Cleanup.md)                             |
+| 2025-12-28 | Password Feature Removal        | ✅ Solved   | [.troubles/2025-12-28_Password-Feature-Removal.md](.troubles/2025-12-28_Password-Feature-Removal.md)         |

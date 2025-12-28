@@ -4,13 +4,11 @@ import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
-import com.stolink.backend.domain.share.dto.CreateShareRequest;
 import com.stolink.backend.domain.share.dto.SharedDocumentResponse;
 import com.stolink.backend.domain.share.dto.SharedProjectResponse;
 import com.stolink.backend.domain.share.dto.ShareResponse;
 import com.stolink.backend.domain.share.entity.Share;
 import com.stolink.backend.domain.share.repository.ShareRepository;
-import com.stolink.backend.global.common.exception.AccessDeniedException;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -42,19 +40,17 @@ public class ShareService {
         return ShareResponse.builder()
                 .shareId(share.getId())
                 .projectId(projectId)
-                .hasPassword(share.getPassword() != null && !share.getPassword().isEmpty())
                 .build();
     }
 
     @Transactional
-    public ShareResponse createShareLink(UUID userId, UUID projectId, CreateShareRequest request) {
+    public ShareResponse createShareLink(UUID userId, UUID projectId) {
         // Try to find existing share with project and user in one query
         Share share = shareRepository.findByProjectIdWithUser(projectId).orElse(null);
 
-        Project project;
         if (share == null) {
             // Only fetch project if share doesn't exist
-            project = projectRepository.findByIdWithUser(projectId)
+            Project project = projectRepository.findByIdWithUser(projectId)
                     .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
             if (!project.getUser().getId().equals(userId)) {
@@ -63,21 +59,19 @@ public class ShareService {
 
             share = Share.builder()
                     .project(project)
-                    .password(request.getPassword())
                     .build();
+            shareRepository.save(share);
         } else {
             // Already have everything we need for check
             if (!share.getProject().getUser().getId().equals(userId)) {
                 throw new ResourceNotFoundException("Project not found");
             }
-            share.updatePassword(request.getPassword());
+            // Share already exists, just return it
         }
 
-        shareRepository.save(share);
         return ShareResponse.builder()
                 .shareId(share.getId())
                 .projectId(projectId)
-                .hasPassword(share.getPassword() != null && !share.getPassword().isEmpty())
                 .build();
     }
 
@@ -93,16 +87,9 @@ public class ShareService {
         shareRepository.delete(share);
     }
 
-    public SharedProjectResponse getSharedProject(UUID shareId, String password) {
+    public SharedProjectResponse getSharedProject(UUID shareId) {
         Share share = shareRepository.findById(shareId)
                 .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
-
-        // Password check
-        if (share.getPassword() != null && !share.getPassword().isEmpty()) {
-            if (password == null || !password.equals(share.getPassword())) {
-                throw new AccessDeniedException("Invalid password");
-            }
-        }
 
         Project project = share.getProject();
         List<Document> allDocuments = documentRepository.findByProjectWithParent(project);

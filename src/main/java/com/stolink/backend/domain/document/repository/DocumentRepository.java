@@ -31,7 +31,7 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
     @Query("SELECT COUNT(d) FROM Document d WHERE d.project = :project AND d.type = 'TEXT'")
     Long countTextDocumentsByProject(@Param("project") Project project);
 
-    @Query("SELECT DISTINCT d FROM Document d LEFT JOIN FETCH d.parent WHERE d.project = :project ORDER BY d.order ASC")
+    @Query("SELECT d FROM Document d LEFT JOIN FETCH d.parent WHERE d.project = :project ORDER BY d.order ASC")
     List<Document> findByProjectWithParent(@Param("project") Project project);
 
     void deleteAllByProject(Project project);

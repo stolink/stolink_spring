@@ -22,11 +22,4 @@ public class Share extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false, unique = true)
     private Project project;
-
-    @Column(length = 255)
-    private String password;
-
-    public void updatePassword(String password) {
-        this.password = password;
-    }
 }
