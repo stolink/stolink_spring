@@ -1,8 +1,40 @@
-name: Deploy Development
+# =========================================================================
+# Deploy Production Workflow
+# =========================================================================
+# 🚨 프로덕션 서버 배포 시 아래 항목들을 변경해야 합니다:
+#
+# [GitHub Secrets 추가 필요]
+# - AWS_ROLE_SSMFULL_ARN_PROD: 프로덕션 계정의 SSM 권한 Role ARN
+# - POSTGRESQL_URL_PROD: 프로덕션 PostgreSQL 호스트
+# - POSTGRESQL_USERNAME_PROD: 프로덕션 PostgreSQL 사용자명
+# - POSTGRESQL_PASSWORD_PROD: 프로덕션 PostgreSQL 비밀번호
+# - NEO4J_URI_PROD: 프로덕션 Neo4j 호스트
+# - NEO4J_USERNAME_PROD: 프로덕션 Neo4j 사용자명
+# - NEO4J_PASSWORD_PROD: 프로덕션 Neo4j 비밀번호
+# - RABBITMQ_IMAGE_HOST_PROD: 프로덕션 RabbitMQ 호스트
+# - RABBITMQ_IMAGE_USER_PROD: 프로덕션 RabbitMQ 사용자명
+# - RABBITMQ_IMAGE_PASSWORD_PROD: 프로덕션 RabbitMQ 비밀번호
+# - ALB_DNS_NAME_PROD: 프로덕션 ALB DNS 이름
+# - GH_PAT_PROD: 프로덕션용 GitHub PAT (필요시)
+#
+# [GitHub Variables 추가 필요]
+# - AWS_REGION_PROD: 프로덕션 AWS 리전
+# - POSTGRESQL_PORT_PROD: 프로덕션 PostgreSQL 포트
+# - NEO4J_PORT_PROD: 프로덕션 Neo4j 포트
+# - RABBITMQ_IMAGE_PORT_PROD: 프로덕션 RabbitMQ 포트
+# - RABBITMQ_IMAGE_VHOST_PROD: 프로덕션 RabbitMQ vHost
+# - CLOUDFRONT_URL_PROD: 프로덕션 CloudFront 도메인
+#
+# [코드 내 변경 필요]
+# - Line 107: EC2 태그 값 (stolink-spring-prod -> 실제 프로덕션 서버 태그)
+# - Line 109: Git 브랜치 (main -> 프로덕션 배포 브랜치)
+# =========================================================================
+
+name: Deploy Production
 
 on:
   push:
-    branches: ["dev"]
+    branches: ["main"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -97,32 +129,32 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_SSMFULL_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_SSMFULL_ARN_PROD }}
+          aws-region: ${{ vars.AWS_REGION_PROD }}
 
       - name: Deploy to EC2 via SSM
         run: |
           aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:tag,Values=stolink-spring" \
+            --targets "Key=tag:tag,Values=stolink-spring-prod" \
             --parameters 'commands=[
-              "sudo -i -u ubuntu bash -c '\''mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout develop && git pull origin develop; else git clone -b develop https://github.com/stolink/stolink_spring.git .; fi && tee .env > /dev/null << EOF",
-              "POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}",
-              "POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}",
-              "POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}",
-              "POSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT }}",
-              "NEO4J_URI=${{ secrets.NEO4J_URI }}",
-              "NEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}",
-              "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}",
-              "NEO4J_PORT=${{ vars.NEO4J_PORT }}",
-              "RABBITMQ_IMAGE_HOST=${{ secrets.RABBITMQ_IMAGE_HOST }}",
-              "RABBITMQ_IMAGE_PORT=${{ vars.RABBITMQ_IMAGE_PORT }}",
-              "RABBITMQ_IMAGE_VHOST=${{ vars.RABBITMQ_IMAGE_VHOST }}",
-              "RABBITMQ_IMAGE_USER=${{ secrets.RABBITMQ_IMAGE_USER }}",
-              "RABBITMQ_IMAGE_PASSWORD=${{ secrets.RABBITMQ_IMAGE_PASSWORD }}",
-              "APP_AI_CALLBACK_BASE_URL=http://${{ secrets.ALB_DNS_NAME }}/api/internal/ai",
+              "sudo -i -u ubuntu bash -c '\''mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout main && git pull origin main; else git clone -b main https://github.com/stolink/stolink_spring.git .; fi && tee .env > /dev/null << EOF",
+              "POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL_PROD }}",
+              "POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME_PROD }}",
+              "POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD_PROD }}",
+              "POSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT_PROD }}",
+              "NEO4J_URI=${{ secrets.NEO4J_URI_PROD }}",
+              "NEO4J_USERNAME=${{ secrets.NEO4J_USERNAME_PROD }}",
+              "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD_PROD }}",
+              "NEO4J_PORT=${{ vars.NEO4J_PORT_PROD }}",
+              "RABBITMQ_IMAGE_HOST=${{ secrets.RABBITMQ_IMAGE_HOST_PROD }}",
+              "RABBITMQ_IMAGE_PORT=${{ vars.RABBITMQ_IMAGE_PORT_PROD }}",
+              "RABBITMQ_IMAGE_VHOST=${{ vars.RABBITMQ_IMAGE_VHOST_PROD }}",
+              "RABBITMQ_IMAGE_USER=${{ secrets.RABBITMQ_IMAGE_USER_PROD }}",
+              "RABBITMQ_IMAGE_PASSWORD=${{ secrets.RABBITMQ_IMAGE_PASSWORD_PROD }}",
+              "APP_AI_CALLBACK_BASE_URL=http://${{ secrets.ALB_DNS_NAME_PROD }}/api/internal/ai",
               "IMAGE_NAME=ghcr.io/stolink/stolink-spring:latest",
-              "CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,https://${{ vars.CLOUDFRONT_URL }},https://${{ vars.CLOUDFRONT_URL_DEV }}",
+              "CORS_ALLOWED_ORIGINS=https://${{ vars.CLOUDFRONT_URL_PROD }}",
               "EOF",
               "echo ${{ secrets.GH_PAT }} | docker login ghcr.io -u stolink --password-stdin && docker compose down --remove-orphans && docker compose pull && docker compose up -d && docker image prune -f'\''"
             ]' \
@@ -136,7 +168,7 @@ jobs:
           echo "Waiting for application to start..."
           sleep 30
 
-          HEALTH_URL="https://${{ vars.CLOUDFRONT_URL_DEV }}/actuator/health"
+          HEALTH_URL="https://${{ vars.CLOUDFRONT_URL_PROD }}/actuator/health"
           echo "Health check URL: $HEALTH_URL"
 
           for i in {1..5}; do
