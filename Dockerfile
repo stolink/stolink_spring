@@ -1,41 +1,26 @@
-# Multi-stage build for Spring Boot application
-# Stage 1: Build
-FROM eclipse-temurin:21-jdk AS builder
-
+# Build stage
+FROM gradle:8.11-jdk21 AS builder
 WORKDIR /app
-
-# Copy everything needed for the build
 COPY . .
+RUN gradle build -x test --no-daemon
 
-# Run Gradle Wrapper directly using Java (avoids shell script issues)
-RUN java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain dependencies --no-daemon
-
-# Build the application
-RUN java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain bootJar --no-daemon -x test
-
-# Stage 2: Runtime
+# Runtime stage
 FROM eclipse-temurin:21-jre-alpine
-
 WORKDIR /app
 
-# Create non-root user for security
+# Create non-root user
 RUN addgroup -S spring && adduser -S spring -G spring
-
-# Create storage directory
-RUN mkdir -p /app/storage/uploads && chown -R spring:spring /app
-
-# Copy the built jar
-COPY --from=builder /app/build/libs/*.jar app.jar
-
-# Switch to non-root user
 USER spring:spring
+
+# Copy jar file
+COPY --from=builder /app/build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 
-# Run the application
+# Run application
 ENTRYPOINT ["java", "-jar", "app.jar"]
