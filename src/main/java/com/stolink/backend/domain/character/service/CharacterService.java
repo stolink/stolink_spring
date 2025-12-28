@@ -1,5 +1,7 @@
 package com.stolink.backend.domain.character.service;
 
+import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
+import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
 import com.stolink.backend.domain.project.entity.Project;
@@ -9,6 +11,7 @@ import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +26,14 @@ public class CharacterService {
     private final CharacterRepository characterRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final RabbitMQProducerService producerService;
     private final com.stolink.backend.domain.document.repository.DocumentRepository documentRepository;
     private final org.neo4j.driver.Driver driver;
     private final jakarta.persistence.EntityManager entityManager;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @Value("${app.ai.callback-base-url}")
+    private String callbackBaseUrl;
 
     public List<Character> getCharacters(UUID userId, UUID projectId) {
         User user = getUserOrThrow(userId);
@@ -225,5 +232,53 @@ public class CharacterService {
     private Project getProjectOrThrow(UUID projectId, User user) {
         return projectRepository.findByIdAndUser(projectId, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+    }
+
+    /**
+     * Project 조회 (User 정보 포함) - userId 조회용
+     */
+    private Project getProjectWithUser(UUID projectId) {
+        return projectRepository.findByIdWithUser(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+    }
+
+    /**
+     * 캐릭터 이미지 생성 요청 (RabbitMQ로 전송)
+     * 
+     * @Transactional 없음: RabbitMQ 메시지 전송은 DB 트랜잭션과 독립적.
+     * 메시지가 전송된 후 DB 롤백이 발생하면 불일치가 생기므로,
+     * 이미지 생성은 비동기 작업으로 별도 처리.
+     * 
+     * @param projectId 프로젝트 ID (userId 조회용)
+     * @param characterId 캐릭터 ID
+     * @param description 캐릭터 외형 설명 (FastAPI message 필드에 매핑)
+     * @return 생성된 jobId
+     */
+    public String triggerImageGeneration(
+            UUID projectId,
+            UUID characterId,
+            String description
+    ) {
+        // Project 조회하여 userId 획득
+        Project project = getProjectWithUser(projectId);
+        UUID userId = project.getUser().getId();
+        String jobId = UUID.randomUUID().toString();
+
+        ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
+                .jobId(jobId)
+                .userId(userId)
+                .projectId(projectId)
+                .characterId(characterId)
+                .message(description)  // FastAPI의 message 필드에 매핑
+                .action("create")
+                .callbackUrl(callbackBaseUrl + "/internal/ai/image/callback")
+                .build();
+
+        producerService.sendImageGenerationTask(task);
+
+        log.info("Image generation triggered: jobId={}, userId={}, projectId={}, characterId={}",
+                jobId, userId, projectId, characterId);
+        
+        return jobId;
     }
 }

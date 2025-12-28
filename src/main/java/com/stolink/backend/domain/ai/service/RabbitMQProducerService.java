@@ -28,6 +28,6 @@ public class RabbitMQProducerService {
 
     public void sendImageGenerationTask(ImageGenerationTaskDTO task) {
         rabbitTemplate.convertAndSend(imageQueue, task);
-        log.info("Image generation task sent to queue for character: {}", task.getCharacterName());
+        log.info("Image generation task sent to queue for character: {}", task.getCharacterId());
     }
 }

@@ -18,11 +18,11 @@ public class CharacterController {
 
     private final CharacterService characterService;
 
-    @GetMapping("/projects/{pid}/characters")
+    @GetMapping("/projects/{projectId}/characters")
     public ApiResponse<List<Character>> getCharacters(
             @RequestHeader("X-User-Id") UUID userId,
-            @PathVariable UUID pid) {
-        List<Character> characters = characterService.getCharactersWithRelationships(userId, pid);
+            @PathVariable UUID projectId) {
+        List<Character> characters = characterService.getCharactersWithRelationships(userId, projectId);
         return ApiResponse.ok(characters);
     }
 
@@ -32,13 +32,13 @@ public class CharacterController {
         return ApiResponse.ok(characters);
     }
 
-    @PostMapping("/projects/{pid}/characters")
+    @PostMapping("/projects/{projectId}/characters")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Character> createCharacter(
             @RequestHeader("X-User-Id") UUID userId,
-            @PathVariable UUID pid,
+            @PathVariable UUID projectId,
             @RequestBody Character character) {
-        Character created = characterService.createCharacter(userId, pid, character);
+        Character created = characterService.createCharacter(userId, projectId, character);
         return ApiResponse.created(created);
     }
 
@@ -64,11 +64,36 @@ public class CharacterController {
         return ApiResponse.created(null);
     }
 
-    @DeleteMapping("/characters/{id}")
+    @DeleteMapping("/characters/{characterId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteCharacter(
             @RequestHeader("X-User-Id") UUID userId,
-            @PathVariable String id) {
-        characterService.deleteCharacter(userId, id);
+            @PathVariable String characterId) {
+        characterService.deleteCharacter(userId, characterId);
+    }
+
+    /**
+     * 캐릭터 이미지 생성 요청
+     * RabbitMQ를 통해 FastAPI 이미지 워커로 전송
+     */
+    @PostMapping("/projects/{projectId}/characters/{characterId}/image")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<Map<String, String>> triggerImageGeneration(
+            @PathVariable UUID projectId,
+            @PathVariable UUID characterId,
+            @RequestBody Map<String, String> body) {
+        
+        String description = body.get("description");
+        if (description == null || description.isBlank()) {
+            throw new IllegalArgumentException("description is required");
+        }
+        
+        String jobId = characterService.triggerImageGeneration(projectId, characterId, description);
+        
+        return ApiResponse.<Map<String, String>>builder()
+                .status(HttpStatus.ACCEPTED)
+                .message("Image generation started")
+                .data(Map.of("jobId", jobId))
+                .build();
     }
 }
