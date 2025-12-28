@@ -7,12 +7,14 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.List;
+import java.util.UUID;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateDocumentRequest {
+    private UUID parentId;  // 문서 이동 시 새로운 부모 폴더 ID (null이면 루트로 이동)
     private String title;
     private String content;
     private String synopsis;

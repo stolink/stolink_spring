@@ -119,6 +119,16 @@ public class Document extends BaseEntity {
         this.keywords = keywords;
     }
 
+    /**
+     * 문서의 부모를 변경합니다 (폴더 이동)
+     * @param newParent 새로운 부모 문서 (null이면 루트로 이동)
+     * @param newOrder 새 부모 아래에서의 순서
+     */
+    public void updateParent(Document newParent, int newOrder) {
+        this.parent = newParent;
+        this.order = newOrder;
+    }
+
     private int calculateWordCount(String text) {
         if (text == null || text.isEmpty()) {
             return 0;
