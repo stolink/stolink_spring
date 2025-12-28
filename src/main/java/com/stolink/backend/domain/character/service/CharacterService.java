@@ -245,23 +245,48 @@ public class CharacterService {
     /**
      * 캐릭터 이미지 생성 요청 (RabbitMQ로 전송)
      * 
-     * @Transactional 없음: RabbitMQ 메시지 전송은 DB 트랜잭션과 독립적.
-     * 메시지가 전송된 후 DB 롤백이 발생하면 불일치가 생기므로,
-     * 이미지 생성은 비동기 작업으로 별도 처리.
+     * 트랜잭션 분리 전략:
+     * - Project 조회는 @Transactional(readOnly = true)로 수행
+     * - RabbitMQ 메시지 전송은 트랜잭션 범위 외부에서 별도 메서드로 수행
+     * - 이를 통해 DB 조회 후 예외 발생 시에도 데이터 정합성 보장
      * 
      * @param projectId 프로젝트 ID (userId 조회용)
      * @param characterId 캐릭터 ID
      * @param description 캐릭터 외형 설명 (FastAPI message 필드에 매핑)
      * @return 생성된 jobId
      */
+    @Transactional(readOnly = true)
     public String triggerImageGeneration(
             UUID projectId,
             UUID characterId,
             String description
     ) {
-        // Project 조회하여 userId 획득
-        Project project = getProjectWithUser(projectId);
+        // Project 조회하여 userId 획득 (트랜잭션 범위 내)
+        Project project = projectRepository.findByIdWithUser(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
         UUID userId = project.getUser().getId();
+        
+        // 트랜잭션 범위 외에서 메시지 발송 (별도 메서드)
+        return sendImageGenerationTaskAsync(userId, projectId, characterId, description);
+    }
+
+    /**
+     * RabbitMQ 이미지 생성 태스크 전송
+     * 
+     * @Transactional 없음 - 메시지 발송만 수행하며 DB 트랜잭션과 독립적
+     * 
+     * @param userId 사용자 ID
+     * @param projectId 프로젝트 ID
+     * @param characterId 캐릭터 ID
+     * @param description 캐릭터 외형 설명
+     * @return 생성된 jobId
+     */
+    public String sendImageGenerationTaskAsync(
+            UUID userId,
+            UUID projectId,
+            UUID characterId,
+            String description
+    ) {
         String jobId = UUID.randomUUID().toString();
 
         ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
