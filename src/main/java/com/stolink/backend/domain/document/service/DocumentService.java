@@ -14,6 +14,8 @@ import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,32 @@ public class DocumentService {
 
         List<Document> rootDocuments = documentRepository.findRootDocuments(project);
         return buildTree(rootDocuments);
+    }
+
+    /**
+     * 특정 폴더의 직계 자식 문서를 페이징하여 반환 (무한 스크롤용)
+     * TEXT 타입 문서만 반환하며, order 기준 오름차순 정렬
+     */
+    public Page<DocumentTreeResponse> getChildren(UUID userId, UUID folderId, Pageable pageable) {
+        User user = getUserOrThrow(userId);
+        Document folder = documentRepository.findById(folderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document", "id", folderId));
+
+        // 권한 검증: 프로젝트 소유자 확인
+        if (!folder.getProject().getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("권한이 없습니다.");
+        }
+
+        // FOLDER 타입인지 확인
+        if (folder.getType() != Document.DocumentType.FOLDER) {
+            throw new IllegalArgumentException("폴더가 아닌 문서입니다.");
+        }
+
+        // TEXT 타입 자식만 페이징 조회
+        Page<Document> children = documentRepository.findByParentAndTypeOrderByOrderAsc(
+                folder, Document.DocumentType.TEXT, pageable);
+
+        return children.map(DocumentTreeResponse::from);
     }
 
     @Transactional
@@ -117,14 +145,13 @@ public class DocumentService {
         }
 
         document.update(
-            request.getTitle(),
-            request.getSynopsis(),
-            request.getOrder(),
-            request.getStatus(),
-            request.getTargetWordCount(),
-            request.getIncludeInCompile(),
-            request.getNotes()
-        );
+                request.getTitle(),
+                request.getSynopsis(),
+                request.getOrder(),
+                request.getStatus(),
+                request.getTargetWordCount(),
+                request.getIncludeInCompile(),
+                request.getNotes());
 
         document.updateLabel(request.getLabel(), request.getLabelColor());
 
@@ -137,30 +164,30 @@ public class DocumentService {
      */
     private void moveDocument(Document document, UUID newParentId) {
         Document newParent = null;
-        
+
         if (newParentId != null) {
             newParent = documentRepository.findById(newParentId)
                     .orElseThrow(() -> new ResourceNotFoundException("Document", "id", newParentId));
-            
+
             // 순환 참조 방지: 자기 자신이나 자신의 하위 폴더로 이동 불가
             if (document.getId().equals(newParentId)) {
                 throw new IllegalArgumentException("문서를 자기 자신으로 이동할 수 없습니다.");
             }
-            
+
             if (isDescendant(document, newParent)) {
                 throw new IllegalArgumentException("문서를 자신의 하위 폴더로 이동할 수 없습니다.");
             }
-            
+
             // 폴더 타입만 자식을 가질 수 있음
             if (newParent.getType() != Document.DocumentType.FOLDER) {
                 throw new IllegalArgumentException("일반 문서 아래로는 이동할 수 없습니다. 폴더만 자식을 가질 수 있습니다.");
             }
         }
-        
+
         // 새 부모 아래에서의 순서 계산 (마지막 순서)
         int newOrder = getNextOrder(document.getProject(), newParent);
         document.updateParent(newParent, newOrder);
-        
+
         log.info("Document {} moved to parent {}", document.getId(), newParentId);
     }
 
@@ -188,7 +215,6 @@ public class DocumentService {
         return false;
     }
 
-
     @Transactional
     public void deleteDocument(UUID userId, UUID documentId) {
         Document document = getDocument(userId, documentId);
@@ -207,8 +233,9 @@ public class DocumentService {
             // Verify the document belongs to the same parent
             UUID currentParentId = document.getParent() != null ? document.getParent().getId() : null;
             if ((request.getParentId() == null && currentParentId != null) ||
-                (request.getParentId() != null && !request.getParentId().equals(currentParentId))) {
-                throw new IllegalArgumentException("Document " + documentId + " does not belong to parent " + request.getParentId());
+                    (request.getParentId() != null && !request.getParentId().equals(currentParentId))) {
+                throw new IllegalArgumentException(
+                        "Document " + documentId + " does not belong to parent " + request.getParentId());
             }
 
             document.update(null, null, i, null, null, null, null);

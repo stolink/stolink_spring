@@ -9,6 +9,10 @@ import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.service.DocumentService;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,6 +33,25 @@ public class DocumentController {
             @PathVariable UUID pid) {
         List<DocumentTreeResponse> tree = documentService.getDocumentTree(userId, pid);
         return ApiResponse.ok(tree);
+    }
+
+    /**
+     * 특정 폴더의 직계 자식 문서를 페이징하여 조회 (무한 스크롤용)
+     * TEXT 타입 문서만 반환, order 기준 오름차순
+     */
+    @GetMapping("/documents/{folderId}/children")
+    public ApiResponse<Page<DocumentTreeResponse>> getChildren(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID folderId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        // size 최대값 제한 (100)
+        int limitedSize = Math.min(size, 100);
+
+        Pageable pageable = PageRequest.of(page, limitedSize, Sort.by("order").ascending());
+        Page<DocumentTreeResponse> result = documentService.getChildren(userId, folderId, pageable);
+        return ApiResponse.ok(result);
     }
 
     @PostMapping("/projects/{pid}/documents")

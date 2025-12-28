@@ -7,6 +7,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -15,6 +18,12 @@ import java.util.UUID;
 public interface DocumentRepository extends JpaRepository<Document, UUID> {
 
     List<Document> findByProject(Project project);
+
+    /**
+     * 특정 부모 폴더의 직계 자식 중 지정된 타입의 문서를 페이징하여 조회
+     * 무한 스크롤 (통합뷰) 지원용
+     */
+    Page<Document> findByParentAndTypeOrderByOrderAsc(Document parent, Document.DocumentType type, Pageable pageable);
 
     List<Document> findByProjectAndParentIsNullOrderByOrder(Project project);
 
