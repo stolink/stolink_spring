@@ -298,8 +298,11 @@ public class CharacterService {
             producerService.sendImageGenerationTask(task);
             log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
         } catch (Exception e) {
-            log.error("Failed to send image generation task: jobId={}", event.jobId(), e);
-            throw new RuntimeException("Image generation task delivery failed", e);
+            // 트랜잭션은 이미 커밋됨 - throw해도 롤백 불가
+            // 예외 전파 대신 로깅 후 별도 재시도 메커니즘 사용
+            log.warn("Failed to send image generation task: jobId={}, will retry later", 
+                     event.jobId(), e);
+            // TODO: Dead Letter Queue 또는 실패 테이블에 저장하여 재시도 처리
         }
     }
 
