@@ -89,10 +89,6 @@ public class CharacterController {
         String jobId = characterService.triggerImageGeneration(
                 userId, projectId, characterId, request.description());
         
-        return ApiResponse.<Map<String, String>>builder()
-                .status(HttpStatus.ACCEPTED)
-                .message("Image generation started")
-                .data(Map.of("jobId", jobId))
-                .build();
+        return ApiResponse.accepted(Map.of("jobId", jobId));
     }
 }
