@@ -102,6 +102,11 @@ public class DocumentService {
     public Document updateDocument(UUID userId, UUID documentId, UpdateDocumentRequest request) {
         Document document = getDocument(userId, documentId);
 
+        // parentId 변경 처리 (문서 이동)
+        if (request.getParentId() != null || isParentChangeRequested(request)) {
+            moveDocument(document, request.getParentId());
+        }
+
         if (request.getContent() != null) {
             document.updateContent(request.getContent());
         }
@@ -126,6 +131,63 @@ public class DocumentService {
         log.info("Document updated: {}", documentId);
         return document;
     }
+
+    /**
+     * 문서를 다른 폴더로 이동합니다.
+     */
+    private void moveDocument(Document document, UUID newParentId) {
+        Document newParent = null;
+        
+        if (newParentId != null) {
+            newParent = documentRepository.findById(newParentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Document", "id", newParentId));
+            
+            // 순환 참조 방지: 자기 자신이나 자신의 하위 폴더로 이동 불가
+            if (document.getId().equals(newParentId)) {
+                throw new IllegalArgumentException("문서를 자기 자신으로 이동할 수 없습니다.");
+            }
+            
+            if (isDescendant(document, newParent)) {
+                throw new IllegalArgumentException("문서를 자신의 하위 폴더로 이동할 수 없습니다.");
+            }
+            
+            // 폴더 타입만 자식을 가질 수 있음
+            if (newParent.getType() != Document.DocumentType.FOLDER) {
+                throw new IllegalArgumentException("일반 문서 아래로는 이동할 수 없습니다. 폴더만 자식을 가질 수 있습니다.");
+            }
+        }
+        
+        // 새 부모 아래에서의 순서 계산 (마지막 순서)
+        int newOrder = getNextOrder(document.getProject(), newParent);
+        document.updateParent(newParent, newOrder);
+        
+        log.info("Document {} moved to parent {}", document.getId(), newParentId);
+    }
+
+    /**
+     * targetDocument가 ancestorDocument의 하위(자손)인지 확인합니다.
+     */
+    private boolean isDescendant(Document ancestorDocument, Document targetDocument) {
+        Document current = targetDocument.getParent();
+        while (current != null) {
+            if (current.getId().equals(ancestorDocument.getId())) {
+                return true;
+            }
+            current = current.getParent();
+        }
+        return false;
+    }
+
+    /**
+     * 요청에서 parentId 변경이 명시적으로 요청되었는지 확인 (null로 이동하는 경우 포함)
+     * 실제 구현에서는 JSON에서 parentId 필드가 존재하는지 확인하는 별도 로직이 필요할 수 있음
+     */
+    private boolean isParentChangeRequested(UpdateDocumentRequest request) {
+        // 현재는 parentId가 null이 아닐 때만 이동 처리
+        // 루트로 이동하려면 별도 API나 플래그가 필요
+        return false;
+    }
+
 
     @Transactional
     public void deleteDocument(UUID userId, UUID documentId) {
