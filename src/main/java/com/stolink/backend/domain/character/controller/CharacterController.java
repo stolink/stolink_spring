@@ -81,6 +81,7 @@ public class CharacterController {
     @PostMapping("/projects/{projectId}/characters/{characterId}/image")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<Map<String, String>> triggerImageGeneration(
+            @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID projectId,
             @PathVariable UUID characterId,
             @Valid @RequestBody ImageGenerationRequest request) {

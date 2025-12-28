@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.List;
@@ -242,31 +243,31 @@ public class CharacterService {
      * 캐릭터 이미지 생성 요청 (RabbitMQ로 전송)
      * 
      * 트랜잭션 커밋 후 이벤트 발행 패턴:
-     * - Project 조회는 @Transactional(readOnly = true)로 수행
+     * - userId로 Project 소유권 검증 (경합 조건 방지)
      * - RabbitMQ 메시지 전송은 @TransactionalEventListener로 트랜잭션 커밋 후 수행
-     * - 이를 통해 DB 조회 후 예외 발생 시에도 데이터 정합성 보장
      * 
-     * @param projectId 프로젝트 ID (userId 조회용)
+     * @param userId 사용자 ID (소유권 검증용)
+     * @param projectId 프로젝트 ID
      * @param characterId 캐릭터 ID
      * @param description 캐릭터 외형 설명 (FastAPI message 필드에 매핑)
      * @return 생성된 jobId
      */
-    @Transactional(readOnly = true)
+    @Transactional
     public String triggerImageGeneration(
+            UUID userId,
             UUID projectId,
             UUID characterId,
             String description
     ) {
-        // Project 조회하여 userId 획득 (트랜잭션 범위 내)
-        Project project = projectRepository.findByIdWithUser(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
-        UUID userId = project.getUser().getId();
+        // userId로 Project 소유권 검증 (경합 조건 방지)
+        User user = getUserOrThrow(userId);
+        Project project = getProjectOrThrow(projectId, user);
         
         String jobId = UUID.randomUUID().toString();
         
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
         eventPublisher.publishEvent(new ImageGenerationRequestedEvent(
-                jobId, userId, projectId, characterId, description));
+                jobId, userId, project.getId(), characterId, description));
         
         log.info("Image generation event published: jobId={}, userId={}, projectId={}, characterId={}",
                 jobId, userId, projectId, characterId);
@@ -277,11 +278,11 @@ public class CharacterService {
     /**
      * 트랜잭션 커밋 후 RabbitMQ 이미지 생성 태스크 전송
      * 
-     * @TransactionalEventListener: 트랜잭션이 성공적으로 커밋된 후에만 실행됨
+     * @TransactionalEventListener(phase = AFTER_COMMIT): 트랜잭션이 성공적으로 커밋된 후에만 실행됨
      * 
      * @param event 이미지 생성 요청 이벤트
      */
-    @TransactionalEventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
         ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
                 .jobId(event.jobId())
@@ -290,11 +291,18 @@ public class CharacterService {
                 .characterId(event.characterId())
                 .message(event.description())  // FastAPI의 message 필드에 매핑
                 .action("create")
-                .callbackUrl(callbackBaseUrl + "/internal/ai/image/callback")
+                .callbackUrl(buildCallbackUrl())
                 .build();
 
         producerService.sendImageGenerationTask(task);
 
         log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
+    }
+
+    /**
+     * AI 콜백 URL 생성
+     */
+    private String buildCallbackUrl() {
+        return callbackBaseUrl + "/internal/ai/image/callback";
     }
 }
