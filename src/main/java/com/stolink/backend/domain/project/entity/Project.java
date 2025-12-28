@@ -1,5 +1,7 @@
 package com.stolink.backend.domain.project.entity;
 
+import com.stolink.backend.domain.document.entity.Document;
+import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.global.common.entity.BaseEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
@@ -7,7 +9,9 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,6 +32,14 @@ public class Project extends BaseEntity {
 
     @Column(nullable = false)
     private String title;
+
+    // 프로젝트 삭제 시 연관된 문서들도 함께 삭제
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Document> documents = new ArrayList<>();
+
+    // 프로젝트 삭제 시 연관된 복선들도 함께 삭제
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Foreshadowing> foreshadowings = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
@@ -51,7 +63,8 @@ public class Project extends BaseEntity {
     private Map<String, Object> extras = new HashMap<>();
 
     @Builder
-    public Project(String author, ProjectStatus status, String coverImage, String description, Genre genre, String title, User user, UUID id) {
+    public Project(String author, ProjectStatus status, String coverImage, String description, Genre genre,
+            String title, User user, UUID id) {
         this.author = author;
         this.status = status;
         this.coverImage = coverImage;

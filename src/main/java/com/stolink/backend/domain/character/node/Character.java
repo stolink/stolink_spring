@@ -37,6 +37,7 @@ public class Character {
 
     // Dynamic extras
     @Builder.Default
+    @org.springframework.data.neo4j.core.schema.CompositeProperty
     private Map<String, Object> extras = new HashMap<>();
 
     public void updateExtras(String key, Object value) {
