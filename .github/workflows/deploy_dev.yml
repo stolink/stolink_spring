@@ -1,8 +1,8 @@
-name: Deploy Production
+name: Deploy Development
 
 on:
   push:
-    branches: [ "deploytest", "main" ]
+    branches: [ "develop" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -74,7 +74,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/stolink/stolink-spring
+          images: ghcr.io/stolink/stolink-spring-dev
           tags: |
             type=raw,value=latest
             type=sha,prefix=
@@ -104,17 +104,17 @@ jobs:
         run: |
           aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:tag,Values=stolink-spring" \
+            --targets "Key=tag:tag,Values=stolink-spring-dev" \
             --parameters 'commands=[
-              "cd ~/stolink-project || mkdir -p ~/stolink-project && cd ~/stolink-project",
-              "if [ -d .git ]; then git pull; else git clone https://github.com/stolink/stolink_spring.git .; fi",
+              "cd ~/stolink-project-dev || mkdir -p ~/stolink-project-dev && cd ~/stolink-project-dev",
+              "if [ -d .git ]; then git pull origin develop; else git clone -b develop https://github.com/stolink/stolink_spring.git .; fi",
               "cat > .env << EOF",
-              "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}",
+              "SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL_DEV }}",
               "POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}",
               "POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}",
               "NEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}",
               "NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}",
-              "IMAGE_NAME=ghcr.io/stolink/stolink-spring:latest",
+              "IMAGE_NAME=ghcr.io/stolink/stolink-spring-dev:latest",
               "EOF",
               "echo ${{ secrets.GH_PAT }} | docker login ghcr.io -u stolink --password-stdin",
               "docker compose pull",
@@ -133,7 +133,7 @@ jobs:
           
           for i in {1..5}; do
             echo "Health check attempt $i/5..."
-            if curl -sf --max-time 10 "${{ vars.CLOUDFRONT_URL }}/health" > /dev/null 2>&1; then
+            if curl -sf --max-time 10 "${{ vars.CLOUDFRONT_URL_DEV }}/health" > /dev/null 2>&1; then
               echo "✅ Health check passed!"
               exit 0
             fi
