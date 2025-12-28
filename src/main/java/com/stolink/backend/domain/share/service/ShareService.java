@@ -78,15 +78,12 @@ public class ShareService {
 
     @Transactional
     public void deleteShareLink(UUID userId, UUID projectId) {
-        Project project = projectRepository.findById(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        Share share = shareRepository.findByProjectIdWithUser(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
 
-        if (!project.getUser().getId().equals(userId)) {
+        if (!share.getProject().getUser().getId().equals(userId)) {
             throw new ResourceNotFoundException("Project not found");
         }
-
-        Share share = shareRepository.findByProjectId(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
 
         shareRepository.delete(share);
     }
