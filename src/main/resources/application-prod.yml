@@ -16,10 +16,11 @@ spring:
 
   # RabbitMQ Configuration
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USERNAME:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    host: ${RABBITMQ_IMAGE_HOST}
+    port: ${RABBITMQ_IMAGE_PORT}
+    virtual-host: ${RABBITMQ_IMAGE_VHOST}
+    username: ${RABBITMQ_IMAGE_USER}
+    password: ${RABBITMQ_IMAGE_PASSWORD}
 
   # Production JPA settings
   jpa:
@@ -39,7 +40,7 @@ app:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
   ai:
-    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://localhost:8080/api/internal/ai}
+    callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
 
 # Production Logging
 logging:
@@ -47,3 +48,13 @@ logging:
     com.stolink: INFO
     org.springframework.web: WARN
     org.hibernate.SQL: WARN
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when-authorized
