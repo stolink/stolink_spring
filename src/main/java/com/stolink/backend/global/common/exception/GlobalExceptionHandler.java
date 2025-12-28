@@ -16,6 +16,17 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+        @ExceptionHandler(AccessDeniedException.class)
+        public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+                log.error("Access denied: {}", ex.getMessage());
+                return ResponseEntity
+                                .status(HttpStatus.FORBIDDEN)
+                                .body(ApiResponse.<Void>builder()
+                                                .status(HttpStatus.FORBIDDEN)
+                                                .message(ex.getMessage())
+                                                .build());
+        }
+
         @ExceptionHandler(ResourceNotFoundException.class)
         public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
                 log.error("Resource not found: {}", ex.getMessage());
