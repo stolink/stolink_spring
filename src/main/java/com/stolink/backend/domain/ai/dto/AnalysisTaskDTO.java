@@ -1,29 +1,32 @@
 package com.stolink.backend.domain.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.UUID;
 
 @Getter
 @NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class AnalysisTaskDTO {
-    private String jobId;
-    private UUID projectId;
-    private UUID documentId;
-    private String content;
-    private String callbackUrl;
-    private Map<String, Object> options = new HashMap<>();
 
-    @Builder
-    public AnalysisTaskDTO(String jobId, UUID projectId, UUID documentId, String content, String callbackUrl,
-            Map<String, Object> options) {
-        this.jobId = jobId;
-        this.projectId = projectId;
-        this.documentId = documentId;
-        this.content = content;
-        this.callbackUrl = callbackUrl;
-        this.options = options != null ? options : new HashMap<>();
-    }
+    @JsonProperty("job_id")
+    private String jobId;
+
+    @JsonProperty("project_id")
+    private UUID projectId;
+
+    @JsonProperty("document_id")
+    private UUID documentId;
+
+    private String content;
+
+    @JsonProperty("callback_url")
+    private String callbackUrl;
+
+    @JsonProperty("trace_id")
+    private String traceId;
+
+    private AnalysisContext context;
 }
