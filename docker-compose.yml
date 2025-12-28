@@ -7,7 +7,7 @@ services:
     container_name: stolink-backend
     environment:
       # Spring Profile
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_PROFILES_ACTIVE: dev
       # PostgreSQL
       POSTGRESQL_URL: ${POSTGRESQL_URL}
       POSTGRESQL_PORT: ${POSTGRESQL_PORT}
