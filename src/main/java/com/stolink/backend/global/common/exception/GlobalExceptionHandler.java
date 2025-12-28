@@ -16,64 +16,64 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-        @ExceptionHandler(AccessDeniedException.class)
-        public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
-                log.error("Access denied: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.FORBIDDEN)
-                                .body(ApiResponse.<Void>builder()
-                                                .status(HttpStatus.FORBIDDEN)
-                                                .message(ex.getMessage())
-                                                .build());
-        }
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        log.error("Access denied: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.FORBIDDEN)
+                        .message(ex.getMessage())
+                        .build());
+    }
 
-        @ExceptionHandler(ResourceNotFoundException.class)
-        public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
-                log.error("Resource not found: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.NOT_FOUND)
-                                .body(ApiResponse.<Void>builder()
-                                                .status(HttpStatus.NOT_FOUND)
-                                                .message(ex.getMessage())
-                                                .build());
-        }
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleResourceNotFound(ResourceNotFoundException ex) {
+        log.error("Resource not found: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.NOT_FOUND)
+                        .message(ex.getMessage())
+                        .build());
+    }
 
-        @ExceptionHandler(MethodArgumentNotValidException.class)
-        public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
-                String message = ex.getBindingResult()
-                                .getFieldErrors()
-                                .stream()
-                                .map(FieldError::getDefaultMessage)
-                                .collect(Collectors.joining(", "));
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
+        String message = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
 
-                log.error("Validation error: {}", message);
-                return ResponseEntity
-                                .status(HttpStatus.BAD_REQUEST)
-                                .body(ApiResponse.<Void>builder()
-                                                .status(HttpStatus.BAD_REQUEST)
-                                                .message(message)
-                                                .build());
-        }
+        log.error("Validation error: {}", message);
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.BAD_REQUEST)
+                        .message(message)
+                        .build());
+    }
 
-        @ExceptionHandler(IllegalArgumentException.class)
-        public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
-                log.error("Illegal argument: {}", ex.getMessage());
-                return ResponseEntity
-                                .status(HttpStatus.BAD_REQUEST)
-                                .body(ApiResponse.<Void>builder()
-                                                .status(HttpStatus.BAD_REQUEST)
-                                                .message(ex.getMessage())
-                                                .build());
-        }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        log.error("Illegal argument: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.BAD_REQUEST)
+                        .message(ex.getMessage())
+                        .build());
+    }
 
-        @ExceptionHandler(Exception.class)
-        public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
-                log.error("Internal server error", ex);
-                return ResponseEntity
-                                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .body(ApiResponse.<Void>builder()
-                                                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                                .message("서버 내부 오류가 발생했습니다.")
-                                                .build());
-        }
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
+        log.error("Internal server error", ex);
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.<Void>builder()
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .message("서버 내부 오류가 발생했습니다.")
+                        .build());
+    }
 }
