@@ -42,7 +42,11 @@ public class ShareService {
         Share share = shareRepository.findByProjectId(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
 
-        return ShareResponse.from(share);
+        return ShareResponse.builder()
+                .shareId(share.getId())
+                .projectId(projectId)
+                .hasPassword(share.getPassword() != null && !share.getPassword().isEmpty())
+                .build();
     }
 
     @Transactional
@@ -65,7 +69,11 @@ public class ShareService {
         }
 
         shareRepository.save(share);
-        return ShareResponse.from(share);
+        return ShareResponse.builder()
+                .shareId(share.getId())
+                .projectId(projectId)
+                .hasPassword(share.getPassword() != null && !share.getPassword().isEmpty())
+                .build();
     }
 
     @Transactional
@@ -102,6 +110,8 @@ public class ShareService {
         return SharedProjectResponse.from(project, documentTree);
     }
 
+    private static final int MAX_TREE_DEPTH = 10;
+
     private List<SharedDocumentResponse> buildDocumentTree(List<Document> documents) {
         // Group by parent ID
         Map<UUID, List<Document>> childrenMap = documents.stream()
@@ -115,18 +125,24 @@ public class ShareService {
                 .collect(Collectors.toList());
 
         return rootDocs.stream()
-                .map(doc -> convertToSharedResponse(doc, childrenMap))
+                .map(doc -> convertToSharedResponse(doc, childrenMap, 0))
                 .collect(Collectors.toList());
     }
 
-    private SharedDocumentResponse convertToSharedResponse(Document doc, Map<UUID, List<Document>> childrenMap) {
+    private SharedDocumentResponse convertToSharedResponse(Document doc, Map<UUID, List<Document>> childrenMap,
+            int depth) {
         SharedDocumentResponse response = SharedDocumentResponse.from(doc);
+
+        if (depth >= MAX_TREE_DEPTH) {
+            response.setChildren(new ArrayList<>());
+            return response;
+        }
 
         List<Document> children = childrenMap.getOrDefault(doc.getId(), new ArrayList<>());
         children.sort((d1, d2) -> Integer.compare(d1.getOrder(), d2.getOrder()));
 
         List<SharedDocumentResponse> childResponses = children.stream()
-                .map(child -> convertToSharedResponse(child, childrenMap))
+                .map(child -> convertToSharedResponse(child, childrenMap, depth + 1))
                 .collect(Collectors.toList());
 
         response.setChildren(childResponses);
