@@ -1,0 +1,156 @@
+# 로컬 개발용 Docker Compose 파일
+# PostgreSQL, Neo4j, RabbitMQ, Spring Boot 모두 포함
+#
+# 사용법:
+# 1. 실행: docker compose -f docker-compose.local.yml up --build -d
+# 2. 중지: docker compose -f docker-compose.local.yml down
+# 3. 데이터 삭제 포함 중지: docker compose -f docker-compose.local.yml down -v
+
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: stolink-postgres
+    environment:
+      POSTGRES_DB: stolink
+      POSTGRES_USER: stolink
+      POSTGRES_PASSWORD: stolink123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stolink -d stolink"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Neo4j Graph Database
+  neo4j:
+    image: neo4j:5-community
+    container_name: stolink-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/stolink123
+      NEO4J_PLUGINS: '["apoc"]'
+    ports:
+      - "7474:7474" # HTTP
+      - "7687:7687" # Bolt
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:7474",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: stolink-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stolink-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      # Spring Profile
+      SPRING_PROFILES_ACTIVE: local
+      # PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
+      SPRING_DATASOURCE_USERNAME: stolink
+      SPRING_DATASOURCE_PASSWORD: stolink123
+      # Neo4j
+      SPRING_NEO4J_URI: bolt://stolink-neo4j:7687
+      SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
+      SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
+      # RabbitMQ (Analysis)
+      SPRING_RABBITMQ_HOST: stolink-rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: guest
+      SPRING_RABBITMQ_PASSWORD: guest
+      # RabbitMQ (Image Generation) - 로컬에서는 같은 RabbitMQ 사용
+      RABBITMQ_IMAGE_HOST: stolink-rabbitmq
+      RABBITMQ_IMAGE_PORT: 5672
+      RABBITMQ_IMAGE_USERNAME: guest
+      RABBITMQ_IMAGE_PASSWORD: guest
+      RABBITMQ_IMAGE_VHOST: /
+      # AI Callback URL
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
+      # Storage path
+      APP_STORAGE_BASE_PATH: /app/storage/uploads
+      # CORS (로컬 개발용)
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+    ports:
+      - "8080:8080"
+    volumes:
+      - backend_storage:/app/storage/uploads
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/actuator/health",
+        ]
+      interval: 30s
+      timeout: 3s
+      start_period: 60s
+      retries: 3
+
+volumes:
+  postgres_data:
+  neo4j_data:
+  neo4j_logs:
+  rabbitmq_data:
+  backend_storage:
+
+networks:
+  stolink-local-network:
+    driver: bridge
