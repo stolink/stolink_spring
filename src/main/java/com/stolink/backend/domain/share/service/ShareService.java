@@ -32,15 +32,12 @@ public class ShareService {
     private final DocumentRepository documentRepository;
 
     public ShareResponse getShareSettings(UUID userId, UUID projectId) {
-        Project project = projectRepository.findByIdWithUser(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        Share share = shareRepository.findByProjectIdWithUser(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
 
-        if (!project.getUser().getId().equals(userId)) {
+        if (!share.getProject().getUser().getId().equals(userId)) {
             throw new ResourceNotFoundException("Project not found");
         }
-
-        Share share = shareRepository.findByProjectId(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
 
         return ShareResponse.builder()
                 .shareId(share.getId())
@@ -51,20 +48,28 @@ public class ShareService {
 
     @Transactional
     public ShareResponse createShareLink(UUID userId, UUID projectId, CreateShareRequest request) {
-        Project project = projectRepository.findByIdWithUser(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+        // Try to find existing share with project and user in one query
+        Share share = shareRepository.findByProjectIdWithUser(projectId).orElse(null);
 
-        if (!project.getUser().getId().equals(userId)) {
-            throw new ResourceNotFoundException("Project not found");
-        }
-
-        Share share = shareRepository.findByProjectId(projectId).orElse(null);
+        Project project;
         if (share == null) {
+            // Only fetch project if share doesn't exist
+            project = projectRepository.findByIdWithUser(projectId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
+
+            if (!project.getUser().getId().equals(userId)) {
+                throw new ResourceNotFoundException("Project not found");
+            }
+
             share = Share.builder()
                     .project(project)
                     .password(request.getPassword())
                     .build();
         } else {
+            // Already have everything we need for check
+            if (!share.getProject().getUser().getId().equals(userId)) {
+                throw new ResourceNotFoundException("Project not found");
+            }
             share.updatePassword(request.getPassword());
         }
 
