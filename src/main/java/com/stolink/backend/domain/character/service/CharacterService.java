@@ -284,19 +284,23 @@ public class CharacterService {
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
-        ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
-                .jobId(event.jobId())
-                .userId(event.userId())
-                .projectId(event.projectId())
-                .characterId(event.characterId())
-                .message(event.description())  // FastAPI의 message 필드에 매핑
-                .action("create")
-                .callbackUrl(buildCallbackUrl())
-                .build();
+        try {
+            ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
+                    .jobId(event.jobId())
+                    .userId(event.userId())
+                    .projectId(event.projectId())
+                    .characterId(event.characterId())
+                    .message(event.description())
+                    .action("create")
+                    .callbackUrl(buildCallbackUrl())
+                    .build();
 
-        producerService.sendImageGenerationTask(task);
-
-        log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
+            producerService.sendImageGenerationTask(task);
+            log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
+        } catch (Exception e) {
+            log.error("Failed to send image generation task: jobId={}", event.jobId(), e);
+            throw new RuntimeException("Image generation task delivery failed", e);
+        }
     }
 
     /**

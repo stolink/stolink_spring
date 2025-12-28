@@ -86,7 +86,8 @@ public class CharacterController {
             @PathVariable UUID characterId,
             @Valid @RequestBody ImageGenerationRequest request) {
         
-        String jobId = characterService.triggerImageGeneration(projectId, characterId, request.description());
+        String jobId = characterService.triggerImageGeneration(
+                userId, projectId, characterId, request.description());
         
         return ApiResponse.<Map<String, String>>builder()
                 .status(HttpStatus.ACCEPTED)
