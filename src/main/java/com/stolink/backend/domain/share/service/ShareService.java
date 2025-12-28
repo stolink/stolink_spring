@@ -32,7 +32,7 @@ public class ShareService {
     private final DocumentRepository documentRepository;
 
     public ShareResponse getShareSettings(UUID userId, UUID projectId) {
-        Project project = projectRepository.findById(projectId)
+        Project project = projectRepository.findByIdWithUser(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         if (!project.getUser().getId().equals(userId)) {
@@ -51,7 +51,7 @@ public class ShareService {
 
     @Transactional
     public ShareResponse createShareLink(UUID userId, UUID projectId, CreateShareRequest request) {
-        Project project = projectRepository.findById(projectId)
+        Project project = projectRepository.findByIdWithUser(projectId)
                 .orElseThrow(() -> new ResourceNotFoundException("Project not found"));
 
         if (!project.getUser().getId().equals(userId)) {
@@ -103,7 +103,7 @@ public class ShareService {
         }
 
         Project project = share.getProject();
-        List<Document> allDocuments = documentRepository.findByProject(project);
+        List<Document> allDocuments = documentRepository.findByProjectWithParent(project);
 
         List<SharedDocumentResponse> documentTree = buildDocumentTree(allDocuments);
 
