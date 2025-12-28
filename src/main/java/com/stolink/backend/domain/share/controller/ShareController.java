@@ -34,9 +34,8 @@ public class ShareController {
     public ApiResponse<ShareResponse> createShareLink(
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID projectId,
-            @RequestBody(required = false) CreateShareRequest request) {
-        CreateShareRequest req = request != null ? request : new CreateShareRequest();
-        ShareResponse response = shareService.createShareLink(userId, projectId, req);
+            @RequestBody CreateShareRequest request) {
+        ShareResponse response = shareService.createShareLink(userId, projectId, request);
         return ApiResponse.created(response);
     }
 

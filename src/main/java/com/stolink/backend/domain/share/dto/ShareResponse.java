@@ -12,7 +12,6 @@ public class ShareResponse {
     private UUID shareId;
     private UUID projectId;
     private boolean hasPassword;
-    private String shareUrl; // Optional, convenient for frontend
 
     public static ShareResponse from(Share share) {
         return ShareResponse.builder()
