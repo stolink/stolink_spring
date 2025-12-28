@@ -29,4 +29,5 @@ logs/
 # Environment
 .env
 .env.local
-application.yml
+
+smart-commit-md.md

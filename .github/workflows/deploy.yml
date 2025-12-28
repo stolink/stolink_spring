@@ -2,7 +2,7 @@ name: Deploy Production
 
 on:
   push:
-    branches: ["deploytest", "main"]
+    branches: ["main"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
