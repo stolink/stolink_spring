@@ -1,8 +1,10 @@
 package com.stolink.backend.domain.character.controller;
 
+import com.stolink.backend.domain.character.dto.ImageGenerationRequest;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.service.CharacterService;
 import com.stolink.backend.global.common.dto.ApiResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -81,14 +83,9 @@ public class CharacterController {
     public ApiResponse<Map<String, String>> triggerImageGeneration(
             @PathVariable UUID projectId,
             @PathVariable UUID characterId,
-            @RequestBody Map<String, String> body) {
+            @Valid @RequestBody ImageGenerationRequest request) {
         
-        String description = body.get("description");
-        if (description == null || description.isBlank()) {
-            throw new IllegalArgumentException("description is required");
-        }
-        
-        String jobId = characterService.triggerImageGeneration(projectId, characterId, description);
+        String jobId = characterService.triggerImageGeneration(projectId, characterId, request.description());
         
         return ApiResponse.<Map<String, String>>builder()
                 .status(HttpStatus.ACCEPTED)

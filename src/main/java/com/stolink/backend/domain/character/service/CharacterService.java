@@ -2,6 +2,7 @@ package com.stolink.backend.domain.character.service;
 
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
+import com.stolink.backend.domain.character.event.ImageGenerationRequestedEvent;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
 import com.stolink.backend.domain.project.entity.Project;
@@ -12,8 +13,10 @@ import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,12 +30,13 @@ public class CharacterService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final RabbitMQProducerService producerService;
+    private final ApplicationEventPublisher eventPublisher;
     private final com.stolink.backend.domain.document.repository.DocumentRepository documentRepository;
     private final org.neo4j.driver.Driver driver;
     private final jakarta.persistence.EntityManager entityManager;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
-    @Value("${app.ai.callback-base-url}")
+    @Value("${app.ai.callback-base-url:http://localhost:8080}")
     private String callbackBaseUrl;
 
     public List<Character> getCharacters(UUID userId, UUID projectId) {
@@ -235,19 +239,11 @@ public class CharacterService {
     }
 
     /**
-     * Project 조회 (User 정보 포함) - userId 조회용
-     */
-    private Project getProjectWithUser(UUID projectId) {
-        return projectRepository.findByIdWithUser(projectId)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
-    }
-
-    /**
      * 캐릭터 이미지 생성 요청 (RabbitMQ로 전송)
      * 
-     * 트랜잭션 분리 전략:
+     * 트랜잭션 커밋 후 이벤트 발행 패턴:
      * - Project 조회는 @Transactional(readOnly = true)로 수행
-     * - RabbitMQ 메시지 전송은 트랜잭션 범위 외부에서 별도 메서드로 수행
+     * - RabbitMQ 메시지 전송은 @TransactionalEventListener로 트랜잭션 커밋 후 수행
      * - 이를 통해 DB 조회 후 예외 발생 시에도 데이터 정합성 보장
      * 
      * @param projectId 프로젝트 ID (userId 조회용)
@@ -266,44 +262,39 @@ public class CharacterService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
         UUID userId = project.getUser().getId();
         
-        // 트랜잭션 범위 외에서 메시지 발송 (별도 메서드)
-        return sendImageGenerationTaskAsync(userId, projectId, characterId, description);
+        String jobId = UUID.randomUUID().toString();
+        
+        // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
+        eventPublisher.publishEvent(new ImageGenerationRequestedEvent(
+                jobId, userId, projectId, characterId, description));
+        
+        log.info("Image generation event published: jobId={}, userId={}, projectId={}, characterId={}",
+                jobId, userId, projectId, characterId);
+        
+        return jobId;
     }
 
     /**
-     * RabbitMQ 이미지 생성 태스크 전송
+     * 트랜잭션 커밋 후 RabbitMQ 이미지 생성 태스크 전송
      * 
-     * @Transactional 없음 - 메시지 발송만 수행하며 DB 트랜잭션과 독립적
+     * @TransactionalEventListener: 트랜잭션이 성공적으로 커밋된 후에만 실행됨
      * 
-     * @param userId 사용자 ID
-     * @param projectId 프로젝트 ID
-     * @param characterId 캐릭터 ID
-     * @param description 캐릭터 외형 설명
-     * @return 생성된 jobId
+     * @param event 이미지 생성 요청 이벤트
      */
-    public String sendImageGenerationTaskAsync(
-            UUID userId,
-            UUID projectId,
-            UUID characterId,
-            String description
-    ) {
-        String jobId = UUID.randomUUID().toString();
-
+    @TransactionalEventListener
+    public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
         ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
-                .jobId(jobId)
-                .userId(userId)
-                .projectId(projectId)
-                .characterId(characterId)
-                .message(description)  // FastAPI의 message 필드에 매핑
+                .jobId(event.jobId())
+                .userId(event.userId())
+                .projectId(event.projectId())
+                .characterId(event.characterId())
+                .message(event.description())  // FastAPI의 message 필드에 매핑
                 .action("create")
                 .callbackUrl(callbackBaseUrl + "/internal/ai/image/callback")
                 .build();
 
         producerService.sendImageGenerationTask(task);
 
-        log.info("Image generation triggered: jobId={}, userId={}, projectId={}, characterId={}",
-                jobId, userId, projectId, characterId);
-        
-        return jobId;
+        log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
     }
 }
