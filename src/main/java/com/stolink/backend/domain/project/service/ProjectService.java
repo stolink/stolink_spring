@@ -75,7 +75,7 @@ public class ProjectService {
                 request.getGenreEnum(),
                 request.getDescription(),
                 null,
-                null);
+                request.getStatusEnum());
 
         return ProjectResponse.from(project);
     }

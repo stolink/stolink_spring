@@ -29,3 +29,4 @@ logs/
 # Environment
 .env
 .env.local
+application.yml
