@@ -58,7 +58,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # RabbitMQ Message Broker
+  # RabbitMQ Message Broker (Main - Image Generation)
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: stolink-rabbitmq-local
@@ -70,6 +70,30 @@ services:
       - "15672:15672" # Management UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: >
+        rabbitmq-diagnostics -q ping &&
+        rabbitmqctl list_vhosts | grep -q stolink ||
+        (rabbitmqctl add_vhost stolink && rabbitmqctl set_permissions -p stolink guest ".*" ".*" ".*")
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ Message Broker (AI Agent용 - FastAPI 연결)
+  rabbitmq-agent:
+    image: rabbitmq:3.13-management-alpine
+    container_name: stolink-rabbitmq-agent
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5673:5672" # AMQP (외부 포트 5673)
+      - "15673:15672" # Management UI (외부 포트 15673)
+    volumes:
+      - rabbitmq_agent_data:/var/lib/rabbitmq
     networks:
       - stolink-local-network
     restart: unless-stopped
@@ -95,6 +119,8 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      rabbitmq-agent:
+        condition: service_healthy
     environment:
       # Spring Profile
       SPRING_PROFILES_ACTIVE: local
@@ -106,13 +132,13 @@ services:
       SPRING_NEO4J_URI: bolt://stolink-neo4j-local:7687
       SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
-      # RabbitMQ (Analysis)
-      SPRING_RABBITMQ_HOST: stolink-rabbitmq-local
+      # RabbitMQ (Analysis - AI Agent용)
+      SPRING_RABBITMQ_HOST: stolink-rabbitmq-agent
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
       SPRING_RABBITMQ_VIRTUAL_HOST: stolink
-      # RabbitMQ (Image Generation) - 로컬에서는 같은 RabbitMQ 사용
+      # RabbitMQ (Image Generation - 기존 RabbitMQ)
       RABBITMQ_IMAGE_HOST: stolink-rabbitmq-local
       RABBITMQ_IMAGE_PORT: 5672
       RABBITMQ_IMAGE_USERNAME: guest
@@ -151,6 +177,7 @@ volumes:
   neo4j_data:
   neo4j_logs:
   rabbitmq_data:
+  rabbitmq_agent_data:
   backend_storage:
 
 networks:
