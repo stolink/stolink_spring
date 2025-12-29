@@ -33,6 +33,7 @@ public class CharacterService {
     private final RabbitMQProducerService producerService;
     private final ApplicationEventPublisher eventPublisher;
     private final com.stolink.backend.domain.document.repository.DocumentRepository documentRepository;
+    private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
     private final org.neo4j.driver.Driver driver;
     private final jakarta.persistence.EntityManager entityManager;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
@@ -239,19 +240,10 @@ public class CharacterService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
     }
 
-    /**
-     * 캐릭터 이미지 생성 요청 (RabbitMQ로 전송)
-     * 
-     * 트랜잭션 커밋 후 이벤트 발행 패턴:
-     * - userId로 Project 소유권 검증 (경합 조건 방지)
-     * - RabbitMQ 메시지 전송은 @TransactionalEventListener로 트랜잭션 커밋 후 수행
-     * 
-     * @param userId 사용자 ID (소유권 검증용)
-     * @param projectId 프로젝트 ID
-     * @param characterId 캐릭터 ID
-     * @param description 캐릭터 외형 설명 (FastAPI message 필드에 매핑)
-     * @return 생성된 jobId
-     */
+    // 캐릭터 이미지 생성 요청 (RabbitMQ로 전송)
+    // - userId로 Project 소유권 검증 (경합 조건 방지)
+    // - ImageGenerationTask를 DB에 저장하여 추적 가능하게 함
+    // - RabbitMQ 메시지 전송은 @TransactionalEventListener로 트랜잭션 커밋 후 수행
     @Transactional
     public String triggerImageGeneration(
             UUID userId,
@@ -265,23 +257,31 @@ public class CharacterService {
         
         String jobId = UUID.randomUUID().toString();
         
+        // ImageGenerationTask를 DB에 저장 (콜백 처리 및 재시도를 위함)
+        com.stolink.backend.domain.character.entity.ImageGenerationTask task = 
+            com.stolink.backend.domain.character.entity.ImageGenerationTask.builder()
+                .jobId(jobId)
+                .userId(userId)
+                .projectId(project.getId())
+                .characterId(characterId)
+                .description(description)
+                .status(com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus.PENDING)
+                .build();
+        imageGenerationTaskRepository.save(task);
+        
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
         eventPublisher.publishEvent(new ImageGenerationRequestedEvent(
                 jobId, userId, project.getId(), characterId, description));
         
-        log.info("Image generation event published: jobId={}, userId={}, projectId={}, characterId={}",
+        log.info("Image generation task created and event published: jobId={}, userId={}, projectId={}, characterId={}",
                 jobId, userId, projectId, characterId);
         
         return jobId;
     }
 
-    /**
-     * 트랜잭션 커밋 후 RabbitMQ 이미지 생성 태스크 전송
-     * 
-     * @TransactionalEventListener(phase = AFTER_COMMIT): 트랜잭션이 성공적으로 커밋된 후에만 실행됨
-     * 
-     * @param event 이미지 생성 요청 이벤트
-     */
+    // 트랜잭션 커밋 후 RabbitMQ 이미지 생성 태스크 전송
+    // @TransactionalEventListener(phase = AFTER_COMMIT): 트랜잭션이 성공적으로 커밋된 후에만 실행됨
+    // 실패 시 ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
         try {
@@ -296,19 +296,29 @@ public class CharacterService {
                     .build();
 
             producerService.sendImageGenerationTask(task);
+            
+            // 전송 성공 시 상태 업데이트
+            imageGenerationTaskRepository.findById(event.jobId()).ifPresent(t -> {
+                t.markAsSent();
+                imageGenerationTaskRepository.save(t);
+            });
+            
             log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
         } catch (Exception e) {
             // 트랜잭션은 이미 커밋됨 - throw해도 롤백 불가
-            // 예외 전파 대신 로깅 후 별도 재시도 메커니즘 사용
-            log.warn("Failed to send image generation task: jobId={}, will retry later", 
-                     event.jobId(), e);
-            // TODO: Dead Letter Queue 또는 실패 테이블에 저장하여 재시도 처리
+            // ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
+            log.error("Failed to send image generation task: jobId={}, error={}", 
+                     event.jobId(), e.getMessage(), e);
+            
+            imageGenerationTaskRepository.findById(event.jobId()).ifPresent(t -> {
+                t.markAsFailed("RabbitMQ send failed: " + e.getMessage());
+                t.incrementRetryCount();
+                imageGenerationTaskRepository.save(t);
+            });
         }
     }
 
-    /**
-     * AI 콜백 URL 생성
-     */
+    // AI 콜백 URL 생성
     private String buildCallbackUrl() {
         return callbackBaseUrl + "/image/callback";
     }

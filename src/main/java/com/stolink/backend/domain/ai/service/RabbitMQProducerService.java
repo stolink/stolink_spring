@@ -25,9 +25,11 @@ public class RabbitMQProducerService {
     public void sendAnalysisTask(AnalysisTaskDTO task) {
         try {
             rabbitTemplate.convertAndSend(analysisQueue, task);
-            log.info("Analysis task sent to queue: jobId={}", task.getJobId());
+            log.info("Analysis task sent: jobId={}, projectId={}", 
+                     task.getJobId(), task.getProjectId());
         } catch (AmqpException e) {
-            log.error("Failed to send analysis task: jobId={}", task.getJobId(), e);
+            log.error("Failed to send analysis task: jobId={}, projectId={}", 
+                      task.getJobId(), task.getProjectId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
     }
@@ -35,11 +37,11 @@ public class RabbitMQProducerService {
     public void sendImageGenerationTask(ImageGenerationTaskDTO task) {
         try {
             rabbitTemplate.convertAndSend(imageQueue, task);
-            log.info("Image generation task sent to queue: characterId={}, jobId={}", 
-                     task.getCharacterId(), task.getJobId());
+            log.info("Image generation task sent: jobId={}, userId={}, projectId={}, characterId={}", 
+                     task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId());
         } catch (AmqpException e) {
-            log.error("Failed to send image generation task: characterId={}, jobId={}", 
-                      task.getCharacterId(), task.getJobId(), e);
+            log.error("Failed to send image generation task: jobId={}, userId={}, projectId={}, characterId={}", 
+                      task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
     }
