@@ -6,13 +6,11 @@
 # 2. 중지: docker compose -f docker-compose.local.yml down
 # 3. 데이터 삭제 포함 중지: docker compose -f docker-compose.local.yml down -v
 
-version: "3.8"
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:16.11-alpine
-    container_name: stolink-postgres
+    container_name: stolink-postgres-local
     environment:
       POSTGRES_DB: stolink
       POSTGRES_USER: stolink
@@ -33,7 +31,7 @@ services:
   # Neo4j Graph Database
   neo4j:
     image: neo4j:5.26-community
-    container_name: stolink-neo4j
+    container_name: stolink-neo4j-local
     environment:
       NEO4J_AUTH: neo4j/stolink123
       NEO4J_PLUGINS: '["apoc"]'
@@ -63,7 +61,7 @@ services:
   # RabbitMQ Message Broker
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
-    container_name: stolink-rabbitmq
+    container_name: stolink-rabbitmq-local
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -76,7 +74,10 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: >
+        rabbitmq-diagnostics -q ping &&
+        rabbitmqctl list_vhosts | grep -q stolink ||
+        (rabbitmqctl add_vhost stolink && rabbitmqctl set_permissions -p stolink guest ".*" ".*" ".*")
       interval: 10s
       timeout: 5s
       retries: 5
@@ -98,24 +99,25 @@ services:
       # Spring Profile
       SPRING_PROFILES_ACTIVE: local
       # PostgreSQL
-      SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
+      SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres-local:5432/stolink
       SPRING_DATASOURCE_USERNAME: stolink
       SPRING_DATASOURCE_PASSWORD: stolink123
       # Neo4j
-      SPRING_NEO4J_URI: bolt://stolink-neo4j:7687
+      SPRING_NEO4J_URI: bolt://stolink-neo4j-local:7687
       SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
       # RabbitMQ (Analysis)
-      SPRING_RABBITMQ_HOST: stolink-rabbitmq
+      SPRING_RABBITMQ_HOST: stolink-rabbitmq-local
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: guest
       SPRING_RABBITMQ_PASSWORD: guest
+      SPRING_RABBITMQ_VIRTUAL_HOST: stolink
       # RabbitMQ (Image Generation) - 로컬에서는 같은 RabbitMQ 사용
-      RABBITMQ_IMAGE_HOST: stolink-rabbitmq
+      RABBITMQ_IMAGE_HOST: stolink-rabbitmq-local
       RABBITMQ_IMAGE_PORT: 5672
       RABBITMQ_IMAGE_USERNAME: guest
       RABBITMQ_IMAGE_PASSWORD: guest
-      RABBITMQ_IMAGE_VHOST: /
+      RABBITMQ_IMAGE_VHOST: stolink
       # AI Callback URL
       APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
       # Storage path
@@ -153,4 +155,5 @@ volumes:
 
 networks:
   stolink-local-network:
+    name: stolink-shared-network # Spring/FastAPI 공통 네트워크 - 먼저 실행하는 쪽에서 생성
     driver: bridge

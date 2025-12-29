@@ -17,13 +17,26 @@ import java.util.UUID;
 public class ImageGenerationTaskDTO {
 
     private String jobId;
+    private UUID userId;
     private UUID projectId;
     private UUID characterId;
-    private String characterName;
-    private String description;
-
+    
+    /**
+     * FastAPI의 ImageTaskMessage.message에 매핑됨
+     * 캐릭터 외형 설명 또는 편집 요청 내용
+     */
+    private String message;
+    
+    /**
+     * 이미지 작업 타입: "create" 또는 "edit"
+     */
     @Builder.Default
-    private String style = "anime";
+    private String action = "create";
+    
+    // TODO: 향후 characterName, style 필요시 FastAPI 스키마와 함께 추가
+    // private String characterName;
+    // @Builder.Default
+    // private String style = "anime";
 
     private String callbackUrl;
 }

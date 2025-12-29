@@ -1,17 +1,11 @@
 package com.stolink.backend.domain.character.service;
 
 import com.stolink.backend.domain.character.node.Character;
-import com.stolink.backend.domain.character.relationship.CharacterRelationship;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 // @Component

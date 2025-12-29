@@ -31,4 +31,8 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> ok() {
         return new ApiResponse<>(HttpStatus.OK, "OK", null);
     }
+
+    public static <T> ApiResponse<T> accepted(T data) {
+        return new ApiResponse<>(HttpStatus.ACCEPTED, "Accepted", data);
+    }
 }
