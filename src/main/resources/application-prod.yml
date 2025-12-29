@@ -14,13 +14,10 @@ spring:
       username: ${NEO4J_USERNAME}
       password: ${NEO4J_PASSWORD}
 
-  # RabbitMQ Configuration
-  rabbitmq:
-    host: ${RABBITMQ_IMAGE_HOST}
-    port: ${RABBITMQ_IMAGE_PORT}
-    virtual-host: ${RABBITMQ_IMAGE_VHOST}
-    username: ${RABBITMQ_IMAGE_USER}
-    password: ${RABBITMQ_IMAGE_PASSWORD}
+  # Spring Boot 기본 RabbitMQ 자동 구성 비활성화 (수동 구성 사용)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
   # Production JPA settings
   jpa:
@@ -39,6 +36,20 @@ app:
     queues:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
+    # Image RabbitMQ (이미지 생성용)
+    image:
+      host: ${RABBITMQ_IMAGE_HOST}
+      port: ${RABBITMQ_IMAGE_PORT:5672}
+      username: ${RABBITMQ_IMAGE_USER}
+      password: ${RABBITMQ_IMAGE_PASSWORD}
+      virtual-host: ${RABBITMQ_IMAGE_VHOST}
+    # Agent RabbitMQ (분석용)
+    agent:
+      host: ${RABBITMQ_AGENT_HOST}
+      port: ${RABBITMQ_AGENT_PORT:5672}
+      username: ${RABBITMQ_AGENT_USER}
+      password: ${RABBITMQ_AGENT_PASSWORD}
+      virtual-host: ${RABBITMQ_AGENT_VHOST}
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
 

@@ -14,13 +14,10 @@ spring:
       username: neo4j
       password: stolink123
 
-  # RabbitMQ Configuration
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
-    virtual-host: stolink
+  # Spring Boot 기본 RabbitMQ 자동 구성 비활성화 (수동 구성 사용)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
 # Application Configuration
 app:
@@ -32,5 +29,19 @@ app:
     queues:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
+    # Image RabbitMQ (이미지 생성용) - 로컬에서는 5672 포트
+    image:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+      virtual-host: stolink
+    # Agent RabbitMQ (분석용) - 로컬에서는 5673 포트 (docker-compose.local.yml 참조)
+    agent:
+      host: localhost
+      port: 5673
+      username: guest
+      password: guest
+      virtual-host: stolink
   ai:
     callback-base-url: http://localhost:8080/api/internal/ai
