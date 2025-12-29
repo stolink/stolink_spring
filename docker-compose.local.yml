@@ -6,8 +6,6 @@
 # 2. 중지: docker compose -f docker-compose.local.yml down
 # 3. 데이터 삭제 포함 중지: docker compose -f docker-compose.local.yml down -v
 
-version: "3.8"
-
 services:
   # PostgreSQL Database
   postgres:
@@ -61,25 +59,26 @@ services:
       retries: 5
 
   # RabbitMQ Message Broker
-  # rabbitmq:
-  #   image: rabbitmq:3.13-management-alpine
-  #   container_name: stolink-rabbitmq
-  #   environment:
-  #     RABBITMQ_DEFAULT_USER: guest
-  #     RABBITMQ_DEFAULT_PASS: guest
-  #   ports:
-  #     - "5672:5672" # AMQP
-  #     - "15672:15672" # Management UI
-  #   volumes:
-  #     - rabbitmq_data:/var/lib/rabbitmq
-  #   networks:
-  #     - stolink-local-network
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: stolink-rabbitmq-local
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: stolink
+    ports:
+      - "5672:5672" # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # Spring Boot Backend
   backend:
@@ -92,8 +91,8 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
-      # rabbitmq:
-      #   condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     environment:
       # Spring Profile
       SPRING_PROFILES_ACTIVE: local
@@ -154,5 +153,5 @@ volumes:
 
 networks:
   stolink-local-network:
-    external: true
-    name: stolink_fastapi_image_stolink-local-network
+    name: stolink-shared-network # Spring/FastAPI 공통 네트워크 - 먼저 실행하는 쪽에서 생성
+    driver: bridge
