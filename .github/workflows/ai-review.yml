@@ -113,8 +113,11 @@ jobs:
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ]; then
             echo "API Error: ANTHROPIC_API_KEY secret is missing in GitHub repository settings." > review_result.txt
-            exit 0
+            echo "error=API_KEY_MISSING" >> $GITHUB_OUTPUT
+            exit 1
           fi
+
+          echo "::add-mask::$ANTHROPIC_API_KEY"
 
           RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
             -H "Content-Type: application/json" \

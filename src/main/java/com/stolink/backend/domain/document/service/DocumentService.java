@@ -14,6 +14,8 @@ import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +39,32 @@ public class DocumentService {
 
         List<Document> rootDocuments = documentRepository.findRootDocuments(project);
         return buildTree(rootDocuments);
+    }
+
+    /**
+     * 특정 폴더의 직계 자식 문서를 페이징하여 반환 (무한 스크롤용)
+     * TEXT 타입 문서만 반환하며, order 기준 오름차순 정렬
+     */
+    public Page<DocumentTreeResponse> getChildren(UUID userId, UUID folderId, Pageable pageable) {
+        User user = getUserOrThrow(userId);
+        Document folder = documentRepository.findById(folderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Document", "id", folderId));
+
+        // 권한 검증: 프로젝트 소유자 확인
+        if (!folder.getProject().getUser().getId().equals(user.getId())) {
+            throw new IllegalArgumentException("권한이 없습니다.");
+        }
+
+        // FOLDER 타입인지 확인
+        if (folder.getType() != Document.DocumentType.FOLDER) {
+            throw new IllegalArgumentException("폴더가 아닌 문서입니다.");
+        }
+
+        // TEXT 타입 자식만 페이징 조회
+        Page<Document> children = documentRepository.findByParentAndTypeOrderByOrderAsc(
+                folder, Document.DocumentType.TEXT, pageable);
+
+        return children.map(DocumentTreeResponse::from);
     }
 
     @Transactional

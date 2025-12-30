@@ -1,117 +1,51 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Spring Boot Application
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${IMAGE_NAME}
     container_name: stolink-backend
     environment:
+      # Spring Profile
+      SPRING_PROFILES_ACTIVE: dev
       # PostgreSQL
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/stolink
-      SPRING_DATASOURCE_USERNAME: stolink
-      SPRING_DATASOURCE_PASSWORD: stolink123
+      POSTGRESQL_URL: ${POSTGRESQL_URL}
+      POSTGRESQL_PORT: ${POSTGRESQL_PORT}
+      POSTGRESQL_USERNAME: ${POSTGRESQL_USERNAME}
+      POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD}
       # Neo4j
-      SPRING_NEO4J_URI: bolt://neo4j:7687
-      SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
-      SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
-      # RabbitMQ
-      SPRING_RABBITMQ_HOST: rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
-      # AI Callback URL (update for fastapi service if needed)
-      APP_AI_CALLBACK_BASE_URL: http://backend:8080/api/internal/ai
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USERNAME: ${NEO4J_USERNAME}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_PORT: ${NEO4J_PORT}
+      # RabbitMQ - Image (이미지 생성용)
+      RABBITMQ_IMAGE_HOST: ${RABBITMQ_IMAGE_HOST}
+      RABBITMQ_IMAGE_PORT: ${RABBITMQ_IMAGE_PORT}
+      RABBITMQ_IMAGE_VHOST: ${RABBITMQ_IMAGE_VHOST}
+      RABBITMQ_IMAGE_USER: ${RABBITMQ_IMAGE_USER}
+      RABBITMQ_IMAGE_PASSWORD: ${RABBITMQ_IMAGE_PASSWORD}
+      # RabbitMQ - Agent (분석용)
+      RABBITMQ_AGENT_HOST: ${RABBITMQ_AGENT_HOST}
+      RABBITMQ_AGENT_PORT: ${RABBITMQ_AGENT_PORT}
+      RABBITMQ_AGENT_VHOST: ${RABBITMQ_AGENT_VHOST}
+      RABBITMQ_AGENT_USER: ${RABBITMQ_AGENT_USER}
+      RABBITMQ_AGENT_PASSWORD: ${RABBITMQ_AGENT_PASSWORD}
+      # AI Callback URL
+      APP_AI_CALLBACK_BASE_URL: ${APP_AI_CALLBACK_BASE_URL}
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
+      # CORS
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174}
     ports:
       - "8080:8080"
     volumes:
       - backend_storage:/app/storage/uploads
     networks:
       - stolink-network
-    depends_on:
-      postgres:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
-
-  # PostgreSQL
-  postgres:
-    image: postgres:16.11-alpine
-    container_name: stolink-postgres
-    environment:
-      POSTGRES_DB: stolink
-      POSTGRES_USER: stolink
-      POSTGRES_PASSWORD: stolink123
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - stolink-network
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U stolink -d stolink" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # Neo4j
-  neo4j:
-    image: neo4j:5.26-community
-    container_name: stolink-neo4j
-    environment:
-      NEO4J_AUTH: neo4j/stolink123
-      NEO4J_dbms_memory_pagecache_size: 512M
-      NEO4J_dbms_memory_heap_max__size: 512M
-    ports:
-      - "7474:7474" # HTTP
-      - "7687:7687" # Bolt
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    networks:
-      - stolink-network
-    healthcheck:
-      test: [ "CMD", "wget", "-q", "--spider", "http://localhost:7474" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  # RabbitMQ
-  rabbitmq:
-    image: rabbitmq:3.13-management-alpine
-    container_name: stolink-rabbitmq
-    environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
-    ports:
-      - "5672:5672" # AMQP
-      - "15672:15672" # Management UI
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    networks:
-      - stolink-network
-    healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
 volumes:
-  postgres_data:
-  neo4j_data:
-  neo4j_logs:
-  rabbitmq_data:
   backend_storage:
-
 
 networks:
   stolink-network:

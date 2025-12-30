@@ -1,0 +1,71 @@
+# Development Profile - Uses environment variables from GitHub Secrets
+spring:
+  # PostgreSQL Configuration
+  datasource:
+    url: jdbc:postgresql://${POSTGRESQL_URL}:${POSTGRESQL_PORT:5432}/stolink
+    username: ${POSTGRESQL_USERNAME}
+    password: ${POSTGRESQL_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  # Neo4j Configuration
+  neo4j:
+    uri: bolt://${NEO4J_URI}:${NEO4J_PORT:7687}
+    authentication:
+      username: ${NEO4J_USERNAME}
+      password: ${NEO4J_PASSWORD}
+
+  # Spring Boot 기본 RabbitMQ 자동 구성 비활성화 (수동 구성 사용)
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+  # Production JPA settings
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+# Application Configuration
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174}
+  storage:
+    base-path: ${APP_STORAGE_BASE_PATH:/app/storage/uploads}
+  rabbitmq:
+    queues:
+      analysis: stolink.analysis.queue
+      image: stolink.image.queue
+    # Image RabbitMQ (이미지 생성용)
+    image:
+      host: ${RABBITMQ_IMAGE_HOST}
+      port: ${RABBITMQ_IMAGE_PORT:5672}
+      username: ${RABBITMQ_IMAGE_USER}
+      password: ${RABBITMQ_IMAGE_PASSWORD}
+      virtual-host: ${RABBITMQ_IMAGE_VHOST}
+    # Agent RabbitMQ (분석용)
+    agent:
+      host: ${RABBITMQ_AGENT_HOST}
+      port: ${RABBITMQ_AGENT_PORT:5672}
+      username: ${RABBITMQ_AGENT_USER}
+      password: ${RABBITMQ_AGENT_PASSWORD}
+      virtual-host: ${RABBITMQ_AGENT_VHOST}
+  ai:
+    callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
+
+# Development Logging
+logging:
+  level:
+    com.stolink: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: when-authorized
