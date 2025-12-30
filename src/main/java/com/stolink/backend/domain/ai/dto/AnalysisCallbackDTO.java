@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.*;
 
 import java.util.Map;
@@ -13,9 +14,13 @@ import java.util.Map;
 @Builder
 public class AnalysisCallbackDTO {
 
+    @JsonAlias("job_id")
     private String jobId;
+
     private String status; // "COMPLETED", "WARNING", "FAILED"
+
     private Map<String, Object> result;
+
     private String error;
 
     /**

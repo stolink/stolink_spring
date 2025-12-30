@@ -10,9 +10,7 @@ import com.stolink.backend.domain.character.relationship.CharacterRelationship;
 import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Node("Character")
 @Getter
@@ -30,17 +28,21 @@ public class Character {
     private String name;
     private String role; // protagonist, antagonist, supporting, mentor, sidekick, other
     private String imageUrl;
+    private String status; // alive, dead, unknown
+
+    // JSON 문자열로 저장 (Neo4j는 중첩 Map을 지원하지 않음)
+    private String visualJson;
+    private String personalityJson;
+    private String currentMoodJson;
+
+    // 추가 필드 (v2.0 스키마)
+    private String motivation; // 캐릭터 동기
+    private String firstAppearance; // 첫 등장 장소
+
+    // extras를 단일 JSON 문자열로 저장
+    private String extrasJson;
 
     @Relationship(type = "RELATED_TO", direction = Relationship.Direction.OUTGOING)
     @Builder.Default
     private List<CharacterRelationship> relationships = new ArrayList<>();
-
-    // Dynamic extras
-    @Builder.Default
-    @org.springframework.data.neo4j.core.schema.CompositeProperty
-    private Map<String, Object> extras = new HashMap<>();
-
-    public void updateExtras(String key, Object value) {
-        this.extras.put(key, value);
-    }
 }

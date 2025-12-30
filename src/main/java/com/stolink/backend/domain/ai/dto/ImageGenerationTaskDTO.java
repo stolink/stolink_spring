@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -16,14 +17,23 @@ import java.util.UUID;
 @AllArgsConstructor
 public class ImageGenerationTaskDTO {
 
+    @JsonProperty("job_id")
     private String jobId;
+
+    @JsonProperty("project_id")
     private UUID projectId;
+
+    @JsonProperty("character_id")
     private UUID characterId;
+
+    @JsonProperty("character_name")
     private String characterName;
+
     private String description;
 
     @Builder.Default
     private String style = "anime";
 
+    @JsonProperty("callback_url")
     private String callbackUrl;
 }

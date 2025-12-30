@@ -117,14 +117,13 @@ public class DocumentService {
         }
 
         document.update(
-            request.getTitle(),
-            request.getSynopsis(),
-            request.getOrder(),
-            request.getStatus(),
-            request.getTargetWordCount(),
-            request.getIncludeInCompile(),
-            request.getNotes()
-        );
+                request.getTitle(),
+                request.getSynopsis(),
+                request.getOrder(),
+                request.getStatus(),
+                request.getTargetWordCount(),
+                request.getIncludeInCompile(),
+                request.getNotes());
 
         document.updateLabel(request.getLabel(), request.getLabelColor());
 
@@ -137,30 +136,30 @@ public class DocumentService {
      */
     private void moveDocument(Document document, UUID newParentId) {
         Document newParent = null;
-        
+
         if (newParentId != null) {
             newParent = documentRepository.findById(newParentId)
                     .orElseThrow(() -> new ResourceNotFoundException("Document", "id", newParentId));
-            
+
             // 순환 참조 방지: 자기 자신이나 자신의 하위 폴더로 이동 불가
             if (document.getId().equals(newParentId)) {
                 throw new IllegalArgumentException("문서를 자기 자신으로 이동할 수 없습니다.");
             }
-            
+
             if (isDescendant(document, newParent)) {
                 throw new IllegalArgumentException("문서를 자신의 하위 폴더로 이동할 수 없습니다.");
             }
-            
+
             // 폴더 타입만 자식을 가질 수 있음
             if (newParent.getType() != Document.DocumentType.FOLDER) {
                 throw new IllegalArgumentException("일반 문서 아래로는 이동할 수 없습니다. 폴더만 자식을 가질 수 있습니다.");
             }
         }
-        
+
         // 새 부모 아래에서의 순서 계산 (마지막 순서)
         int newOrder = getNextOrder(document.getProject(), newParent);
         document.updateParent(newParent, newOrder);
-        
+
         log.info("Document {} moved to parent {}", document.getId(), newParentId);
     }
 
@@ -188,7 +187,6 @@ public class DocumentService {
         return false;
     }
 
-
     @Transactional
     public void deleteDocument(UUID userId, UUID documentId) {
         Document document = getDocument(userId, documentId);
@@ -198,7 +196,7 @@ public class DocumentService {
 
     @Transactional
     public void reorderDocuments(UUID userId, ReorderDocumentsRequest request) {
-        User user = getUserOrThrow(userId);
+        getUserOrThrow(userId);
 
         for (int i = 0; i < request.getOrderedIds().size(); i++) {
             UUID documentId = request.getOrderedIds().get(i);
@@ -207,8 +205,9 @@ public class DocumentService {
             // Verify the document belongs to the same parent
             UUID currentParentId = document.getParent() != null ? document.getParent().getId() : null;
             if ((request.getParentId() == null && currentParentId != null) ||
-                (request.getParentId() != null && !request.getParentId().equals(currentParentId))) {
-                throw new IllegalArgumentException("Document " + documentId + " does not belong to parent " + request.getParentId());
+                    (request.getParentId() != null && !request.getParentId().equals(currentParentId))) {
+                throw new IllegalArgumentException(
+                        "Document " + documentId + " does not belong to parent " + request.getParentId());
             }
 
             document.update(null, null, i, null, null, null, null);
