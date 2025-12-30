@@ -28,14 +28,14 @@
 
 ### 1.2 주요 기능
 
-| 기능 | 설명 |
-|------|------|
-| **사용자 인증** | 회원가입, 로그인, 프로필 관리 |
-| **프로젝트 관리** | 작품(소설/시나리오) CRUD, 장르별 분류, 통계 제공 |
-| **문서 관리** | 계층적 문서 구조, 폴더/텍스트 타입, 실시간 단어수 계산 |
-| **캐릭터 관계도** | Neo4j 기반 그래프 데이터베이스, 캐릭터 관계 시각화 |
-| **복선 관리** | 복선 태그 등록, 등장 위치 추적, 회수 상태 관리 |
-| **AI 통합** | RabbitMQ 기반 비동기 분석, 이미지 생성 작업 큐잉 |
+| 기능              | 설명                                                   |
+| ----------------- | ------------------------------------------------------ |
+| **사용자 인증**   | 회원가입, 로그인, 프로필 관리                          |
+| **프로젝트 관리** | 작품(소설/시나리오) CRUD, 장르별 분류, 통계 제공       |
+| **문서 관리**     | 계층적 문서 구조, 폴더/텍스트 타입, 실시간 단어수 계산 |
+| **캐릭터 관계도** | Neo4j 기반 그래프 데이터베이스, 캐릭터 관계 시각화     |
+| **복선 관리**     | 복선 태그 등록, 등장 위치 추적, 회수 상태 관리         |
+| **AI 통합**       | RabbitMQ 기반 비동기 분석, 이미지 생성 작업 큐잉       |
 
 ### 1.3 시스템 요구사항
 
@@ -49,34 +49,34 @@
 
 ### 2.1 Backend Framework
 
-| 기술 | 버전 | 용도 |
-|------|------|------|
-| Spring Boot | 3.4.1 | 메인 프레임워크 |
-| Spring Data JPA | 3.x | PostgreSQL ORM |
-| Spring Data Neo4j | 7.x | Neo4j 그래프 DB 연동 |
-| Spring AMQP | 3.x | RabbitMQ 메시지 큐 |
-| Lombok | 1.18+ | 보일러플레이트 코드 감소 |
-| QueryDSL | 5.x | JPA 쿼리 생성 |
+| 기술              | 버전  | 용도                     |
+| ----------------- | ----- | ------------------------ |
+| Spring Boot       | 3.4.1 | 메인 프레임워크          |
+| Spring Data JPA   | 3.x   | PostgreSQL ORM           |
+| Spring Data Neo4j | 7.x   | Neo4j 그래프 DB 연동     |
+| Spring AMQP       | 3.x   | RabbitMQ 메시지 큐       |
+| Lombok            | 1.18+ | 보일러플레이트 코드 감소 |
+| QueryDSL          | 5.x   | JPA 쿼리 생성            |
 
 ### 2.2 Database
 
-| 데이터베이스 | 버전 | 용도 |
-|--------------|------|------|
-| PostgreSQL | 16 | 정형 데이터 (사용자, 프로젝트, 문서) |
-| Neo4j | 5.15 | 그래프 데이터 (캐릭터 관계도) |
+| 데이터베이스 | 버전 | 용도                                 |
+| ------------ | ---- | ------------------------------------ |
+| PostgreSQL   | 16   | 정형 데이터 (사용자, 프로젝트, 문서) |
+| Neo4j        | 5.15 | 그래프 데이터 (캐릭터 관계도)        |
 
 ### 2.3 Message Queue
 
-| 기술 | 버전 | 용도 |
-|------|------|------|
+| 기술     | 버전 | 용도                |
+| -------- | ---- | ------------------- |
 | RabbitMQ | 3.13 | AI 작업 비동기 처리 |
 
 ### 2.4 Additional Libraries
 
-| 라이브러리 | 용도 |
-|------------|------|
+| 라이브러리          | 용도                       |
+| ------------------- | -------------------------- |
 | Hypersistence Utils | PostgreSQL JSONB 타입 지원 |
-| Jackson | JSON 직렬화/역직렬화 |
+| Jackson             | JSON 직렬화/역직렬화       |
 
 ---
 
@@ -221,36 +221,38 @@ src/main/java/com/stolink/backend/
 
 사용자 계정 정보를 관리합니다.
 
-| 필드 | 타입 | 제약조건 | 설명 |
-|------|------|----------|------|
-| `id` | UUID | PK, auto-generated | 사용자 고유 식별자 |
-| `email` | String | NOT NULL, UNIQUE | 이메일 주소 |
-| `password` | String | NOT NULL | 비밀번호 (현재 평문 저장) |
-| `nickname` | String(100) | NOT NULL | 닉네임 |
-| `avatarUrl` | String(500) | nullable | 프로필 이미지 URL |
-| `createdAt` | LocalDateTime | auto | 생성 시간 |
-| `updatedAt` | LocalDateTime | auto | 수정 시간 |
+| 필드        | 타입          | 제약조건           | 설명                      |
+| ----------- | ------------- | ------------------ | ------------------------- |
+| `id`        | UUID          | PK, auto-generated | 사용자 고유 식별자        |
+| `email`     | String        | NOT NULL, UNIQUE   | 이메일 주소               |
+| `password`  | String        | NOT NULL           | 비밀번호 (현재 평문 저장) |
+| `nickname`  | String(100)   | NOT NULL           | 닉네임                    |
+| `avatarUrl` | String(500)   | nullable           | 프로필 이미지 URL         |
+| `createdAt` | LocalDateTime | auto               | 생성 시간                 |
+| `updatedAt` | LocalDateTime | auto               | 수정 시간                 |
 
 ### 5.2 Project (프로젝트/작품)
 
 작품 정보를 관리합니다.
 
-| 필드 | 타입 | 제약조건 | 설명 |
-|------|------|----------|------|
-| `id` | UUID | PK, auto-generated | 프로젝트 고유 식별자 |
-| `user` | User | FK, NOT NULL | 소유자 |
-| `title` | String | NOT NULL | 작품 제목 |
-| `genre` | Genre (Enum) | nullable | 장르 |
-| `description` | TEXT | nullable | 작품 설명 |
-| `coverImage` | String(500) | nullable | 커버 이미지 URL |
-| `status` | ProjectStatus | NOT NULL, default: WRITING | 작품 상태 |
-| `author` | String(100) | nullable | 저자명 |
-| `extras` | JSONB | nullable | 추가 정보 (JSON) |
+| 필드          | 타입          | 제약조건                   | 설명                 |
+| ------------- | ------------- | -------------------------- | -------------------- |
+| `id`          | UUID          | PK, auto-generated         | 프로젝트 고유 식별자 |
+| `user`        | User          | FK, NOT NULL               | 소유자               |
+| `title`       | String        | NOT NULL                   | 작품 제목            |
+| `genre`       | Genre (Enum)  | nullable                   | 장르                 |
+| `description` | TEXT          | nullable                   | 작품 설명            |
+| `coverImage`  | String(500)   | nullable                   | 커버 이미지 URL      |
+| `status`      | ProjectStatus | NOT NULL, default: WRITING | 작품 상태            |
+| `author`      | String(100)   | nullable                   | 저자명               |
+| `extras`      | JSONB         | nullable                   | 추가 정보 (JSON)     |
 
 **Genre Enum 값:**
+
 - `FANTASY`, `ROMANCE`, `SF`, `MYSTERY`, `THRILLER`, `HORROR`, `DRAMA`, `OTHER`
 
 **ProjectStatus Enum 값:**
+
 - `WRITING` (작성 중)
 - `COMPLETED` (완료)
 
@@ -258,30 +260,32 @@ src/main/java/com/stolink/backend/
 
 계층적 문서 구조를 관리합니다.
 
-| 필드 | 타입 | 제약조건 | 설명 |
-|------|------|----------|------|
-| `id` | UUID | PK, auto-generated | 문서 고유 식별자 |
-| `project` | Project | FK, NOT NULL | 소속 프로젝트 |
-| `parent` | Document | FK, nullable | 부모 문서 (폴더) |
-| `type` | DocumentType | NOT NULL | 문서 타입 |
-| `title` | String | NOT NULL | 문서 제목 |
-| `content` | TEXT | default: "" | 본문 내용 (HTML) |
-| `synopsis` | TEXT | default: "" | 시놉시스 |
-| `order` | Integer | NOT NULL, default: 0 | 정렬 순서 |
-| `status` | DocumentStatus | default: DRAFT | 문서 상태 |
-| `label` | String(50) | nullable | 라벨 |
-| `labelColor` | String(7) | nullable | 라벨 색상 (#RRGGBB) |
-| `wordCount` | Integer | NOT NULL, default: 0 | 단어 수 |
-| `targetWordCount` | Integer | nullable | 목표 단어 수 |
-| `includeInCompile` | Boolean | default: true | 컴파일 포함 여부 |
-| `keywords` | TEXT | nullable | 키워드 (쉼표 구분) |
-| `notes` | TEXT | nullable | 메모 |
+| 필드               | 타입           | 제약조건             | 설명                |
+| ------------------ | -------------- | -------------------- | ------------------- |
+| `id`               | UUID           | PK, auto-generated   | 문서 고유 식별자    |
+| `project`          | Project        | FK, NOT NULL         | 소속 프로젝트       |
+| `parent`           | Document       | FK, nullable         | 부모 문서 (폴더)    |
+| `type`             | DocumentType   | NOT NULL             | 문서 타입           |
+| `title`            | String         | NOT NULL             | 문서 제목           |
+| `content`          | TEXT           | default: ""          | 본문 내용 (HTML)    |
+| `synopsis`         | TEXT           | default: ""          | 시놉시스            |
+| `order`            | Integer        | NOT NULL, default: 0 | 정렬 순서           |
+| `status`           | DocumentStatus | default: DRAFT       | 문서 상태           |
+| `label`            | String(50)     | nullable             | 라벨                |
+| `labelColor`       | String(7)      | nullable             | 라벨 색상 (#RRGGBB) |
+| `wordCount`        | Integer        | NOT NULL, default: 0 | 단어 수             |
+| `targetWordCount`  | Integer        | nullable             | 목표 단어 수        |
+| `includeInCompile` | Boolean        | default: true        | 컴파일 포함 여부    |
+| `keywords`         | TEXT           | nullable             | 키워드 (쉼표 구분)  |
+| `notes`            | TEXT           | nullable             | 메모                |
 
 **DocumentType Enum 값:**
+
 - `FOLDER` (폴더)
 - `TEXT` (텍스트 문서)
 
 **DocumentStatus Enum 값:**
+
 - `DRAFT` (초안)
 - `REVISED` (수정됨)
 - `FINAL` (최종)
@@ -290,45 +294,47 @@ src/main/java/com/stolink/backend/
 
 캐릭터 정보를 Neo4j 그래프 노드로 관리합니다.
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `id` | String | UUID 자동 생성 |
-| `projectId` | String | 소속 프로젝트 ID |
-| `name` | String | 캐릭터 이름 |
-| `role` | String | 역할 (protagonist, antagonist, supporting, mentor, sidekick, other) |
-| `imageUrl` | String | 캐릭터 이미지 URL |
-| `extras` | Map<String, Object> | 추가 정보 (나이, 종족, 성격 등) |
-| `relationships` | List<CharacterRelationship> | 관계 목록 (OUTGOING) |
+| 필드            | 타입                        | 설명                                                                |
+| --------------- | --------------------------- | ------------------------------------------------------------------- |
+| `id`            | String                      | UUID 자동 생성                                                      |
+| `projectId`     | String                      | 소속 프로젝트 ID                                                    |
+| `name`          | String                      | 캐릭터 이름                                                         |
+| `role`          | String                      | 역할 (protagonist, antagonist, supporting, mentor, sidekick, other) |
+| `imageUrl`      | String                      | 캐릭터 이미지 URL                                                   |
+| `extras`        | Map<String, Object>         | 추가 정보 (나이, 종족, 성격 등)                                     |
+| `relationships` | List<CharacterRelationship> | 관계 목록 (OUTGOING)                                                |
 
 **CharacterRelationship (관계):**
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| `type` | String | 관계 타입 (friendly, rival, family, romantic, mentor, other) |
-| `strength` | Integer | 관계 강도 (1-10) |
-| `description` | String | 관계 설명 |
-| `targetCharacter` | Character | 대상 캐릭터 |
+| 필드              | 타입      | 설명                                                         |
+| ----------------- | --------- | ------------------------------------------------------------ |
+| `type`            | String    | 관계 타입 (friendly, rival, family, romantic, mentor, other) |
+| `strength`        | Integer   | 관계 강도 (1-10)                                             |
+| `description`     | String    | 관계 설명                                                    |
+| `targetCharacter` | Character | 대상 캐릭터                                                  |
 
 ### 5.5 Foreshadowing (복선)
 
 복선 정보를 관리합니다.
 
-| 필드 | 타입 | 제약조건 | 설명 |
-|------|------|----------|------|
-| `id` | UUID | PK, auto-generated | 복선 고유 식별자 |
-| `project` | Project | FK, NOT NULL | 소속 프로젝트 |
-| `tag` | String(100) | NOT NULL, UNIQUE per project | 복선 태그 |
-| `status` | ForeshadowingStatus | default: PENDING | 회수 상태 |
-| `description` | TEXT | nullable | 복선 설명 |
-| `importance` | Importance | default: MINOR | 중요도 |
-| `appearances` | List<ForeshadowingAppearance> | cascade | 등장 위치 목록 |
+| 필드          | 타입                          | 제약조건                     | 설명             |
+| ------------- | ----------------------------- | ---------------------------- | ---------------- |
+| `id`          | UUID                          | PK, auto-generated           | 복선 고유 식별자 |
+| `project`     | Project                       | FK, NOT NULL                 | 소속 프로젝트    |
+| `tag`         | String(100)                   | NOT NULL, UNIQUE per project | 복선 태그        |
+| `status`      | ForeshadowingStatus           | default: PENDING             | 회수 상태        |
+| `description` | TEXT                          | nullable                     | 복선 설명        |
+| `importance`  | Importance                    | default: MINOR               | 중요도           |
+| `appearances` | List<ForeshadowingAppearance> | cascade                      | 등장 위치 목록   |
 
 **ForeshadowingStatus Enum 값:**
+
 - `PENDING` (미회수)
 - `RECOVERED` (회수됨)
 - `IGNORED` (무시)
 
 **Importance Enum 값:**
+
 - `MAJOR` (주요)
 - `MINOR` (부수)
 
@@ -492,11 +498,11 @@ app:
 
 ### 7.2 Docker Compose 서비스
 
-| 서비스 | 이미지 | 포트 |
-|--------|--------|------|
-| PostgreSQL | postgres:16-alpine | 5432 |
-| Neo4j | neo4j:5.15-community | 7474 (HTTP), 7687 (Bolt) |
-| RabbitMQ | rabbitmq:3.13-management-alpine | 5672 (AMQP), 15672 (UI) |
+| 서비스     | 이미지                          | 포트                     |
+| ---------- | ------------------------------- | ------------------------ |
+| PostgreSQL | postgres:16-alpine              | 5432                     |
+| Neo4j      | neo4j:5.15-community            | 7474 (HTTP), 7687 (Bolt) |
+| RabbitMQ   | rabbitmq:3.13-management-alpine | 5672 (AMQP), 15672 (UI)  |
 
 ---
 
@@ -511,22 +517,24 @@ docker-compose up -d
 ### 8.2 애플리케이션 실행
 
 **Windows:**
+
 ```bash
 gradlew.bat bootRun
 ```
 
 **Linux/Mac:**
+
 ```bash
 ./gradlew bootRun
 ```
 
 ### 8.3 접속 정보
 
-| 서비스 | URL | 인증 정보 |
-|--------|-----|----------|
-| Backend API | http://localhost:8080 | - |
-| Neo4j Browser | http://localhost:7474 | neo4j / stolink123 |
-| RabbitMQ UI | http://localhost:15672 | guest / guest |
+| 서비스        | URL                    | 인증 정보          |
+| ------------- | ---------------------- | ------------------ |
+| Backend API   | http://localhost:8080  | -                  |
+| Neo4j Browser | http://localhost:7474  | neo4j / stolink123 |
+| RabbitMQ UI   | http://localhost:15672 | guest / guest      |
 
 ---
 
@@ -551,8 +559,10 @@ X-User-Id: {user-uuid}
 ### 9.3 CORS 설정
 
 현재 허용된 Origin:
+
 - `http://localhost:3000`
 - `http://localhost:5173`
+- `http://localhost:5174`
 
 ### 9.4 API 응답 형식
 
@@ -568,6 +578,7 @@ X-User-Id: {user-uuid}
 ```
 
 에러 응답:
+
 ```json
 {
   "code": 400,
@@ -583,11 +594,11 @@ X-User-Id: {user-uuid}
 
 ### A. 관련 프로젝트
 
-| 프로젝트 | 설명 |
-|----------|------|
-| Frontend | React + TypeScript + Tiptap 에디터 |
-| AI Worker | FastAPI + LangGraph 기반 AI 분석 |
-| Image Worker | FastAPI + 이미지 생성 모델 |
+| 프로젝트     | 설명                               |
+| ------------ | ---------------------------------- |
+| Frontend     | React + TypeScript + Tiptap 에디터 |
+| AI Worker    | FastAPI + LangGraph 기반 AI 분석   |
+| Image Worker | FastAPI + 이미지 생성 모델         |
 
 ### B. 참고 자료
 
