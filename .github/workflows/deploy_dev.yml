@@ -151,7 +151,8 @@ jobs:
           # Base64로 인코딩하여 SSM으로 전달 (특수문자 이스케이프 문제 해결)
           ENV_BASE64=$(echo "$ENV_CONTENT" | base64 -w 0)
 
-          aws ssm send-command \
+          # SSM 명령 실행 및 Command ID 캡처
+          COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:tag,Values=stolink-spring" \
             --parameters "commands=[
@@ -163,12 +164,39 @@ jobs:
             --timeout-seconds 300 \
             --max-concurrency "50%" \
             --max-errors "0" \
-            --output text
+            --query "Command.CommandId" \
+            --output text)
+
+          echo "SSM Command ID: $COMMAND_ID"
+
+          # SSM 명령 완료 대기 (최대 5분)
+          echo "Waiting for SSM command to complete..."
+          for i in {1..30}; do
+            STATUS=$(aws ssm list-commands --command-id "$COMMAND_ID" --query "Commands[0].Status" --output text)
+            echo "Attempt $i/30: Status = $STATUS"
+
+            if [ "$STATUS" = "Success" ]; then
+              echo "✅ SSM command completed successfully"
+              break
+            elif [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ]; then
+              echo "❌ SSM command failed with status: $STATUS"
+              # 실패 시 상세 로그 출력
+              aws ssm list-command-invocations --command-id "$COMMAND_ID" --details --query "CommandInvocations[0].CommandPlugins[0].Output" --output text
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "❌ SSM command did not complete in time. Last status: $STATUS"
+            exit 1
+          fi
 
       - name: Health Check
         run: |
           echo "Waiting for application to start..."
-          sleep 30
+          sleep 60
 
           HEALTH_URL="https://${{ vars.CLOUDFRONT_URL_DEV }}/actuator/health"
           echo "Health check URL: $HEALTH_URL"
