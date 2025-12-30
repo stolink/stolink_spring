@@ -158,7 +158,7 @@ jobs:
             --parameters "commands=[
               \"sudo -i -u ubuntu bash -c 'mkdir -p /home/ubuntu/stolink-project'\",
               \"sudo -i -u ubuntu bash -c 'cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout dev && git pull origin dev; else git clone -b dev https://github.com/stolink/stolink_spring.git .; fi'\",
-              \"echo '${ENV_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-project/.env > /dev/null\",
+              \"sudo rm -f /home/ubuntu/stolink-project/.env && echo '${ENV_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-project/.env > /dev/null\",
               \"sudo -i -u ubuntu bash -c 'cd /home/ubuntu/stolink-project && echo ${GH_PAT} | sudo docker login ghcr.io -u stolink --password-stdin && sudo docker compose down --remove-orphans && sudo docker compose up -d --pull always && sudo docker image prune -f'\"
             ]" \
             --timeout-seconds 300 \
