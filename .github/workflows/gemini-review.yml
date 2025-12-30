@@ -1,0 +1,238 @@
+name: AI Code Review
+
+on:
+  # 코멘트로 트리거 (/review) - 수동 실행
+  issue_comment:
+    types: [created]
+  # PR 생성 및 업데이트 시 자동 실행
+  pull_request:
+    types: [opened, synchronize]
+
+# 동시 실행 방지 - 같은 PR에서 여러 리뷰가 동시에 실행되지 않도록
+# cancel-in-progress: false로 설정하여 기존 리뷰가 완료될 때까지 대기
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  ai_review:
+    if: |
+      (github.event_name == 'pull_request') ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '/review'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR info
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" == "issue_comment" ]; then
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+            BASE_BRANCH=$(gh pr view ${{ github.event.issue.number }} --json baseRefName --jq '.baseRefName')
+            echo "base_branch=$BASE_BRANCH" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+            echo "base_branch=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get changed files and diff
+        id: diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BASE_BRANCH="${{ steps.pr.outputs.base_branch }}"
+          git fetch origin $BASE_BRANCH
+
+          # 변경된 파일 수 (head 적용 전, 정수 보장) - Java/Spring Boot 프로젝트용
+          FILES_COUNT=$(git diff origin/$BASE_BRANCH...HEAD --name-only -- '*.java' '*.yml' '*.gradle' '*.sql' | wc -l | tr -d ' ')
+          FILES_COUNT=${FILES_COUNT:-0}
+          echo "files_count=$FILES_COUNT" >> $GITHUB_OUTPUT
+
+          # 변경된 파일 목록 (최대 30개)
+          FILES=$(git diff origin/$BASE_BRANCH...HEAD --name-only -- '*.java' '*.yml' '*.gradle' '*.sql' | head -30)
+          echo "files<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # 변경 사항 통계 (정수 보장)
+          DIFF_STAT=$(git diff origin/$BASE_BRANCH...HEAD --stat | tail -1)
+          DIFF_LINES=$(git diff origin/$BASE_BRANCH...HEAD -- '*.java' '*.yml' '*.gradle' '*.sql' | wc -l | tr -d ' ')
+          DIFF_LINES=${DIFF_LINES:-0}
+          echo "diff_stat=$DIFF_STAT" >> $GITHUB_OUTPUT
+          echo "diff_lines=$DIFF_LINES" >> $GITHUB_OUTPUT
+
+          # 빈 diff 체크 (FILES_COUNT 사용 - head 적용 전 값)
+          if [ "$DIFF_LINES" -eq 0 ] || [ "$FILES_COUNT" -eq 0 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+          # 실제 코드 변경 내용 (10,000줄 제한)
+          git diff origin/$BASE_BRANCH...HEAD -- '*.java' '*.yml' '*.gradle' '*.sql' | head -10000 > diff_content.txt
+
+      - name: Skip if no changes
+        if: steps.diff.outputs.skip == 'true'
+        run: |
+          echo "리뷰할 코드 변경사항이 없습니다. (*.java, *.yml, *.gradle, *.sql 파일 변경 없음)" > review_result.txt
+
+      - name: Prepare prompt and call Gemini API
+        id: review
+        if: steps.diff.outputs.skip != 'true'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "API Error: GEMINI_API_KEY is missing." > review_result.txt
+            exit 1
+          fi
+
+          # Python으로 안전하게 JSON 생성 및 API 호출
+          python3 << 'PYEOF'
+          import json
+          import urllib.request
+          import urllib.error
+          import sys
+          import os
+
+          # diff 내용 읽기 (안전한 방식)
+          with open('diff_content.txt', 'r', encoding='utf-8', errors='replace') as f:
+              diff_content = f.read()
+
+          files = """${{ steps.diff.outputs.files }}"""
+          diff_stat = "${{ steps.diff.outputs.diff_stat }}"
+          diff_lines = "${{ steps.diff.outputs.diff_lines }}"
+
+          files_count = "${{ steps.diff.outputs.files_count }}"
+
+          # 제한 사항 경고 메시지 생성
+          truncated_notice = ""
+          notices = []
+          if int(diff_lines) > 10000:
+              notices.append(f"diff 라인 수가 {diff_lines}줄로 10,000줄을 초과하여 일부만 리뷰합니다.")
+          if int(files_count) > 30:
+              notices.append(f"변경된 파일이 {files_count}개로 30개를 초과하여 일부만 표시합니다.")
+          if notices:
+              truncated_notice = "\n\n**Note:** " + " ".join(notices)
+
+          prompt = f"""당신은 StoLink Backend 프로젝트(Java 21/Spring Boot 3.4.1)의 시니어 백엔드 개발자이자 DBA 전문가입니다.
+
+          ## 프로젝트 컨텍스트
+          - Spring Boot 3.4.1 기반 REST API 서버
+          - PostgreSQL 16 + Neo4j 5.26 이중 데이터베이스 구조
+          - FastAPI AI 서비스와 RabbitMQ 비동기 연동
+          - 기술 스택: Java 21, Spring Data JPA, QueryDSL, Hibernate 6.x
+
+          ## 변경 요약
+          {diff_stat}{truncated_notice}
+
+          ## 변경된 파일
+          {files}
+
+          ## 코드 변경사항
+          ```diff
+          {diff_content}
+          ```
+
+          ## 리뷰 우선순위
+          1. 🔴 치명적: 런타임 에러, SQL Injection, N+1 쿼리, 데이터 정합성 이슈
+          2. ⚠️ 경고: 성능 이슈, 트랜잭션 범위 문제, 안티패턴
+          3. 💡 제안: 코드 스타일, 리팩토링 (선택사항)
+
+          ## 주요 체크포인트
+          - N+1 쿼리 발생 여부 (fetch join 또는 @EntityGraph 사용 확인)
+          - Entity 직접 API 응답 노출 (DTO 변환 필수)
+          - 트랜잭션 내 외부 API 호출 금지
+          - SELECT * 사용 금지
+          - 루프 내 DB 쿼리 실행 금지
+
+          ## 리뷰 지시사항
+          - 반드시 한국어로 답변하세요
+          - 🔴 치명적, ⚠️ 경고가 없으면 '✅ 코드 리뷰 통과' 출력
+          - 💡 제안은 선택사항이므로 '수정 필요'로 취급하지 않음
+          - 응답 형식 외의 추가 설명이나 마무리 멘트는 작성하지 마세요
+
+          ## 응답 형식
+          ### 요약
+          (1-2문장으로 전체 변경사항 요약)
+
+          ### 🔴 치명적 (N건)
+          **파일:라인** - 이슈 제목
+          - 문제: 설명
+          - 개선: 코드 예시
+          (없으면 이 섹션 생략)
+
+          ### ⚠️ 경고 (N건)
+          **파일:라인** - 이슈 제목
+          > 설명
+          (없으면 이 섹션 생략)
+
+          ### 💡 제안
+          - (있다면 간결하게 1-3개만 제안, 없으면 생략)"""
+
+          # Gemini API 호출
+          api_key = os.environ.get('GEMINI_API_KEY')
+          url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={api_key}"
+
+          payload = {
+              "contents": [{"parts": [{"text": prompt}]}],
+              "generationConfig": {
+                  "temperature": 0.7,
+                  "maxOutputTokens": 4096
+              }
+          }
+
+          try:
+              req = urllib.request.Request(
+                  url,
+                  data=json.dumps(payload).encode('utf-8'),
+                  headers={'Content-Type': 'application/json'},
+                  method='POST'
+              )
+              with urllib.request.urlopen(req, timeout=120) as response:
+                  result = json.loads(response.read().decode('utf-8'))
+
+              # Gemini 응답 파싱
+              review = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '리뷰 생성 실패')
+              with open('review_result.txt', 'w', encoding='utf-8') as f:
+                  f.write(review)
+
+          except urllib.error.HTTPError as e:
+              error_body = e.read().decode('utf-8') if e.fp else str(e)
+              with open('review_result.txt', 'w') as f:
+                  f.write(f"Gemini API Error ({e.code}): {error_body}")
+              sys.exit(1)
+          except Exception as e:
+              with open('review_result.txt', 'w') as f:
+                  f.write(f"API Error: {e}")
+              sys.exit(1)
+          PYEOF
+
+      - name: Post review comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let review = '리뷰 생성 중 오류가 발생했습니다.';
+            try {
+              review = fs.readFileSync('review_result.txt', 'utf8');
+            } catch (e) {
+              review = `파일 읽기 오류: ${e.message}`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.pr.outputs.number }},
+              body: `## 🤖 AI 코드 리뷰 (Gemini Flash)\n\n${review}`
+            });

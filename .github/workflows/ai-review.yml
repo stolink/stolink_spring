@@ -1,12 +1,12 @@
 name: AI Code Review
 
 on:
-  # 코멘트로 트리거 (/review) - 수동 실행
-  issue_comment:
-    types: [created]
-  # PR 생성 및 업데이트 시 자동 실행
-  pull_request:
-    types: [opened, synchronize]
+  # # 코멘트로 트리거 (/review) - 수동 실행
+  # issue_comment:
+  #   types: [created]
+  # # PR 생성 및 업데이트 시 자동 실행
+  # pull_request:
+  #   types: [opened, synchronize]
 
 jobs:
   ai_review:

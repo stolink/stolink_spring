@@ -108,27 +108,7 @@ jobs:
             --parameters 'commands=[
               "sudo -i -u ubuntu bash -c '\''mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project'\''",
               "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout dev && git pull origin dev; else git clone -b dev https://github.com/stolink/stolink_spring.git .; fi'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}\" > .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"POSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"POSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"POSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"NEO4J_URI=${{ secrets.NEO4J_URI }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"NEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"NEO4J_PORT=${{ vars.NEO4J_PORT }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_IMAGE_HOST=${{ secrets.RABBITMQ_IMAGE_HOST }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_IMAGE_PORT=${{ vars.RABBITMQ_IMAGE_PORT }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_IMAGE_VHOST=${{ vars.RABBITMQ_IMAGE_VHOST }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_IMAGE_USER=${{ secrets.RABBITMQ_IMAGE_USER }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_IMAGE_PASSWORD=${{ secrets.RABBITMQ_IMAGE_PASSWORD }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_AGENT_HOST=${{ secrets.RABBITMQ_AGENT_HOST }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_AGENT_PORT=${{ vars.RABBITMQ_AGENT_PORT }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_AGENT_VHOST=${{ vars.RABBITMQ_AGENT_VHOST }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_AGENT_USER=${{ secrets.RABBITMQ_AGENT_USER }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"RABBITMQ_AGENT_PASSWORD=${{ secrets.RABBITMQ_AGENT_PASSWORD }}\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"APP_AI_CALLBACK_BASE_URL=http://${{ secrets.ALB_DNS_NAME }}/api/internal/ai\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"IMAGE_NAME=ghcr.io/stolink/stolink-spring:dev-latest\" >> .env'\''",
-              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo \"CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,https://${{ vars.CLOUDFRONT_URL }},https://${{ vars.CLOUDFRONT_URL_DEV }}\" >> .env'\''",
+              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && printf \"POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}\\nPOSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}\\nPOSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}\\nPOSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT }}\\nNEO4J_URI=${{ secrets.NEO4J_URI }}\\nNEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}\\nNEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}\\nNEO4J_PORT=${{ vars.NEO4J_PORT }}\\nRABBITMQ_IMAGE_HOST=${{ secrets.RABBITMQ_IMAGE_HOST }}\\nRABBITMQ_IMAGE_PORT=${{ vars.RABBITMQ_IMAGE_PORT }}\\nRABBITMQ_IMAGE_VHOST=${{ vars.RABBITMQ_IMAGE_VHOST }}\\nRABBITMQ_IMAGE_USER=${{ secrets.RABBITMQ_IMAGE_USER }}\\nRABBITMQ_IMAGE_PASSWORD=${{ secrets.RABBITMQ_IMAGE_PASSWORD }}\\nRABBITMQ_AGENT_HOST=${{ secrets.RABBITMQ_AGENT_HOST }}\\nRABBITMQ_AGENT_PORT=${{ vars.RABBITMQ_AGENT_PORT }}\\nRABBITMQ_AGENT_VHOST=${{ vars.RABBITMQ_AGENT_VHOST }}\\nRABBITMQ_AGENT_USER=${{ secrets.RABBITMQ_AGENT_USER }}\\nRABBITMQ_AGENT_PASSWORD=${{ secrets.RABBITMQ_AGENT_PASSWORD }}\\nAPP_AI_CALLBACK_BASE_URL=http://${{ secrets.ALB_DNS_NAME }}/api/internal/ai\\nIMAGE_NAME=ghcr.io/stolink/stolink-spring:dev-latest\\nCORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,https://${{ vars.CLOUDFRONT_URL }},https://${{ vars.CLOUDFRONT_URL_DEV }}\\n\" > .env'\''",
               "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo ${{ secrets.GH_PAT }} | sudo docker login ghcr.io -u stolink --password-stdin && sudo docker compose down --remove-orphans && sudo docker compose up -d --pull always && sudo docker image prune -f'\''"
             ]' \
             --timeout-seconds 300 \
