@@ -31,3 +31,15 @@ logs/
 .env.local
 
 smart-commit-md.md
+
+FASTAPI*.md
+JOB*.md
+PROJECT*.md
+SPRING*.md
+*.json
+
+# Compiled class files
+bin/
+
+# Compiled class files
+bin/
