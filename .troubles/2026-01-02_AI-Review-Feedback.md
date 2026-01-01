@@ -41,3 +41,9 @@ AI 코드 리뷰(Gemini Flash)에서 4개의 치명적(🔴) 이슈와 2개의 �
   - `CharacterController`: `CharacterResponse` DTO 도입 (Entity 노출 해결)
   - `DocumentController`: `DocumentResponse` DTO 도입 (Entity 노출 해결)
   - `DocumentService`: In-Memory Tree Build 도입 (`findByProjectWithParent` 사용, N+1 해결)
+
+### 2차 피드백 반영 (Cycle 2)
+
+- **DocumentService**: `parseManuscript` 메서드의 반복문 내 `save()` 호출 문제를 **Batch Insert**(`saveAll`)로 리팩토링하여 해결.
+- **OAuth2SuccessHandler**: Access Token 전달 방식을 Query Parameter에서 **URL Fragment**(`#`)로 변경하여 보안 강화.
+- **ManuscriptJobService**: N+1 오탐 확인 (이미 해결됨).

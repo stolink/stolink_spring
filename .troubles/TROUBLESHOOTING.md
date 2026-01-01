@@ -262,4 +262,9 @@ AI 코드 리뷰에서 Controller의 Entity 직접 반환, 비동기 작업의 �
 - **Batch Insert**: `ManuscriptJobService`에서 300+개 섹션을 `saveAll()`로 일괄 저장하여 성능을 개선했습니다.
 - **In-Memory Tree**: `DocumentService.getDocumentTree`에서 재귀 쿼리(N+1) 대신 `findByProjectWithParent`로 한 번에 조회 후 메모리에서 트리로 변환했습니다.
 
+**[2차 반영]**
+
+- **DocumentService**: `parseManuscript`의 반복문 내 `save()` 호출 문제를 **Batch Insert**(`saveAll`)로 추가 수정했습니다.
+- **OAuth2**: Access Token 전달 방식을 **URL Fragment**(`#`)로 변경하여 보안을 강화했습니다.
+
 **결과**: API 안정성 확보, 대용량 처리 속도 개선, N+1 쿼리 완전 제거 ✅

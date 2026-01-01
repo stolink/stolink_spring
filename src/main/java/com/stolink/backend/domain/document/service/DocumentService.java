@@ -339,12 +339,10 @@ public class DocumentService {
         }
 
         // Approved Regex Patterns (v5) - 더 엄격한 패턴
-        // 챕터: "제n장", "Chapter n", "Part n" 등 명확한 챕터 표시만 매칭
         Pattern folderPattern = Pattern.compile(
                 "^\\s*(?:(?:제|第)\\s*[0-9一二三四五六七八九十]+\\s*(?:부|권|편|장)|(?:Part|Chapter|Book|Volume)\\s+[0-9IVXLCDM]+)\\s*[.:\\-]?\\s*.*$",
                 Pattern.CASE_INSENSITIVE);
 
-        // 섹션: 장면 전환선(***,---,===)만 매칭, 숫자 기반 섹션은 제외
         Pattern textPattern = Pattern.compile(
                 "^\\s*[*=-]{3,}\\s*$");
 
@@ -355,7 +353,7 @@ public class DocumentService {
         int rootOrder = getNextOrder(project, rootParent);
         int chapterOrderAdj = 0;
         int sectionOrderAdj = 0;
-        List<Document> createdDocuments = new ArrayList<>();
+        List<Document> documentsToSave = new ArrayList<>();
 
         for (String line : lines) {
             String trimmedLine = line.trim();
@@ -364,12 +362,12 @@ public class DocumentService {
             Matcher textMatcher = textPattern.matcher(line);
 
             if (folderMatcher.find()) {
-                // 이전 데이터 저장
-                createdDocuments.addAll(saveSectionWithSplitting(project,
+                // 이전 데이터 생성
+                documentsToSave.addAll(createSections(project,
                         currentChapter != null ? currentChapter : rootParent, contentBuilder,
                         currentSectionTitle, sectionOrderAdj++));
 
-                // 새로운 챕터(폴더) 생성
+                // 새로운 챕터(폴더) 생성 (저장하지 않음)
                 currentChapter = Document.builder()
                         .project(project)
                         .parent(rootParent)
@@ -378,13 +376,14 @@ public class DocumentService {
                         .order(rootOrder + chapterOrderAdj++)
                         .status(Document.DocumentStatus.DRAFT)
                         .build();
-                currentChapter = documentRepository.save(currentChapter);
+                documentsToSave.add(currentChapter);
+
                 currentSectionTitle = null;
                 sectionOrderAdj = 0;
                 log.info("Parsed Chapter Folder: {}", trimmedLine);
             } else if (textMatcher.find()) {
-                // 이전 데이터 저장
-                createdDocuments.addAll(saveSectionWithSplitting(project,
+                // 이전 데이터 생성
+                documentsToSave.addAll(createSections(project,
                         currentChapter != null ? currentChapter : rootParent, contentBuilder,
                         currentSectionTitle, sectionOrderAdj++));
 
@@ -396,28 +395,31 @@ public class DocumentService {
                 if (!trimmedLine.isEmpty() || contentBuilder.length() > 0) {
                     contentBuilder.append(line).append("\n");
                 }
-                // 5,000자 분할은 saveSectionWithSplitting 내부 while 루프에서 처리됨
             }
         }
 
-        // 마지막 데이터 저장
-        createdDocuments.addAll(
-                saveSectionWithSplitting(project, currentChapter != null ? currentChapter : rootParent, contentBuilder,
+        // 마지막 데이터 생성
+        documentsToSave.addAll(
+                createSections(project, currentChapter != null ? currentChapter : rootParent, contentBuilder,
                         currentSectionTitle, sectionOrderAdj++));
-        log.info("Manuscript parsing completed for project: {}. Created {} documents.", request.getProjectId(),
-                createdDocuments.size());
 
-        return createdDocuments.stream()
+        // 일괄 저장 (Batch Insert)
+        if (!documentsToSave.isEmpty()) {
+            documentRepository.saveAll(documentsToSave);
+        }
+
+        log.info("Manuscript parsing completed for project: {}. Created {} documents.", request.getProjectId(),
+                documentsToSave.size());
+
+        return documentsToSave.stream()
                 .map(DocumentTreeResponse::from)
                 .collect(java.util.stream.Collectors.toList());
     }
 
     /**
-     * 섹션을 저장하되, 5000자가 넘으면 문단/문장 단위로 쪼개어 여러 문서로 저장합니다.
-     *
-     * @return 생성된 문서 목록
+     * 섹션을 생성하되, 5000자가 넘으면 문단/문장 단위로 쪼개어 여러 문서 객체를 반환합니다.
      */
-    private List<Document> saveSectionWithSplitting(Project project, Document parent, StringBuilder builder,
+    private List<Document> createSections(Project project, Document parent, StringBuilder builder,
             String title,
             int order) {
         List<Document> created = new ArrayList<>();
@@ -427,8 +429,6 @@ public class DocumentService {
         String rawContent = builder.toString();
         int partCount = 1;
         final int MAX_CHARS = 5000;
-
-        log.info("Starting split for content length: {}", rawContent.length());
 
         while (!rawContent.isEmpty()) {
             String chunk;
@@ -456,10 +456,6 @@ public class DocumentService {
                 chunk = rawContent.substring(0, splitIndex).trim();
                 remaining = rawContent.substring(splitIndex).trim();
 
-                log.info("Split at index {}: chunk={} chars, remaining={} chars",
-                        splitIndex, chunk.length(), remaining.length());
-
-                // 빈 청크 방지
                 if (chunk.isEmpty()) {
                     rawContent = remaining;
                     continue;
@@ -486,9 +482,8 @@ public class DocumentService {
                         .status(Document.DocumentStatus.DRAFT)
                         .includeInCompile(true)
                         .build();
-                documentRepository.save(doc);
+                // 저장하지 않고 리스트에 추가
                 created.add(doc);
-                log.info("Saved section '{}' with {} chars", finalTitle, chunk.length());
                 partCount++;
             }
             rawContent = remaining;
