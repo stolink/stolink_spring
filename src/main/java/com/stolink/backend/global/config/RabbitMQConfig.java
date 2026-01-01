@@ -20,6 +20,13 @@ public class RabbitMQConfig {
     @Value("${app.rabbitmq.queues.image}")
     private String imageQueue;
 
+    // 대용량 분석 아키텍처 큐
+    @Value("${app.rabbitmq.queues.document-analysis:document_analysis_queue}")
+    private String documentAnalysisQueue;
+
+    @Value("${app.rabbitmq.queues.global-merge:global_merge_queue}")
+    private String globalMergeQueue;
+
     // Image RabbitMQ 설정
     @Value("${app.rabbitmq.image.host}")
     private String imageHost;
@@ -60,6 +67,22 @@ public class RabbitMQConfig {
     @Bean
     public Queue imageQueue() {
         return new Queue(imageQueue, true);
+    }
+
+    /**
+     * 문서 분석 큐 (대용량 분석 아키텍처)
+     */
+    @Bean
+    public Queue documentAnalysisQueue() {
+        return new Queue(documentAnalysisQueue, true);
+    }
+
+    /**
+     * 글로벌 병합 큐 (2차 Pass)
+     */
+    @Bean
+    public Queue globalMergeQueue() {
+        return new Queue(globalMergeQueue, true);
     }
 
     /**
@@ -104,7 +127,8 @@ public class RabbitMQConfig {
      */
     @Bean
     @Primary
-    public RabbitTemplate imageRabbitTemplate(@Qualifier("imageConnectionFactory") ConnectionFactory connectionFactory) {
+    public RabbitTemplate imageRabbitTemplate(
+            @Qualifier("imageConnectionFactory") ConnectionFactory connectionFactory) {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(messageConverter());
         return template;
@@ -114,7 +138,8 @@ public class RabbitMQConfig {
      * Agent RabbitTemplate (Analysis용)
      */
     @Bean
-    public RabbitTemplate agentRabbitTemplate(@Qualifier("agentConnectionFactory") ConnectionFactory connectionFactory) {
+    public RabbitTemplate agentRabbitTemplate(
+            @Qualifier("agentConnectionFactory") ConnectionFactory connectionFactory) {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(messageConverter());
         return template;

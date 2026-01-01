@@ -44,4 +44,32 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
     List<Document> findByProjectWithParent(@Param("project") Project project);
 
     void deleteAllByProject(Project project);
+
+    // === 대용량 분석 아키텍처 관련 메서드 ===
+
+    /**
+     * 프로젝트 내 TEXT 타입 문서 중 특정 분석 상태인 문서 수 조회
+     */
+    @Query("SELECT COUNT(d) FROM Document d WHERE d.project.id = :projectId AND d.type = 'TEXT' AND d.analysisStatus = :status")
+    long countByProjectIdAndTypeTextAndAnalysisStatus(
+            @Param("projectId") UUID projectId,
+            @Param("status") Document.AnalysisStatus status);
+
+    /**
+     * 분석 상태가 FAILED이고 재시도 횟수가 maxRetry 미만인 문서 조회
+     */
+    @Query("SELECT d FROM Document d WHERE d.analysisStatus = 'FAILED' AND d.analysisRetryCount < :maxRetry")
+    List<Document> findFailedDocumentsForRetry(@Param("maxRetry") int maxRetry);
+
+    /**
+     * 프로젝트 ID로 TEXT 타입 문서 조회 (분석 대상)
+     */
+    @Query("SELECT d FROM Document d WHERE d.project.id = :projectId AND d.type = 'TEXT' ORDER BY d.order")
+    List<Document> findTextDocumentsByProjectId(@Param("projectId") UUID projectId);
+
+    /**
+     * 프로젝트 내 TEXT 문서 총 수 조회
+     */
+    @Query("SELECT COUNT(d) FROM Document d WHERE d.project.id = :projectId AND d.type = 'TEXT'")
+    long countTextDocumentsByProjectId(@Param("projectId") UUID projectId);
 }
