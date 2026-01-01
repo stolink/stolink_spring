@@ -2,6 +2,7 @@ package com.stolink.backend.domain.document.controller;
 
 import com.stolink.backend.domain.document.dto.CreateDocumentRequest;
 import com.stolink.backend.domain.document.dto.DocumentTreeResponse;
+import com.stolink.backend.domain.document.dto.DocumentResponse;
 import com.stolink.backend.domain.document.dto.UpdateDocumentRequest;
 import com.stolink.backend.domain.document.dto.ReorderDocumentsRequest;
 import com.stolink.backend.domain.document.dto.BulkUpdateRequest;
@@ -69,11 +70,11 @@ public class DocumentController {
     }
 
     @GetMapping("/documents/{id}")
-    public ApiResponse<Document> getDocument(
+    public ApiResponse<DocumentResponse> getDocument(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id) {
         Document document = documentService.getDocument(userId, id);
-        return ApiResponse.ok(document);
+        return ApiResponse.ok(DocumentResponse.from(document));
     }
 
     @GetMapping("/documents/{id}/content")
@@ -94,12 +95,12 @@ public class DocumentController {
     }
 
     @PatchMapping("/documents/{id}")
-    public ApiResponse<Document> updateDocument(
+    public ApiResponse<DocumentResponse> updateDocument(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id,
             @RequestBody UpdateDocumentRequest request) {
         Document document = documentService.updateDocument(userId, id, request);
-        return ApiResponse.ok(document);
+        return ApiResponse.ok(DocumentResponse.from(document));
     }
 
     @PatchMapping("/documents/{id}/content")

@@ -59,6 +59,7 @@ jwt:
   access-token-expiry: 1800000 # 30분 (ms)
   refresh-token-expiry: 604800000 # 7일 (ms)
   cookie-domain: ${JWT_COOKIE_DOMAIN}
+  cookie-secure: ${JWT_COOKIE_SECURE:true}
 
 # OAuth2 Configuration
 security:

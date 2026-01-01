@@ -45,7 +45,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         throw new OAuth2AuthenticationException("Unsupported OAuth2 provider: " + registrationId);
     }
 
-    private OAuth2User processGoogleUser(OAuth2User oAuth2User) {
+    protected OAuth2User processGoogleUser(OAuth2User oAuth2User) {
         Map<String, Object> attributes = oAuth2User.getAttributes();
 
         String googleId = (String) attributes.get("sub");
@@ -64,7 +64,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
             user = existingUser.get();
             log.info("Existing Google user logged in: {}", email);
         } else {
-            // 이메일로 기존 사용자 확인
+            // 이메일로 기존 사용자 확인 (대소문자 무시를 위해 lowercase 비교 또는 DB Collation 의존)
+            // 여기서는 email이 고유하므로 그대로 조회
             Optional<User> userByEmail = userRepository.findByEmail(email);
             if (userByEmail.isPresent()) {
                 User localUser = userByEmail.get();
@@ -74,7 +75,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                     throw new OAuth2AuthenticationException(
                             "이미 일반 회원가입으로 등록된 이메일입니다. 기존 계정으로 로그인해주세요.");
                 }
+                // Google Provider이지만 ID가 매칭되지 않은 경우 (ID 변경 등) -> ID 업데이트
                 user = localUser;
+                user.updateProviderId(googleId);
+                log.info("Updated existing Google user providerId: {}", email);
             } else {
                 // 신규 사용자: 자동 회원가입
                 user = User.builder()

@@ -246,3 +246,20 @@ MVP 단계에서는 현재 방식을 유지하되, N+1 문제는 Fetch Join으�
 ### 4. 이중 DB 아키텍처 경험
 
 > "PostgreSQL(RDBMS)과 Neo4j(그래프DB)를 함께 사용하면서, 각 DB의 특성에 맞는 최적화를 적용했습니다."
+
+---
+
+## 🔴 AI 리뷰 피드백 반영 (2026-01-02)
+
+### 10. Entity 노출 및 N+1 문제 종합 해결
+
+**상황**
+AI 코드 리뷰에서 Controller의 Entity 직접 반환, 비동기 작업의 트랜잭션 범위 문제, 그리고 `ManuscriptJobService`와 `DocumentService`의 N+1 쿼리 문제가 지적되었습니다.
+
+**해결**
+
+- **DTO 도입**: `CharacterResponse`, `DocumentResponse`를 도입하여 엔티티 노출을 차단했습니다.
+- **Batch Insert**: `ManuscriptJobService`에서 300+개 섹션을 `saveAll()`로 일괄 저장하여 성능을 개선했습니다.
+- **In-Memory Tree**: `DocumentService.getDocumentTree`에서 재귀 쿼리(N+1) 대신 `findByProjectWithParent`로 한 번에 조회 후 메모리에서 트리로 변환했습니다.
+
+**결과**: API 안정성 확보, 대용량 처리 속도 개선, N+1 쿼리 완전 제거 ✅

@@ -46,4 +46,8 @@ public class User extends BaseEntity {
             this.avatarUrl = avatarUrl;
         }
     }
+
+    public void updateProviderId(String providerId) {
+        this.providerId = providerId;
+    }
 }

@@ -65,8 +65,10 @@ public class ManuscriptJobService {
     /**
      * 비동기로 원고를 처리합니다.
      */
+    /**
+     * 비동기로 원고를 처리합니다.
+     */
     @Async
-    @Transactional
     public void processJobAsync(UUID jobId) {
         ManuscriptJob job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("ManuscriptJob", "id", jobId));
@@ -77,6 +79,11 @@ public class ManuscriptJobService {
             jobRepository.save(job);
 
             List<Document> createdDocuments = parseManuscriptWithProgress(job);
+
+            // Batch Insert로 성능 최적화
+            if (!createdDocuments.isEmpty()) {
+                documentRepository.saveAll(createdDocuments);
+            }
 
             job.complete(createdDocuments.size());
             jobRepository.save(job);
@@ -125,9 +132,10 @@ public class ManuscriptJobService {
         for (int i = 0; i < totalSections; i++) {
             ImprovedManuscriptParser.ParsedSection section = sections.get(i);
 
-            // 섹션 저장
-            createdDocuments.addAll(saveSection(project, rootParent, section.getContent(), section.getTitle(),
-                    rootOrder + documentOrder++));
+            // 섹션 생성 (저장하지 않고 객체만 반환)
+            createdDocuments
+                    .addAll(createSectionDocuments(project, rootParent, section.getContent(), section.getTitle(),
+                            rootOrder + documentOrder++));
 
             // 진행률 업데이트
             if (i % 5 == 0 || i == totalSections - 1) { // 너무 잦은 업데이트 방지
@@ -149,7 +157,7 @@ public class ManuscriptJobService {
                 .orElse(0);
     }
 
-    private List<Document> saveSection(Project project, Document parent,
+    private List<Document> createSectionDocuments(Project project, Document parent,
             String contentRaw, String title, int order) {
         List<Document> created = new ArrayList<>();
         String content = contentRaw.trim();
@@ -171,7 +179,7 @@ public class ManuscriptJobService {
                 .status(Document.DocumentStatus.DRAFT)
                 .includeInCompile(true)
                 .build();
-        documentRepository.save(doc);
+        // save 호출 제거 (Batch Insert를 위해 객체만 리턴)
         created.add(doc);
 
         return created;

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,8 +42,35 @@ public class DocumentService {
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
 
-        List<Document> rootDocuments = documentRepository.findRootDocuments(project);
-        return buildTree(rootDocuments);
+        // N+1 문제 해결: 전체 문서를 한 번에 조회 (Parent Fetch Join)
+        List<Document> allDocs = documentRepository.findByProjectWithParent(project);
+
+        return buildTreeInMemory(allDocs);
+    }
+
+    private List<DocumentTreeResponse> buildTreeInMemory(List<Document> documents) {
+        Map<UUID, DocumentTreeResponse> dtoMap = new HashMap<>();
+        List<DocumentTreeResponse> roots = new ArrayList<>();
+
+        // 1. 모든 문서를 DTO로 변환하여 맵에 저장
+        for (Document doc : documents) {
+            dtoMap.put(doc.getId(), DocumentTreeResponse.from(doc));
+        }
+
+        // 2. 부모-자식 관계 연결
+        // 입력된 documents가 이미 order 순으로 정렬되어 있으므로, 순서대로 처리하면 자식 리스트도 정렬됨
+        for (Document doc : documents) {
+            DocumentTreeResponse dto = dtoMap.get(doc.getId());
+            if (doc.getParent() == null) {
+                roots.add(dto);
+            } else {
+                DocumentTreeResponse parentDto = dtoMap.get(doc.getParent().getId());
+                if (parentDto != null) {
+                    parentDto.getChildren().add(dto);
+                }
+            }
+        }
+        return roots;
     }
 
     /**
@@ -277,24 +305,6 @@ public class DocumentService {
             updateDocument(userId, update.getId(), update.getChanges());
         }
         log.info("Bulk updated {} documents", request.getUpdates().size());
-    }
-
-    private List<DocumentTreeResponse> buildTree(List<Document> documents) {
-        List<DocumentTreeResponse> tree = new ArrayList<>();
-
-        for (Document doc : documents) {
-            DocumentTreeResponse node = DocumentTreeResponse.from(doc);
-
-            // Recursively load children
-            List<Document> children = documentRepository.findByParentOrderByOrder(doc);
-            if (!children.isEmpty()) {
-                node.setChildren(buildTree(children));
-            }
-
-            tree.add(node);
-        }
-
-        return tree;
     }
 
     private int getNextOrder(Project project, Document parent) {

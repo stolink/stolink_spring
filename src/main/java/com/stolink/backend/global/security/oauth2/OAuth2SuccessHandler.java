@@ -36,6 +36,9 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         @Value("${jwt.cookie-domain}")
         private String cookieDomain;
 
+        @Value("${jwt.cookie-secure}")
+        private boolean cookieSecure;
+
         @Override
         public void onAuthenticationSuccess(HttpServletRequest request,
                         HttpServletResponse response,
@@ -58,7 +61,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 // Refresh Token을 HttpOnly 쿠키로 설정
                 ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
                                 .httpOnly(true)
-                                .secure(true)
+                                .secure(cookieSecure)
                                 .path("/")
                                 .domain(cookieDomain)
                                 .maxAge(7 * 24 * 60 * 60)

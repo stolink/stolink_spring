@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.character.controller;
 
+import com.stolink.backend.domain.character.dto.CharacterResponse;
 import com.stolink.backend.domain.character.dto.ImageGenerationRequest;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.service.CharacterService;
@@ -13,6 +14,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -22,27 +24,31 @@ public class CharacterController {
     private final CharacterService characterService;
 
     @GetMapping("/projects/{projectId}/characters")
-    public ApiResponse<List<Character>> getCharacters(
+    public ApiResponse<List<CharacterResponse>> getCharacters(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId) {
         List<Character> characters = characterService.getCharactersWithRelationships(userId, projectId);
-        return ApiResponse.ok(characters);
+        return ApiResponse.ok(characters.stream()
+                .map(CharacterResponse::from)
+                .collect(Collectors.toList()));
     }
 
     @GetMapping("/characters")
-    public ApiResponse<List<Character>> getAllCharacters() {
+    public ApiResponse<List<CharacterResponse>> getAllCharacters() {
         List<Character> characters = characterService.getAllCharacters();
-        return ApiResponse.ok(characters);
+        return ApiResponse.ok(characters.stream()
+                .map(CharacterResponse::from)
+                .collect(Collectors.toList()));
     }
 
     @PostMapping("/projects/{projectId}/characters")
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Character> createCharacter(
+    public ApiResponse<CharacterResponse> createCharacter(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
             @RequestBody Character character) {
         Character created = characterService.createCharacter(userId, projectId, character);
-        return ApiResponse.created(created);
+        return ApiResponse.created(CharacterResponse.from(created));
     }
 
     @PostMapping("/relationships")
