@@ -916,4 +916,214 @@ public class AICallbackService {
             return null;
         }
     }
+
+    // ============================================================
+    // 대용량 문서 분석 아키텍처 (Document Analysis Architecture)
+    // ============================================================
+
+    private final com.stolink.backend.domain.document.repository.DocumentRepository documentRepository;
+    private final com.stolink.backend.domain.document.repository.SectionRepository sectionRepository;
+    private final DocumentAnalysisPublisher documentAnalysisPublisher;
+
+    /**
+     * 문서 분석 결과 콜백 처리 (1차 Pass)
+     * 
+     * 각 Document(TEXT)의 분석 결과를 처리하고 Section을 저장합니다.
+     * 모든 문서 분석 완료 시 2차 Pass(글로벌 병합)를 트리거합니다.
+     */
+    @Transactional
+    public void handleDocumentAnalysisCallback(com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO callback) {
+        log.info("Processing document analysis callback for document: {}, status: {}",
+                callback.getDocumentId(), callback.getStatus());
+
+        UUID documentId = UUID.fromString(callback.getDocumentId());
+
+        // 문서 조회
+        com.stolink.backend.domain.document.entity.Document document = documentRepository.findById(documentId)
+                .orElse(null);
+        if (document == null) {
+            log.error("Document not found: {}", callback.getDocumentId());
+            return;
+        }
+
+        // 실패 처리
+        if (callback.isFailed()) {
+            log.error("Document analysis failed for {}: {}", callback.getDocumentId(), callback.getError());
+            document.updateAnalysisStatus(com.stolink.backend.domain.document.entity.Document.AnalysisStatus.FAILED);
+            documentRepository.save(document);
+            return;
+        }
+
+        // 1. Section 저장
+        saveSections(document, callback.getSections());
+
+        // 2. 임시 캐릭터/이벤트/설정 저장 (기존 로직 재사용)
+        Project project = document.getProject();
+        if (callback.getCharacters() != null && !callback.getCharacters().isEmpty()) {
+            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
+            tempResult.put("characters", callback.getCharacters());
+            saveCharacters(tempResult, project);
+        }
+        if (callback.getEvents() != null && !callback.getEvents().isEmpty()) {
+            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
+            tempResult.put("events", callback.getEvents());
+            saveEvents(tempResult, project);
+        }
+        if (callback.getSettings() != null && !callback.getSettings().isEmpty()) {
+            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
+            tempResult.put("settings", callback.getSettings());
+            saveSettings(tempResult, project);
+        }
+
+        // 3. 문서 상태 업데이트
+        document.updateAnalysisStatus(com.stolink.backend.domain.document.entity.Document.AnalysisStatus.COMPLETED);
+        documentRepository.save(document);
+
+        // 4. 1차 Pass 완료 체크 및 2차 Pass 트리거
+        checkAndTriggerGlobalMerge(project, callback.getTraceId());
+
+        log.info("Document analysis callback processed for: {} (processing_time: {}ms)",
+                callback.getDocumentId(), callback.getProcessingTimeMs());
+    }
+
+    /**
+     * Section 저장
+     */
+    private void saveSections(com.stolink.backend.domain.document.entity.Document document,
+            java.util.List<com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO.SectionDTO> sections) {
+        if (sections == null || sections.isEmpty()) {
+            log.info("No sections to save for document: {}", document.getId());
+            return;
+        }
+
+        // 기존 Section 삭제 (재분석 시)
+        sectionRepository.deleteAllByDocument(document);
+
+        for (com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO.SectionDTO sectionDTO : sections) {
+            com.stolink.backend.domain.document.entity.Section section = com.stolink.backend.domain.document.entity.Section
+                    .builder()
+                    .document(document)
+                    .sequenceOrder(sectionDTO.getSequenceOrder())
+                    .navTitle(sectionDTO.getNavTitle())
+                    .content(sectionDTO.getContent())
+                    .embeddingJson(toJson(sectionDTO.getEmbedding()))
+                    .relatedCharactersJson(toJson(sectionDTO.getRelatedCharacters()))
+                    .relatedEventsJson(toJson(sectionDTO.getRelatedEvents()))
+                    .build();
+
+            sectionRepository.save(section);
+        }
+
+        log.info("Saved {} sections for document: {}", sections.size(), document.getId());
+    }
+
+    /**
+     * 1차 Pass 완료 체크 및 2차 Pass 트리거
+     */
+    private void checkAndTriggerGlobalMerge(Project project, String traceId) {
+        UUID projectId = project.getId();
+
+        // TEXT 문서 총 수
+        long totalTextDocuments = documentRepository.countTextDocumentsByProjectId(projectId);
+
+        // COMPLETED 상태 문서 수
+        long completedDocuments = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                projectId,
+                com.stolink.backend.domain.document.entity.Document.AnalysisStatus.COMPLETED);
+
+        log.info("Project {} - 1차 Pass 진행률: {}/{}", projectId, completedDocuments, totalTextDocuments);
+
+        if (completedDocuments == totalTextDocuments && totalTextDocuments > 0) {
+            log.info("Project {} - 모든 문서 분석 완료! 2차 Pass(글로벌 병합) 트리거", projectId);
+            documentAnalysisPublisher.publishGlobalMerge(projectId, traceId);
+        }
+    }
+
+    /**
+     * 글로벌 병합 결과 콜백 처리 (2차 Pass)
+     * 
+     * Entity Resolution(캐릭터 병합) 결과를 적용합니다.
+     */
+    @Transactional
+    public void handleGlobalMergeCallback(com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO callback) {
+        log.info("Processing global merge callback for project: {}, status: {}",
+                callback.getProjectId(), callback.getStatus());
+
+        if (!callback.isSuccess()) {
+            log.error("Global merge failed for project {}: {}", callback.getProjectId(), callback.getError());
+            return;
+        }
+
+        String projectId = callback.getProjectId();
+
+        // 캐릭터 병합 적용
+        if (callback.getCharacterMerges() != null) {
+            for (com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO.CharacterMergeDTO merge : callback
+                    .getCharacterMerges()) {
+                applyCharacterMerge(merge, projectId);
+            }
+        }
+
+        // 일관성 보고서 로깅
+        if (callback.getConsistencyReport() != null) {
+            log.info("Global merge consistency report for project {}: {}", projectId, callback.getConsistencyReport());
+        }
+
+        log.info("Global merge callback processed for project: {} (processing_time: {}ms)",
+                callback.getProjectId(), callback.getProcessingTimeMs());
+    }
+
+    /**
+     * 캐릭터 병합 적용
+     */
+    private void applyCharacterMerge(com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO.CharacterMergeDTO merge,
+            String projectId) {
+        String primaryId = merge.getPrimaryId();
+        java.util.List<String> mergedIds = merge.getMergedIds();
+
+        if (primaryId == null || mergedIds == null || mergedIds.isEmpty()) {
+            return;
+        }
+
+        // Primary 캐릭터 조회
+        Optional<Character> primaryCharOpt = characterRepository.findById(primaryId);
+        if (primaryCharOpt.isEmpty()) {
+            log.warn("Primary character not found for merge: {}", primaryId);
+            return;
+        }
+
+        Character primaryChar = primaryCharOpt.get();
+
+        // Aliases 통합
+        java.util.Set<String> allAliases = new java.util.HashSet<>();
+        String existingAliasesJson = primaryChar.getAliasesJson();
+        if (existingAliasesJson != null) {
+            try {
+                java.util.List<String> existingAliases = objectMapper.readValue(existingAliasesJson,
+                        objectMapper.getTypeFactory().constructCollectionType(java.util.List.class, String.class));
+                allAliases.addAll(existingAliases);
+            } catch (Exception e) {
+                log.warn("Failed to parse existing aliases: {}", e.getMessage());
+            }
+        }
+        if (merge.getMergedAliases() != null) {
+            allAliases.addAll(merge.getMergedAliases());
+        }
+
+        primaryChar.setAliasesJson(toJson(new java.util.ArrayList<>(allAliases)));
+        characterRepository.save(primaryChar);
+
+        // 중복 캐릭터 삭제
+        for (String oldId : mergedIds) {
+            try {
+                characterRepository.deleteById(oldId);
+                log.info("Deleted merged character: {} (merged into {})", oldId, primaryId);
+            } catch (Exception e) {
+                log.warn("Failed to delete merged character {}: {}", oldId, e.getMessage());
+            }
+        }
+
+        log.info("Applied character merge: {} <- {} (aliases: {})",
+                primaryId, mergedIds, merge.getMergedAliases());
+    }
 }

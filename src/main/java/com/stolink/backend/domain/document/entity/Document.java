@@ -45,6 +45,14 @@ public class Document extends BaseEntity {
     @Column(length = 20)
     private DocumentStatus status = DocumentStatus.DRAFT;
 
+    // AI 분석 상태 (대용량 문서 분석 아키텍처)
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private AnalysisStatus analysisStatus = AnalysisStatus.NONE;
+
+    @Column
+    private Integer analysisRetryCount = 0;
+
     @Column(length = 50)
     private String label;
 
@@ -66,7 +74,9 @@ public class Document extends BaseEntity {
     private String notes;
 
     @Builder
-    public Document(UUID id, Project project, Document parent, DocumentType type, String title, String content, String synopsis, Integer order, DocumentStatus status, String label, String labelColor, Integer wordCount, Integer targetWordCount, Boolean includeInCompile, String keywords, String notes) {
+    public Document(UUID id, Project project, Document parent, DocumentType type, String title, String content,
+            String synopsis, Integer order, DocumentStatus status, String label, String labelColor, Integer wordCount,
+            Integer targetWordCount, Boolean includeInCompile, String keywords, String notes) {
         this.id = id;
         this.project = project;
         this.parent = parent;
@@ -121,8 +131,9 @@ public class Document extends BaseEntity {
 
     /**
      * 문서의 부모를 변경합니다 (폴더 이동)
+     * 
      * @param newParent 새로운 부모 문서 (null이면 루트로 이동)
-     * @param newOrder 새 부모 아래에서의 순서
+     * @param newOrder  새 부모 아래에서의 순서
      */
     public void updateParent(Document newParent, int newOrder) {
         this.parent = newParent;
@@ -143,5 +154,32 @@ public class Document extends BaseEntity {
 
     public enum DocumentStatus {
         DRAFT, REVISED, FINAL
+    }
+
+    /**
+     * AI 분석 상태 (대용량 문서 분석 아키텍처)
+     */
+    public enum AnalysisStatus {
+        NONE, // 분석 요청 전
+        PENDING, // 분석 대기
+        QUEUED, // RabbitMQ 발행됨
+        PROCESSING, // Python 처리 중
+        COMPLETED, // 분석 완료
+        FAILED // 분석 실패
+    }
+
+    // === 분석 상태 관리 메서드 ===
+
+    public void updateAnalysisStatus(AnalysisStatus status) {
+        this.analysisStatus = status;
+    }
+
+    public void incrementRetryCount() {
+        this.analysisRetryCount++;
+    }
+
+    public void resetAnalysisForRetry() {
+        this.analysisStatus = AnalysisStatus.QUEUED;
+        this.analysisRetryCount++;
     }
 }
