@@ -1,7 +1,7 @@
 # StoLink Backend 프로젝트 명세서
 
-> **Version**: 1.0.0  
-> **Last Updated**: 2025-12-25  
+> **Version**: 1.0.0
+> **Last Updated**: 2025-12-25
 > **Author**: StoLink Development Team
 
 ---
@@ -542,13 +542,12 @@ gradlew.bat bootRun
 
 ### 9.1 인증
 
-현재는 간단한 헤더 기반 인증을 사용합니다:
+현재는 JWT 및 OAuth2 기반 인증을 사용합니다.
+Access Token은 Bearer 헤더로, Refresh Token은 HttpOnly 쿠키로 관리됩니다.
 
 ```http
-X-User-Id: {user-uuid}
+Authorization: Bearer {access-token}
 ```
-
-> ⚠️ **주의**: 프로덕션에서는 JWT 또는 Spring Security 기반 인증으로 전환하세요.
 
 ### 9.2 비밀번호
 

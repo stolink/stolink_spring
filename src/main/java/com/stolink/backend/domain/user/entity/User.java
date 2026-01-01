@@ -21,7 +21,7 @@ public class User extends BaseEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column(nullable = false)
+    @Column // OAuth2 사용자는 null 가능
     private String password;
 
     @Column(nullable = false, length = 100)
@@ -29,6 +29,14 @@ public class User extends BaseEntity {
 
     @Column(length = 500)
     private String avatarUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private AuthProvider provider = AuthProvider.LOCAL;
+
+    @Column
+    private String providerId; // OAuth2 provider's user ID (e.g., Google sub)
 
     public void updateProfile(String nickname, String avatarUrl) {
         if (nickname != null) {

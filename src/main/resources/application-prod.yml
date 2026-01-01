@@ -53,6 +53,24 @@ app:
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
 
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:very-long-and-secure-random-secret-key-that-is-at-least-512-bits-for-hs512-algorithm-security-must-be-kept-secret-for-production}
+  access-token-expiry: 1800000 # 30분 (ms)
+  refresh-token-expiry: 604800000 # 7일 (ms)
+  cookie-domain: ${JWT_COOKIE_DOMAIN}
+
+# OAuth2 Configuration
+security:
+  oauth2:
+    client:
+      registration:
+        google:
+          client-id: ${GOOGLE_CLIENT_ID}
+          client-secret: ${GOOGLE_CLIENT_SECRET}
+          scope: email, profile
+          redirect-uri: ${OAUTH2_REDIRECT_URI}
+
 # Production Logging
 logging:
   level:

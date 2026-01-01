@@ -21,7 +21,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import com.stolink.backend.domain.document.dto.ManuscriptUploadRequest;
 
 @Slf4j
 @Service
@@ -116,6 +120,29 @@ public class DocumentService {
         }
 
         return document;
+    }
+
+    public Map<String, Object> getPagedContent(UUID userId, UUID documentId, int page, int size) {
+        Document document = getDocument(userId, documentId);
+        String content = document.getContent();
+        if (content == null)
+            content = "";
+
+        // 최대 사이즈 제한 (예: 100KB)
+        int safeSize = Math.min(Math.max(size, 100), 100000);
+        int totalLength = content.length();
+        int start = Math.min(page * safeSize, totalLength);
+        int end = Math.min(start + safeSize, totalLength);
+
+        String chunk = content.substring(start, end);
+        boolean hasNext = end < totalLength;
+
+        return Map.of(
+                "content", chunk,
+                "page", page,
+                "size", safeSize,
+                "totalLength", totalLength,
+                "hasNext", hasNext);
     }
 
     @Transactional
@@ -286,5 +313,177 @@ public class DocumentService {
     private Project getProjectOrThrow(UUID projectId, User user) {
         return projectRepository.findByIdAndUser(projectId, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+    }
+
+    @Transactional
+    public List<DocumentTreeResponse> parseManuscript(UUID userId, ManuscriptUploadRequest request) {
+        User user = getUserOrThrow(userId);
+        Project project = getProjectOrThrow(request.getProjectId(), user);
+
+        String[] lines = request.getContent().split("\\r?\\n");
+
+        Document rootParent = null;
+        if (request.getParentId() != null) {
+            rootParent = documentRepository.findById(request.getParentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Document", "id", request.getParentId()));
+        }
+
+        // Approved Regex Patterns (v5) - 더 엄격한 패턴
+        // 챕터: "제n장", "Chapter n", "Part n" 등 명확한 챕터 표시만 매칭
+        Pattern folderPattern = Pattern.compile(
+                "^\\s*(?:(?:제|第)\\s*[0-9一二三四五六七八九十]+\\s*(?:부|권|편|장)|(?:Part|Chapter|Book|Volume)\\s+[0-9IVXLCDM]+)\\s*[.:\\-]?\\s*.*$",
+                Pattern.CASE_INSENSITIVE);
+
+        // 섹션: 장면 전환선(***,---,===)만 매칭, 숫자 기반 섹션은 제외
+        Pattern textPattern = Pattern.compile(
+                "^\\s*[*=-]{3,}\\s*$");
+
+        Document currentChapter = null; // Folder
+        StringBuilder contentBuilder = new StringBuilder();
+        String currentSectionTitle = null;
+
+        int rootOrder = getNextOrder(project, rootParent);
+        int chapterOrderAdj = 0;
+        int sectionOrderAdj = 0;
+        List<Document> createdDocuments = new ArrayList<>();
+
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+
+            Matcher folderMatcher = folderPattern.matcher(line);
+            Matcher textMatcher = textPattern.matcher(line);
+
+            if (folderMatcher.find()) {
+                // 이전 데이터 저장
+                createdDocuments.addAll(saveSectionWithSplitting(project,
+                        currentChapter != null ? currentChapter : rootParent, contentBuilder,
+                        currentSectionTitle, sectionOrderAdj++));
+
+                // 새로운 챕터(폴더) 생성
+                currentChapter = Document.builder()
+                        .project(project)
+                        .parent(rootParent)
+                        .type(Document.DocumentType.FOLDER)
+                        .title(trimmedLine)
+                        .order(rootOrder + chapterOrderAdj++)
+                        .status(Document.DocumentStatus.DRAFT)
+                        .build();
+                currentChapter = documentRepository.save(currentChapter);
+                currentSectionTitle = null;
+                sectionOrderAdj = 0;
+                log.info("Parsed Chapter Folder: {}", trimmedLine);
+            } else if (textMatcher.find()) {
+                // 이전 데이터 저장
+                createdDocuments.addAll(saveSectionWithSplitting(project,
+                        currentChapter != null ? currentChapter : rootParent, contentBuilder,
+                        currentSectionTitle, sectionOrderAdj++));
+
+                // 새로운 섹션(텍스트) 타이틀 설정
+                currentSectionTitle = trimmedLine;
+                log.info("Parsed Section Trigger: {}", trimmedLine);
+            } else {
+                // 일반 본문
+                if (!trimmedLine.isEmpty() || contentBuilder.length() > 0) {
+                    contentBuilder.append(line).append("\n");
+                }
+                // 5,000자 분할은 saveSectionWithSplitting 내부 while 루프에서 처리됨
+            }
+        }
+
+        // 마지막 데이터 저장
+        createdDocuments.addAll(
+                saveSectionWithSplitting(project, currentChapter != null ? currentChapter : rootParent, contentBuilder,
+                        currentSectionTitle, sectionOrderAdj++));
+        log.info("Manuscript parsing completed for project: {}. Created {} documents.", request.getProjectId(),
+                createdDocuments.size());
+
+        return createdDocuments.stream()
+                .map(DocumentTreeResponse::from)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * 섹션을 저장하되, 5000자가 넘으면 문단/문장 단위로 쪼개어 여러 문서로 저장합니다.
+     *
+     * @return 생성된 문서 목록
+     */
+    private List<Document> saveSectionWithSplitting(Project project, Document parent, StringBuilder builder,
+            String title,
+            int order) {
+        List<Document> created = new ArrayList<>();
+        if (builder.length() == 0)
+            return created;
+
+        String rawContent = builder.toString();
+        int partCount = 1;
+        final int MAX_CHARS = 5000;
+
+        log.info("Starting split for content length: {}", rawContent.length());
+
+        while (!rawContent.isEmpty()) {
+            String chunk;
+            String remaining;
+
+            if (rawContent.length() > MAX_CHARS) {
+                int splitIndex = -1;
+
+                // 1차: 줄바꿈으로 분할 시도
+                splitIndex = rawContent.lastIndexOf("\n", MAX_CHARS);
+
+                // 2차: 줄바꿈이 없으면 마침표로 분할 시도
+                if (splitIndex <= 0) {
+                    splitIndex = rawContent.lastIndexOf(". ", MAX_CHARS);
+                    if (splitIndex > 0) {
+                        splitIndex += 1; // 마침표 포함
+                    }
+                }
+
+                // 3차: 그래도 없으면 강제로 MAX_CHARS에서 자르기
+                if (splitIndex <= 0) {
+                    splitIndex = MAX_CHARS;
+                }
+
+                chunk = rawContent.substring(0, splitIndex).trim();
+                remaining = rawContent.substring(splitIndex).trim();
+
+                log.info("Split at index {}: chunk={} chars, remaining={} chars",
+                        splitIndex, chunk.length(), remaining.length());
+
+                // 빈 청크 방지
+                if (chunk.isEmpty()) {
+                    rawContent = remaining;
+                    continue;
+                }
+            } else {
+                chunk = rawContent.trim();
+                remaining = "";
+            }
+
+            if (!chunk.isEmpty()) {
+                String finalTitle = (title != null && !title.isEmpty()) ? title : (parent != null ? "본문" : "프롤로그");
+                if (partCount > 1 || !remaining.isEmpty()) {
+                    finalTitle += " (" + partCount + ")";
+                }
+
+                Document doc = Document.builder()
+                        .project(project)
+                        .parent(parent)
+                        .type(Document.DocumentType.TEXT)
+                        .title(finalTitle)
+                        .content(chunk)
+                        .wordCount(chunk.length())
+                        .order(order++)
+                        .status(Document.DocumentStatus.DRAFT)
+                        .includeInCompile(true)
+                        .build();
+                documentRepository.save(doc);
+                created.add(doc);
+                log.info("Saved section '{}' with {} chars", finalTitle, chunk.length());
+                partCount++;
+            }
+            rawContent = remaining;
+        }
+        builder.setLength(0);
+        return created;
     }
 }

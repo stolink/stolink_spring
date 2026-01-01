@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -43,7 +44,7 @@ public class AIController {
         @PostMapping("/ai/analyze")
         @ResponseStatus(HttpStatus.ACCEPTED)
         public ApiResponse<Map<String, String>> analyze(
-                        @RequestHeader(value = "X-User-Id", required = false) UUID userId,
+                        @AuthenticationPrincipal UUID userId,
                         @RequestBody Map<String, Object> request) {
 
                 String jobId = UUID.randomUUID().toString();
@@ -99,7 +100,7 @@ public class AIController {
         }
 
         /**
-         * Job 상태 조회
+         * Job 상태 조회 (프론트엔드 폴링용)
          */
         @GetMapping("/ai/jobs/{jobId}")
         public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {

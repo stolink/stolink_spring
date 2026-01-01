@@ -2,27 +2,48 @@
 spring:
   # PostgreSQL Configuration
   datasource:
-    url: jdbc:postgresql://localhost:5432/stolink
-    username: stolink
-    password: stolink123
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:stolink}
+    username: ${POSTGRES_USER:stolink}
+    password: ${POSTGRES_PASSWORD:stolink123}
     driver-class-name: org.postgresql.Driver
 
   # Neo4j Configuration
   neo4j:
-    uri: bolt://localhost:7687
+    uri: bolt://${NEO4J_HOST:localhost}:${NEO4J_PORT:7687}
     authentication:
-      username: neo4j
-      password: stolink123
+      username: ${NEO4J_USER:neo4j}
+      password: ${NEO4J_PASSWORD:stolink123}
 
   # Spring Boot 기본 RabbitMQ 자동 구성 비활성화 (수동 구성 사용)
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
+  # OAuth2 Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: email, profile
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:very-long-and-secure-random-secret-key-that-is-at-least-512-bits-for-hs512-algorithm-security-must-be-kept-secret}
+  access-token-expiry: 1800000 # 30분 (ms)
+  refresh-token-expiry: 604800000 # 7일 (ms)
+  cookie-domain: ${JWT_COOKIE_DOMAIN:localhost}
+
+# OAuth2 Redirect URI
+oauth2:
+  redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/callback}
+
 # Application Configuration
 app:
   cors:
-    allowed-origins: http://localhost:3000,http://localhost:5173,http://localhost:5174
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174}
   storage:
     base-path: ./storage/uploads
   rabbitmq:

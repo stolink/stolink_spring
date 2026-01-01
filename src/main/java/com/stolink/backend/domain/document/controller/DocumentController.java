@@ -5,8 +5,11 @@ import com.stolink.backend.domain.document.dto.DocumentTreeResponse;
 import com.stolink.backend.domain.document.dto.UpdateDocumentRequest;
 import com.stolink.backend.domain.document.dto.ReorderDocumentsRequest;
 import com.stolink.backend.domain.document.dto.BulkUpdateRequest;
+import com.stolink.backend.domain.document.dto.ManuscriptUploadRequest;
+import com.stolink.backend.domain.document.dto.ManuscriptJobResponse;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.service.DocumentService;
+import com.stolink.backend.domain.document.service.ManuscriptJobService;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
 import java.util.Map;
@@ -26,10 +30,11 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final ManuscriptJobService manuscriptJobService;
 
     @GetMapping("/projects/{pid}/documents")
     public ApiResponse<List<DocumentTreeResponse>> getDocuments(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID pid) {
         List<DocumentTreeResponse> tree = documentService.getDocumentTree(userId, pid);
         return ApiResponse.ok(tree);
@@ -41,7 +46,7 @@ public class DocumentController {
      */
     @GetMapping("/documents/{folderId}/children")
     public ApiResponse<Page<DocumentTreeResponse>> getChildren(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID folderId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -57,7 +62,7 @@ public class DocumentController {
     @PostMapping("/projects/{pid}/documents")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<DocumentTreeResponse> createDocument(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @RequestBody CreateDocumentRequest request) {
         DocumentTreeResponse document = documentService.createDocument(userId, request);
         return ApiResponse.created(document);
@@ -65,7 +70,7 @@ public class DocumentController {
 
     @GetMapping("/documents/{id}")
     public ApiResponse<Document> getDocument(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id) {
         Document document = documentService.getDocument(userId, id);
         return ApiResponse.ok(document);
@@ -73,15 +78,24 @@ public class DocumentController {
 
     @GetMapping("/documents/{id}/content")
     public ApiResponse<Map<String, String>> getContent(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id) {
         Document document = documentService.getDocument(userId, id);
         return ApiResponse.ok(Map.of("content", document.getContent() != null ? document.getContent() : ""));
     }
 
+    @GetMapping("/documents/{id}/content/page")
+    public ApiResponse<Map<String, Object>> getDocumentContentPage(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10000") int size) {
+        return ApiResponse.ok(documentService.getPagedContent(userId, id, page, size));
+    }
+
     @PatchMapping("/documents/{id}")
     public ApiResponse<Document> updateDocument(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id,
             @RequestBody UpdateDocumentRequest request) {
         Document document = documentService.updateDocument(userId, id, request);
@@ -90,7 +104,7 @@ public class DocumentController {
 
     @PatchMapping("/documents/{id}/content")
     public ApiResponse<Map<String, Object>> updateContent(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id,
             @RequestBody Map<String, String> body) {
         String content = body.get("content");
@@ -105,14 +119,14 @@ public class DocumentController {
     @DeleteMapping("/documents/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteDocument(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID id) {
         documentService.deleteDocument(userId, id);
     }
 
     @PostMapping("/documents/reorder")
     public ApiResponse<Void> reorderDocuments(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @RequestBody ReorderDocumentsRequest request) {
         documentService.reorderDocuments(userId, request);
         return ApiResponse.ok(null);
@@ -120,9 +134,30 @@ public class DocumentController {
 
     @PostMapping("/documents/bulk-update")
     public ApiResponse<Void> bulkUpdateDocuments(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @RequestBody BulkUpdateRequest request) {
         documentService.bulkUpdateDocuments(userId, request);
         return ApiResponse.ok(null);
+    }
+
+    @PostMapping("/projects/{pid}/manuscript/upload")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApiResponse<ManuscriptJobResponse> uploadManuscript(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID pid,
+            @RequestBody ManuscriptUploadRequest request) {
+        request.setProjectId(pid);
+        ManuscriptJobResponse job = manuscriptJobService.createJob(userId, pid, request);
+        // 비동기로 처리 시작
+        manuscriptJobService.processJobAsync(job.getJobId());
+        return ApiResponse.accepted(job);
+    }
+
+    @GetMapping("/jobs/{jobId}")
+    public ApiResponse<ManuscriptJobResponse> getJobStatus(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID jobId) {
+        ManuscriptJobResponse job = manuscriptJobService.getJobStatus(userId, jobId);
+        return ApiResponse.ok(job);
     }
 }

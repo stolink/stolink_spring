@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.user.repository;
 
+import com.stolink.backend.domain.user.entity.AuthProvider;
 import com.stolink.backend.domain.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -12,4 +13,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
 
     boolean existsByEmail(String email);
+
+    Optional<User> findByProviderAndProviderId(AuthProvider provider, String providerId);
 }

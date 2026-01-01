@@ -72,4 +72,11 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
      */
     @Query("SELECT COUNT(d) FROM Document d WHERE d.project.id = :projectId AND d.type = 'TEXT'")
     long countTextDocumentsByProjectId(@Param("projectId") UUID projectId);
+
+    /**
+     * 원고 업로드 시 다음 order 값 조회
+     */
+    @Query("SELECT MAX(d.order) FROM Document d WHERE d.project = :project AND ((:parent IS NULL AND d.parent IS NULL) OR d.parent = :parent)")
+    Optional<Integer> findMaxOrderByProjectAndParent(@Param("project") Project project,
+            @Param("parent") Document parent);
 }

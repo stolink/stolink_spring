@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import java.util.List;
 import java.util.Map;
@@ -22,7 +23,7 @@ public class CharacterController {
 
     @GetMapping("/projects/{projectId}/characters")
     public ApiResponse<List<Character>> getCharacters(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId) {
         List<Character> characters = characterService.getCharactersWithRelationships(userId, projectId);
         return ApiResponse.ok(characters);
@@ -37,7 +38,7 @@ public class CharacterController {
     @PostMapping("/projects/{projectId}/characters")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Character> createCharacter(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
             @RequestBody Character character) {
         Character created = characterService.createCharacter(userId, projectId, character);
@@ -47,7 +48,7 @@ public class CharacterController {
     @PostMapping("/relationships")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Void> createRelationship(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @RequestBody Map<String, Object> body) {
         characterService.createRelationship(
                 userId,
@@ -69,7 +70,7 @@ public class CharacterController {
     @DeleteMapping("/characters/{characterId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteCharacter(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable String characterId) {
         characterService.deleteCharacter(userId, characterId);
     }
@@ -81,14 +82,14 @@ public class CharacterController {
     @PostMapping("/projects/{projectId}/characters/{characterId}/image")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<Map<String, String>> triggerImageGeneration(
-            @RequestHeader("X-User-Id") UUID userId,
+            @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
             @PathVariable UUID characterId,
             @Valid @RequestBody ImageGenerationRequest request) {
-        
+
         String jobId = characterService.triggerImageGeneration(
                 userId, projectId, characterId, request.description());
-        
+
         return ApiResponse.accepted(Map.of("jobId", jobId));
     }
 }
