@@ -152,17 +152,32 @@ public class DocumentService {
 
     public Map<String, Object> getPagedContent(UUID userId, UUID documentId, int page, int size) {
         Document document = getDocument(userId, documentId);
-        String content = document.getContent();
-        if (content == null)
-            content = "";
 
         // 최대 사이즈 제한 (예: 100KB)
         int safeSize = Math.min(Math.max(size, 100), 100000);
-        int totalLength = content.length();
-        int start = Math.min(page * safeSize, totalLength);
-        int end = Math.min(start + safeSize, totalLength);
 
-        String chunk = content.substring(start, end);
+        // 전체 길이 조회 (DB 부하 적음)
+        int totalLength = document.getContent() != null ? document.getContent().length() : 0;
+
+        if (totalLength == 0) {
+            return Map.of(
+                    "content", "",
+                    "page", page,
+                    "size", safeSize,
+                    "totalLength", 0,
+                    "hasNext", false);
+        }
+
+        int start = Math.min(page * safeSize, totalLength);
+        // JPQL substring은 1-based index일 수 있으나, Hibernate 구현체에 따라 다름.
+        // 통상적으로 JPQL SUBSTRING(str, pos, len)에서 pos는 1부터 시작.
+        // H2, MySQL, PostgreSQL 등 대부분 1-based.
+
+        String chunk = documentRepository.findContentPart(documentId, start + 1, safeSize);
+        if (chunk == null)
+            chunk = "";
+
+        int end = Math.min(start + safeSize, totalLength);
         boolean hasNext = end < totalLength;
 
         return Map.of(
@@ -367,7 +382,7 @@ public class DocumentService {
                         currentChapter != null ? currentChapter : rootParent, contentBuilder,
                         currentSectionTitle, sectionOrderAdj++));
 
-                // 새로운 챕터(폴더) 생성 (저장하지 않음)
+                // 새로운 챕터(폴더) 생성 (즉시 저장하여 ID 확보 - FK Violation 방지)
                 currentChapter = Document.builder()
                         .project(project)
                         .parent(rootParent)
@@ -376,7 +391,9 @@ public class DocumentService {
                         .order(rootOrder + chapterOrderAdj++)
                         .status(Document.DocumentStatus.DRAFT)
                         .build();
-                documentsToSave.add(currentChapter);
+                currentChapter = documentRepository.save(currentChapter);
+                // Folder는 Batch Insert 대상에서 제외 (이미 저장됨)
+                // documentsToSave.add(currentChapter); <- 제거
 
                 currentSectionTitle = null;
                 sectionOrderAdj = 0;

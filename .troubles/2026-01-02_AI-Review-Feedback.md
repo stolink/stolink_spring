@@ -47,3 +47,8 @@ AI 코드 리뷰(Gemini Flash)에서 4개의 치명적(🔴) 이슈와 2개의 �
 - **DocumentService**: `parseManuscript` 메서드의 반복문 내 `save()` 호출 문제를 **Batch Insert**(`saveAll`)로 리팩토링하여 해결.
 - **OAuth2SuccessHandler**: Access Token 전달 방식을 Query Parameter에서 **URL Fragment**(`#`)로 변경하여 보안 강화.
 - **ManuscriptJobService**: N+1 오탐 확인 (이미 해결됨).
+
+### 3차 피드백 반영 (Cycle 3)
+
+- **OOM 방지**: `getPagedContent`에서 `Document` 전체 로딩 대신 DB `SUBSTRING` 쿼리를 사용하여 필요한 부분만 로드하도록 최적화.
+- **FK Violation 방지**: `parseManuscript`에서 트리가 형성되는 경우, 부모(Folder)는 즉시 저장(`save`)하고 자식(Section)은 Batch Insert(`saveAll`)하도록 로직 분리.

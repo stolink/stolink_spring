@@ -267,4 +267,9 @@ AI 코드 리뷰에서 Controller의 Entity 직접 반환, 비동기 작업의 �
 - **DocumentService**: `parseManuscript`의 반복문 내 `save()` 호출 문제를 **Batch Insert**(`saveAll`)로 추가 수정했습니다.
 - **OAuth2**: Access Token 전달 방식을 **URL Fragment**(`#`)로 변경하여 보안을 강화했습니다.
 
+**[3차 반영]**
+
+- **OOM 해결**: `getPagedContent`에서 `SUBSTRING` 쿼리를 도입하여 메모리 부하를 방지했습니다.
+- **FK Violation 방지**: 부모(Folder)는 즉시 저장하고 자식(Text)은 Batch Insert하는 하이브리드 방식으로 정합성을 확보했습니다.
+
 **결과**: API 안정성 확보, 대용량 처리 속도 개선, N+1 쿼리 완전 제거 ✅
