@@ -29,19 +29,19 @@ app:
     queues:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
-    # Image RabbitMQ (이미지 생성용) - 로컬에서는 5672 포트
+    # Image RabbitMQ (이미지 생성용) - Docker 환경변수 우선, fallback으로 localhost
     image:
-      host: localhost
-      port: 5672
-      username: guest
-      password: guest
-      virtual-host: stolink
-    # Agent RabbitMQ (분석용) - 로컬에서는 5673 포트 (docker-compose.local.yml 참조)
+      host: ${RABBITMQ_IMAGE_HOST:localhost}
+      port: ${RABBITMQ_IMAGE_PORT:5672}
+      username: ${RABBITMQ_IMAGE_USERNAME:guest}
+      password: ${RABBITMQ_IMAGE_PASSWORD:guest}
+      virtual-host: ${RABBITMQ_IMAGE_VHOST:stolink}
+    # Agent RabbitMQ (분석용) - Docker 환경변수 우선, fallback으로 localhost:5673
     agent:
-      host: localhost
-      port: 5673
-      username: guest
-      password: guest
-      virtual-host: stolink
+      host: ${SPRING_RABBITMQ_HOST:localhost}
+      port: ${SPRING_RABBITMQ_PORT:5673}
+      username: ${SPRING_RABBITMQ_USERNAME:guest}
+      password: ${SPRING_RABBITMQ_PASSWORD:guest}
+      virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:stolink}
   ai:
     callback-base-url: http://localhost:8080/api/internal/ai
