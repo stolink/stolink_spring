@@ -1,6 +1,8 @@
 package com.stolink.backend.domain.project.service;
 
+import com.stolink.backend.domain.document.dto.ManuscriptUploadRequest;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
+import com.stolink.backend.domain.document.service.DocumentService;
 import com.stolink.backend.domain.project.dto.CreateProjectRequest;
 import com.stolink.backend.domain.project.dto.ProjectResponse;
 import com.stolink.backend.domain.project.entity.Project;
@@ -26,6 +28,7 @@ public class ProjectService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentService documentService;
 
     public Page<ProjectResponse> getProjects(UUID userId, Pageable pageable) {
         User user = getUserOrThrow(userId);
@@ -51,6 +54,16 @@ public class ProjectService {
 
         project = projectRepository.save(project);
         log.info("Project created: {} by user: {}", project.getId(), userId);
+
+        // 기존 원고가 포함된 경우 파싱 진행
+        if (request.getManuscript() != null && !request.getManuscript().isBlank()) {
+            ManuscriptUploadRequest uploadRequest = new ManuscriptUploadRequest();
+            uploadRequest.setProjectId(project.getId());
+            uploadRequest.setContent(request.getManuscript());
+            uploadRequest.setCreateFolders(true);
+            documentService.parseManuscript(userId, uploadRequest);
+            log.info("Initial manuscript parsed for project: {}", project.getId());
+        }
 
         return ProjectResponse.from(project);
     }

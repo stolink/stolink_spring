@@ -37,7 +37,7 @@ curl -X POST http://localhost:8080/api/auth/login \
   }'
 ```
 
-**중요**: 응답에서 받은 `id` 값을 이후 요청의 `X-User-Id` 헤더에 사용하세요.
+**중요**: 로그인/회원가입 후 받은 `accessToken`을 이후 요청의 `Authorization: Bearer` 헤더에 사용하세요. `refreshToken`은 쿠키로 자동 관리됩니다.
 
 ## 2. 작품 관리
 
@@ -45,7 +45,7 @@ curl -X POST http://localhost:8080/api/auth/login \
 # 작품 생성
 curl -X POST http://localhost:8080/api/projects \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "title": "판타지 모험",
     "genre": "fantasy",
@@ -54,11 +54,11 @@ curl -X POST http://localhost:8080/api/projects \
 
 # 작품 목록 조회 (페이지네이션)
 curl -X GET "http://localhost:8080/api/projects?page=1&limit=10" \
-  -H "X-User-Id: {userId}"
+  -H "Authorization: Bearer {accessToken}"
 
 # 작품 상세 조회
 curl -X GET "http://localhost:8080/api/projects/{projectId}" \
-  -H "X-User-Id: {userId}"
+  -H "Authorization: Bearer {accessToken}"
 ```
 
 ## 3. 문서 관리
@@ -66,12 +66,12 @@ curl -X GET "http://localhost:8080/api/projects/{projectId}" \
 ```bash
 # 문서 트리 조회
 curl -X GET "http://localhost:8080/api/projects/{projectId}/documents" \
-  -H "X-User-Id: {userId}"
+  -H "Authorization: Bearer {accessToken}"
 
 # 폴더 생성
 curl -X POST "http://localhost:8080/api/projects/{projectId}/documents" \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "projectId": "{projectId}",
     "type": "folder",
@@ -81,7 +81,7 @@ curl -X POST "http://localhost:8080/api/projects/{projectId}/documents" \
 # 텍스트 문서 생성
 curl -X POST "http://localhost:8080/api/projects/{projectId}/documents" \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "projectId": "{projectId}",
     "parentId": "{folderId}",
@@ -94,7 +94,7 @@ curl -X POST "http://localhost:8080/api/projects/{projectId}/documents" \
 # 문서 내용 수정
 curl -X PATCH "http://localhost:8080/api/documents/{documentId}/content" \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "content": "<p>이 검을 가져가거라. 너에게 필요한 물건이다.</p>"
   }'
@@ -106,7 +106,7 @@ curl -X PATCH "http://localhost:8080/api/documents/{documentId}/content" \
 # 캐릭터 생성
 curl -X POST "http://localhost:8080/api/projects/{projectId}/characters" \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "name": "아린",
     "role": "protagonist",
@@ -121,7 +121,7 @@ curl -X POST "http://localhost:8080/api/projects/{projectId}/characters" \
 # 캐릭터 관계 생성
 curl -X POST "http://localhost:8080/api/relationships" \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "sourceId": "{character1Id}",
     "targetId": "{character2Id}",
@@ -132,7 +132,7 @@ curl -X POST "http://localhost:8080/api/relationships" \
 
 # 관계 포함 캐릭터 조회
 curl -X GET "http://localhost:8080/api/projects/{projectId}/relationships" \
-  -H "X-User-Id: {userId}"
+  -H "Authorization: Bearer {accessToken}"
 ```
 
 ## 5. AI 분석
@@ -141,7 +141,7 @@ curl -X GET "http://localhost:8080/api/projects/{projectId}/relationships" \
 # 분석 요청
 curl -X POST "http://localhost:8080/api/ai/analyze" \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "projectId": "{projectId}",
     "documentId": "{documentId}",
@@ -162,7 +162,7 @@ curl -X POST "http://localhost:8080/api/ai/analyze" \
 
 # 작업 상태 조회
 curl -X GET "http://localhost:8080/api/ai/jobs/{jobId}" \
-  -H "X-User-Id: {userId}"
+  -H "Authorization: Bearer {accessToken}"
 ```
 
 ## 환경 변수 설정 (선택)
@@ -175,10 +175,10 @@ $USER_ID = "your-user-id-here"
 $PROJECT_ID = "your-project-id-here"
 
 # Linux/Mac
-export USER_ID="your-user-id-here"
+export ACCESS_TOKEN="your-access-token-here"
 export PROJECT_ID="your-project-id-here"
 
 # 그 다음 요청에서:
 curl -X GET "http://localhost:8080/api/projects/$PROJECT_ID" \
-  -H "X-User-Id: $USER_ID"
+  -H "Authorization: Bearer $ACCESS_TOKEN"
 ```

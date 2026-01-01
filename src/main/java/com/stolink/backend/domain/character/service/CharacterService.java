@@ -250,17 +250,16 @@ public class CharacterService {
             UUID userId,
             UUID projectId,
             UUID characterId,
-            String description
-    ) {
+            String description) {
         // userId로 Project 소유권 검증 (경합 조건 방지)
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
-        
+
         String jobId = UUID.randomUUID().toString();
-        
+
         // ImageGenerationTask를 DB에 저장 (콜백 처리 및 재시도를 위함)
-        com.stolink.backend.domain.character.entity.ImageGenerationTask task = 
-            com.stolink.backend.domain.character.entity.ImageGenerationTask.builder()
+        com.stolink.backend.domain.character.entity.ImageGenerationTask task = com.stolink.backend.domain.character.entity.ImageGenerationTask
+                .builder()
                 .jobId(jobId)
                 .userId(userId)
                 .projectId(project.getId())
@@ -269,14 +268,14 @@ public class CharacterService {
                 .status(com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus.PENDING)
                 .build();
         imageGenerationTaskRepository.save(task);
-        
+
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
         eventPublisher.publishEvent(new ImageGenerationRequestedEvent(
                 jobId, userId, project.getId(), characterId, description));
-        
+
         log.info("Image generation task created and event published: jobId={}, userId={}, projectId={}, characterId={}",
                 jobId, userId, projectId, characterId);
-        
+
         return jobId;
     }
 
@@ -297,20 +296,20 @@ public class CharacterService {
                     .build();
 
             producerService.sendImageGenerationTask(task);
-            
+
             // 전송 성공 시 상태 업데이트
             imageGenerationTaskRepository.findById(event.jobId()).ifPresent(t -> {
                 t.markAsSent();
                 imageGenerationTaskRepository.save(t);
             });
-            
+
             log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
         } catch (Exception e) {
             // 트랜잭션은 이미 커밋됨 - throw해도 롤백 불가
             // ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
-            log.error("Failed to send image generation task: jobId={}, error={}", 
-                     event.jobId(), e.getMessage(), e);
-            
+            log.error("Failed to send image generation task: jobId={}, error={}",
+                    event.jobId(), e.getMessage(), e);
+
             imageGenerationTaskRepository.findById(event.jobId()).ifPresent(t -> {
                 t.markAsFailed("RabbitMQ send failed: " + e.getMessage());
                 t.incrementRetryCount();
@@ -322,5 +321,24 @@ public class CharacterService {
     // AI 콜백 URL 생성
     private String buildCallbackUrl() {
         return callbackBaseUrl + "/image/callback";
+    }
+
+    /**
+     * 캐릭터 이미지 URL 업데이트 (AI 이미지 생성 완료 후 콜백에서 호출)
+     * 
+     * @param characterId 캐릭터 ID
+     * @param imageUrl    생성된 이미지 URL
+     */
+    @Transactional
+    public void updateCharacterImageUrl(UUID characterId, String imageUrl) {
+        Character updatedCharacter = characterRepository.updateImageUrl(
+                characterId.toString(), imageUrl);
+
+        if (updatedCharacter == null) {
+            log.warn("Character not found for imageUrl update: characterId={}", characterId);
+            throw new ResourceNotFoundException("Character", "id", characterId);
+        }
+
+        log.info("Character imageUrl updated: characterId={}, imageUrl={}", characterId, imageUrl);
     }
 }

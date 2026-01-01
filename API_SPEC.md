@@ -42,8 +42,15 @@
 ### 인증 헤더
 
 ```
+### 인증 헤더 및 쿠키
+
+```
+
 Authorization: Bearer {accessToken}
-X-User-Id: {userId}  // 일부 API에서 사용
+Cookie: refresh_token={refreshToken} (HttpOnly, Secure, Lax)
+
+```
+
 ```
 
 ---
@@ -202,7 +209,8 @@ X-User-Id: {userId}  // 일부 API에서 사용
 {
   "title": "새 작품 제목",
   "genre": "fantasy",
-  "description": "시놉시스..."
+  "description": "시놉시스...",
+  "manuscript": "기존 원고 내용 (선택 사항)"
 }
 ```
 

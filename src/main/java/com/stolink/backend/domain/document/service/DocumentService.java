@@ -20,8 +20,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import com.stolink.backend.domain.document.dto.ManuscriptUploadRequest;
 
 @Slf4j
 @Service
@@ -37,8 +42,35 @@ public class DocumentService {
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
 
-        List<Document> rootDocuments = documentRepository.findRootDocuments(project);
-        return buildTree(rootDocuments);
+        // N+1 문제 해결: 전체 문서를 한 번에 조회 (Parent Fetch Join)
+        List<Document> allDocs = documentRepository.findByProjectWithParent(project);
+
+        return buildTreeInMemory(allDocs);
+    }
+
+    private List<DocumentTreeResponse> buildTreeInMemory(List<Document> documents) {
+        Map<UUID, DocumentTreeResponse> dtoMap = new HashMap<>();
+        List<DocumentTreeResponse> roots = new ArrayList<>();
+
+        // 1. 모든 문서를 DTO로 변환하여 맵에 저장
+        for (Document doc : documents) {
+            dtoMap.put(doc.getId(), DocumentTreeResponse.from(doc));
+        }
+
+        // 2. 부모-자식 관계 연결
+        // 입력된 documents가 이미 order 순으로 정렬되어 있으므로, 순서대로 처리하면 자식 리스트도 정렬됨
+        for (Document doc : documents) {
+            DocumentTreeResponse dto = dtoMap.get(doc.getId());
+            if (doc.getParent() == null) {
+                roots.add(dto);
+            } else {
+                DocumentTreeResponse parentDto = dtoMap.get(doc.getParent().getId());
+                if (parentDto != null) {
+                    parentDto.getChildren().add(dto);
+                }
+            }
+        }
+        return roots;
     }
 
     /**
@@ -116,6 +148,44 @@ public class DocumentService {
         }
 
         return document;
+    }
+
+    public Map<String, Object> getPagedContent(UUID userId, UUID documentId, int page, int size) {
+        Document document = getDocument(userId, documentId);
+
+        // 최대 사이즈 제한 (예: 100KB)
+        int safeSize = Math.min(Math.max(size, 100), 100000);
+
+        // 전체 길이 조회 (DB 부하 적음)
+        int totalLength = document.getContent() != null ? document.getContent().length() : 0;
+
+        if (totalLength == 0) {
+            return Map.of(
+                    "content", "",
+                    "page", page,
+                    "size", safeSize,
+                    "totalLength", 0,
+                    "hasNext", false);
+        }
+
+        int start = Math.min(page * safeSize, totalLength);
+        // JPQL substring은 1-based index일 수 있으나, Hibernate 구현체에 따라 다름.
+        // 통상적으로 JPQL SUBSTRING(str, pos, len)에서 pos는 1부터 시작.
+        // H2, MySQL, PostgreSQL 등 대부분 1-based.
+
+        String chunk = documentRepository.findContentPart(documentId, start + 1, safeSize);
+        if (chunk == null)
+            chunk = "";
+
+        int end = Math.min(start + safeSize, totalLength);
+        boolean hasNext = end < totalLength;
+
+        return Map.of(
+                "content", chunk,
+                "page", page,
+                "size", safeSize,
+                "totalLength", totalLength,
+                "hasNext", hasNext);
     }
 
     @Transactional
@@ -252,24 +322,6 @@ public class DocumentService {
         log.info("Bulk updated {} documents", request.getUpdates().size());
     }
 
-    private List<DocumentTreeResponse> buildTree(List<Document> documents) {
-        List<DocumentTreeResponse> tree = new ArrayList<>();
-
-        for (Document doc : documents) {
-            DocumentTreeResponse node = DocumentTreeResponse.from(doc);
-
-            // Recursively load children
-            List<Document> children = documentRepository.findByParentOrderByOrder(doc);
-            if (!children.isEmpty()) {
-                node.setChildren(buildTree(children));
-            }
-
-            tree.add(node);
-        }
-
-        return tree;
-    }
-
     private int getNextOrder(Project project, Document parent) {
         List<Document> siblings = parent != null
                 ? documentRepository.findByParentOrderByOrder(parent)
@@ -286,5 +338,174 @@ public class DocumentService {
     private Project getProjectOrThrow(UUID projectId, User user) {
         return projectRepository.findByIdAndUser(projectId, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+    }
+
+    @Transactional
+    public List<DocumentTreeResponse> parseManuscript(UUID userId, ManuscriptUploadRequest request) {
+        User user = getUserOrThrow(userId);
+        Project project = getProjectOrThrow(request.getProjectId(), user);
+
+        String[] lines = request.getContent().split("\\r?\\n");
+
+        Document rootParent = null;
+        if (request.getParentId() != null) {
+            rootParent = documentRepository.findById(request.getParentId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Document", "id", request.getParentId()));
+        }
+
+        // Approved Regex Patterns (v5) - 더 엄격한 패턴
+        Pattern folderPattern = Pattern.compile(
+                "^\\s*(?:(?:제|第)\\s*[0-9一二三四五六七八九十]+\\s*(?:부|권|편|장)|(?:Part|Chapter|Book|Volume)\\s+[0-9IVXLCDM]+)\\s*[.:\\-]?\\s*.*$",
+                Pattern.CASE_INSENSITIVE);
+
+        Pattern textPattern = Pattern.compile(
+                "^\\s*[*=-]{3,}\\s*$");
+
+        Document currentChapter = null; // Folder
+        StringBuilder contentBuilder = new StringBuilder();
+        String currentSectionTitle = null;
+
+        int rootOrder = getNextOrder(project, rootParent);
+        int chapterOrderAdj = 0;
+        int sectionOrderAdj = 0;
+        List<Document> documentsToSave = new ArrayList<>();
+
+        for (String line : lines) {
+            String trimmedLine = line.trim();
+
+            Matcher folderMatcher = folderPattern.matcher(line);
+            Matcher textMatcher = textPattern.matcher(line);
+
+            if (folderMatcher.find()) {
+                // 이전 데이터 생성
+                documentsToSave.addAll(createSections(project,
+                        currentChapter != null ? currentChapter : rootParent, contentBuilder,
+                        currentSectionTitle, sectionOrderAdj++));
+
+                // 새로운 챕터(폴더) 생성 (즉시 저장하여 ID 확보 - FK Violation 방지)
+                currentChapter = Document.builder()
+                        .project(project)
+                        .parent(rootParent)
+                        .type(Document.DocumentType.FOLDER)
+                        .title(trimmedLine)
+                        .order(rootOrder + chapterOrderAdj++)
+                        .status(Document.DocumentStatus.DRAFT)
+                        .build();
+                currentChapter = documentRepository.save(currentChapter);
+                // Folder는 Batch Insert 대상에서 제외 (이미 저장됨)
+                // documentsToSave.add(currentChapter); <- 제거
+
+                currentSectionTitle = null;
+                sectionOrderAdj = 0;
+                log.info("Parsed Chapter Folder: {}", trimmedLine);
+            } else if (textMatcher.find()) {
+                // 이전 데이터 생성
+                documentsToSave.addAll(createSections(project,
+                        currentChapter != null ? currentChapter : rootParent, contentBuilder,
+                        currentSectionTitle, sectionOrderAdj++));
+
+                // 새로운 섹션(텍스트) 타이틀 설정
+                currentSectionTitle = trimmedLine;
+                log.info("Parsed Section Trigger: {}", trimmedLine);
+            } else {
+                // 일반 본문
+                if (!trimmedLine.isEmpty() || contentBuilder.length() > 0) {
+                    contentBuilder.append(line).append("\n");
+                }
+            }
+        }
+
+        // 마지막 데이터 생성
+        documentsToSave.addAll(
+                createSections(project, currentChapter != null ? currentChapter : rootParent, contentBuilder,
+                        currentSectionTitle, sectionOrderAdj++));
+
+        // 일괄 저장 (Batch Insert)
+        if (!documentsToSave.isEmpty()) {
+            documentRepository.saveAll(documentsToSave);
+        }
+
+        log.info("Manuscript parsing completed for project: {}. Created {} documents.", request.getProjectId(),
+                documentsToSave.size());
+
+        return documentsToSave.stream()
+                .map(DocumentTreeResponse::from)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * 섹션을 생성하되, 5000자가 넘으면 문단/문장 단위로 쪼개어 여러 문서 객체를 반환합니다.
+     */
+    private List<Document> createSections(Project project, Document parent, StringBuilder builder,
+            String title,
+            int order) {
+        List<Document> created = new ArrayList<>();
+        if (builder.length() == 0)
+            return created;
+
+        String rawContent = builder.toString();
+        int partCount = 1;
+        final int MAX_CHARS = 5000;
+
+        while (!rawContent.isEmpty()) {
+            String chunk;
+            String remaining;
+
+            if (rawContent.length() > MAX_CHARS) {
+                int splitIndex = -1;
+
+                // 1차: 줄바꿈으로 분할 시도
+                splitIndex = rawContent.lastIndexOf("\n", MAX_CHARS);
+
+                // 2차: 줄바꿈이 없으면 마침표로 분할 시도
+                if (splitIndex <= 0) {
+                    splitIndex = rawContent.lastIndexOf(". ", MAX_CHARS);
+                    if (splitIndex > 0) {
+                        splitIndex += 1; // 마침표 포함
+                    }
+                }
+
+                // 3차: 그래도 없으면 강제로 MAX_CHARS에서 자르기
+                if (splitIndex <= 0) {
+                    splitIndex = MAX_CHARS;
+                }
+
+                chunk = rawContent.substring(0, splitIndex).trim();
+                remaining = rawContent.substring(splitIndex).trim();
+
+                if (chunk.isEmpty()) {
+                    rawContent = remaining;
+                    continue;
+                }
+            } else {
+                chunk = rawContent.trim();
+                remaining = "";
+            }
+
+            if (!chunk.isEmpty()) {
+                String finalTitle = (title != null && !title.isEmpty()) ? title : (parent != null ? "본문" : "프롤로그");
+                if (partCount > 1 || !remaining.isEmpty()) {
+                    finalTitle += " (" + partCount + ")";
+                }
+
+                Document doc = Document.builder()
+                        .project(project)
+                        .parent(parent)
+                        .type(Document.DocumentType.TEXT)
+                        .title(finalTitle)
+                        .content(chunk)
+                        .wordCount(chunk.length())
+                        .order(order++)
+                        .status(Document.DocumentStatus.DRAFT)
+                        .includeInCompile(true)
+                        .build();
+                // 저장하지 않고 리스트에 추가
+                created.add(doc);
+                partCount++;
+            }
+            rawContent = remaining;
+        }
+        builder.setLength(0);
+        return created;
     }
 }

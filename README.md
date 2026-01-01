@@ -14,7 +14,8 @@ AI 기반 작가용 스토리 관리 플랫폼의 Spring Boot 백엔드 서버�
 
 ### 1. 인증 (Auth)
 
-- 간단한 헤더 기반 인증 (`X-User-Id`)
+- JWT 및 OAuth2 기반 인증 (Google 로그인 지원)
+- HttpOnly 쿠키 기반의 안전한 Refresh Token 전략 (SSO 지원)
 - 회원가입, 로그인
 - 프로필 관리
 
@@ -131,7 +132,7 @@ curl -X POST http://localhost:8080/api/auth/register \
 ```bash
 curl -X POST http://localhost:8080/api/projects \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: {userId}" \
+  -H "Authorization: Bearer {accessToken}" \
   -d '{
     "title": "나의 첫 소설",
     "genre": "fantasy",
@@ -235,8 +236,8 @@ domain/{name}/
 
 ### 인증
 
-현재는 간단한 헤더 기반(`X-User-Id`) 인증을 사용합니다.
-프로덕션에서는 JWT 또는 Spring Security 기반 인증으로 전환하세요.
+현재는 JWT 및 OAuth2 기반 인증을 사용합니다.
+Refresh Token은 HttpOnly 쿠키로 관리되며, Access Token은 `Authorization: Bearer` 헤더로 요청합니다.
 
 ### 비밀번호
 

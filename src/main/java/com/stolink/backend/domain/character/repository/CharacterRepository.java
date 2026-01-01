@@ -41,4 +41,11 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         void deleteByProjectId(String projectId);
 
         java.util.Optional<Character> findByNameAndProjectId(String name, String projectId);
+
+        @Query("MATCH (c:Character {id: $characterId}) " +
+                        "SET c.imageUrl = $imageUrl " +
+                        "RETURN c")
+        Character updateImageUrl(
+                        @Param("characterId") String characterId,
+                        @Param("imageUrl") String imageUrl);
 }
