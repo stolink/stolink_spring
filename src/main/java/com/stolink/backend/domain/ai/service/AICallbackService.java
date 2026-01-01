@@ -45,6 +45,7 @@ import java.util.UUID;
 public class AICallbackService {
 
     private final CharacterRepository characterRepository;
+    private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
     private final EventRepository eventRepository;
     private final SettingRepository settingRepository;
     private final DialogueRepository dialogueRepository;
@@ -93,8 +94,8 @@ public class AICallbackService {
         Project project = job.getProject();
         String projectIdStr = project.getId().toString();
 
-        // 전체 결과 데이터 로깅 (디버깅용)
-        log.debug("Full analysis result for project {}: {}", projectIdStr, result);
+        // 전체 결과 데이터 로깅 (디버깅용 - 사용자가 확인 가능하도록 INFO로 변경)
+        log.info("Full analysis result for project {}: {}", projectIdStr, result);
 
         // 메타데이터에서 processing_time 추출
         Long processingTimeMs = extractProcessingTime(result);
@@ -102,8 +103,8 @@ public class AICallbackService {
         // 메타데이터 로깅
         logMetadata(result);
 
-        // 1. 캐릭터 저장 (Neo4j)
-        saveCharacters(result, projectIdStr);
+        // 1. 캐릭터 저장 (Neo4j & Postgres)
+        saveCharacters(result, project);
 
         // 2. 관계 저장 (Neo4j)
         saveRelationships(result, projectIdStr);
@@ -171,7 +172,8 @@ public class AICallbackService {
      * 캐릭터 저장 (Neo4j)
      */
     @SuppressWarnings("unchecked")
-    private void saveCharacters(Map<String, Object> result, String projectId) {
+    private void saveCharacters(Map<String, Object> result, Project project) {
+        String projectId = project.getId().toString();
         List<Map<String, Object>> characters = (List<Map<String, Object>>) result.get("characters");
         if (characters == null || characters.isEmpty()) {
             log.info("No characters to save");
@@ -179,7 +181,17 @@ public class AICallbackService {
         }
 
         for (Map<String, Object> charData : characters) {
-            String name = (String) charData.get("name");
+            // Try to get name from profile first (as per expected.json schema)
+            String name = null;
+            Map<String, Object> profile = (Map<String, Object>) charData.get("profile");
+            if (profile != null) {
+                name = (String) profile.get("name");
+            }
+            // Fallback to top-level name if not in profile
+            if (name == null) {
+                name = (String) charData.get("name");
+            }
+
             String role = (String) charData.get("role");
             String status = (String) charData.get("status");
 
@@ -208,31 +220,189 @@ public class AICallbackService {
                 character = characterRepository.save(character);
                 log.info("Created character: {} (id: {})", name, character.getId());
             }
+
+            // PostgreSQL 저장 (AI 서버 호환용)
+            try {
+                saveCharacterToPostgres(charData, project);
+            } catch (Exception e) {
+                log.error("Failed to save character to Postgres: {}", e.getMessage());
+            }
         }
     }
 
+    @SuppressWarnings("unchecked")
+    private void saveCharacterToPostgres(Map<String, Object> charData, Project project) {
+        // Name extraction logic
+        String name = null;
+        Map<String, Object> profile = (Map<String, Object>) charData.get("profile");
+        if (profile != null) {
+            name = (String) profile.get("name");
+        }
+        if (name == null) {
+            name = (String) charData.get("name");
+        }
+
+        if (name == null) {
+            log.error("Cannot save character to Postgres: Name is missing");
+            return;
+        }
+        com.stolink.backend.domain.character.entity.CharacterEntity entity = characterJpaRepository
+                .findByProjectAndName(project, name)
+                .orElse(com.stolink.backend.domain.character.entity.CharacterEntity.builder()
+                        .project(project)
+                        .name(name)
+                        .build());
+
+        // Basic fields
+        entity.setCharacterId((String) charData.get("_id"));
+        entity.setRole((String) charData.get("role"));
+        entity.setStatus((String) charData.get("status"));
+
+        // Profile fields (from profile object or top-level)
+        // profile variable is already extracted above
+        if (profile != null) {
+            entity.setAge(profile.get("age") != null ? ((Number) profile.get("age")).intValue() : null);
+            entity.setGender((String) profile.get("gender"));
+            entity.setRace((String) profile.get("race"));
+            entity.setMbti((String) profile.get("mbti"));
+            entity.setBackstory((String) profile.get("backstory"));
+            Map<String, Object> faction = (Map<String, Object>) profile.get("faction");
+            if (faction != null) {
+                entity.setFaction((String) faction.get("name"));
+            }
+        }
+
+        try {
+            // Aliases
+            if (charData.get("aliases") != null)
+                entity.setAliasesJson(objectMapper.writeValueAsString(charData.get("aliases")));
+
+            // Profile full JSON
+            if (profile != null)
+                entity.setProfileJson(objectMapper.writeValueAsString(profile));
+
+            // Appearance
+            if (charData.get("appearance") != null)
+                entity.setAppearanceJson(objectMapper.writeValueAsString(charData.get("appearance")));
+
+            // Visual (legacy, same as appearance)
+            if (charData.get("visual") != null)
+                entity.setVisualJson(objectMapper.writeValueAsString(charData.get("visual")));
+            else if (charData.get("appearance") != null)
+                entity.setVisualJson(objectMapper.writeValueAsString(charData.get("appearance")));
+
+            // Personality
+            if (charData.get("personality") != null)
+                entity.setPersonalityJson(objectMapper.writeValueAsString(charData.get("personality")));
+
+            // Relations
+            if (charData.get("relations") != null)
+                entity.setRelationsJson(objectMapper.writeValueAsString(charData.get("relations")));
+
+            // Current Mood
+            if (charData.get("current_mood") != null)
+                entity.setCurrentMoodJson(objectMapper.writeValueAsString(charData.get("current_mood")));
+
+            // Inventory
+            if (charData.get("inventory") != null)
+                entity.setInventoryJson(objectMapper.writeValueAsString(charData.get("inventory")));
+
+            // Meta
+            if (charData.get("meta") != null)
+                entity.setMetaJson(objectMapper.writeValueAsString(charData.get("meta")));
+
+            // Embedding
+            if (charData.get("embedding") != null)
+                entity.setEmbeddingJson(objectMapper.writeValueAsString(charData.get("embedding")));
+
+        } catch (JsonProcessingException e) {
+            log.error("JSON processing error for character entity: {}", e.getMessage());
+        }
+
+        // Motivation and first appearance
+        entity.setMotivation((String) charData.get("motivation"));
+        entity.setFirstAppearance((String) charData.get("first_appearance"));
+
+        characterJpaRepository.save(entity);
+        log.info("Saved character to Postgres: {}", name);
+    }
+
     /**
-     * 캐릭터 JSON 필드 업데이트
+     * 캐릭터 JSON 필드 업데이트 (Neo4j)
      */
     @SuppressWarnings("unchecked")
     private void updateCharacterJsonFields(Character character, Map<String, Object> charData) {
         try {
+            // AI generated ID
+            character.setCharacterId((String) charData.get("_id"));
+
+            // Profile fields
+            Map<String, Object> profile = (Map<String, Object>) charData.get("profile");
+            if (profile != null) {
+                character.setAge(profile.get("age") != null ? ((Number) profile.get("age")).intValue() : null);
+                character.setGender((String) profile.get("gender"));
+                character.setRace((String) profile.get("race"));
+                character.setMbti((String) profile.get("mbti"));
+                character.setBackstory((String) profile.get("backstory"));
+                Map<String, Object> faction = (Map<String, Object>) profile.get("faction");
+                if (faction != null) {
+                    character.setFaction((String) faction.get("name"));
+                }
+                character.setProfileJson(objectMapper.writeValueAsString(profile));
+            }
+
+            // Aliases
+            if (charData.get("aliases") != null) {
+                character.setAliasesJson(objectMapper.writeValueAsString(charData.get("aliases")));
+            }
+
+            // Appearance
+            Map<String, Object> appearance = (Map<String, Object>) charData.get("appearance");
+            if (appearance != null) {
+                character.setAppearanceJson(objectMapper.writeValueAsString(appearance));
+            }
+
+            // Visual (legacy)
             Map<String, Object> visual = (Map<String, Object>) charData.get("visual");
             if (visual != null) {
                 character.setVisualJson(objectMapper.writeValueAsString(visual));
+            } else if (appearance != null) {
+                character.setVisualJson(objectMapper.writeValueAsString(appearance));
             }
 
+            // Personality
             Map<String, Object> personality = (Map<String, Object>) charData.get("personality");
             if (personality != null) {
                 character.setPersonalityJson(objectMapper.writeValueAsString(personality));
             }
 
+            // Relations
+            if (charData.get("relations") != null) {
+                character.setRelationsJson(objectMapper.writeValueAsString(charData.get("relations")));
+            }
+
+            // Current Mood
             Map<String, Object> currentMood = (Map<String, Object>) charData.get("current_mood");
             if (currentMood != null) {
                 character.setCurrentMoodJson(objectMapper.writeValueAsString(currentMood));
             }
 
-            // v2.0 스키마 필드
+            // Inventory
+            if (charData.get("inventory") != null) {
+                character.setInventoryJson(objectMapper.writeValueAsString(charData.get("inventory")));
+            }
+
+            // Meta
+            if (charData.get("meta") != null) {
+                character.setMetaJson(objectMapper.writeValueAsString(charData.get("meta")));
+            }
+
+            // Embedding
+            if (charData.get("embedding") != null) {
+                character.setEmbeddingJson(objectMapper.writeValueAsString(charData.get("embedding")));
+            }
+
+            // Simple string fields
             String motivation = (String) charData.get("motivation");
             if (motivation != null) {
                 character.setMotivation(motivation);
@@ -364,6 +534,21 @@ public class AICallbackService {
             event.setIsForeshadowing(isForeshadowing != null ? isForeshadowing : false);
             event.setParticipants(participantsJson);
 
+            // New AI schema fields
+            try {
+                if (eventData.get("timestamp") != null) {
+                    event.setTimestampJson(objectMapper.writeValueAsString(eventData.get("timestamp")));
+                }
+                if (eventData.get("changes_made") != null) {
+                    event.setChangesJson(objectMapper.writeValueAsString(eventData.get("changes_made")));
+                }
+                if (eventData.get("embedding") != null) {
+                    event.setEmbeddingJson(objectMapper.writeValueAsString(eventData.get("embedding")));
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize event JSON fields: {}", e.getMessage());
+            }
+
             eventRepository.save(event);
             log.info("Saved event: {} ({})", eventId, narrativeSummary);
         }
@@ -450,6 +635,7 @@ public class AICallbackService {
             }
 
             setting.setLocationType(locationType);
+            setting.setLocationName((String) settingData.get("location_name"));
             setting.setVisualPrompt(visualPrompt);
             setting.setVisualBackground((String) settingData.get("visual_background"));
             setting.setTimeOfDay(timeOfDay);

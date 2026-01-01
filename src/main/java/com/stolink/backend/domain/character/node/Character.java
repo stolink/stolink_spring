@@ -11,6 +11,7 @@ import org.springframework.data.neo4j.core.schema.Relationship;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.data.neo4j.core.schema.Property;
 
 @Node("Character")
 @Getter
@@ -24,23 +25,43 @@ public class Character {
     @GeneratedValue(generatorClass = UUIDStringGenerator.class)
     private String id;
 
+    @Property("project_id")
     private String projectId;
+
+    // AI 생성 ID (예: char-세라-001)
+    @Property("character_id")
+    private String characterId;
+
     private String name;
-    private String faction;
     private String role; // protagonist, antagonist, supporting, mentor, sidekick, other
+    private String status; // alive, dead, unknown, active
+
+    // Profile fields
+    private Integer age;
+    private String gender;
+    private String race;
+    private String mbti;
+    private String backstory;
+    private String faction; // faction.name
+
+    // Image
     private String imageUrl;
-    private String status; // alive, dead, unknown
 
-    // JSON 문자열로 저장 (Neo4j는 중첩 Map을 지원하지 않음)
+    // JSON fields for complex objects
+    private String aliasesJson; // ["한채린", ...]
+    private String profileJson; // Full profile object with faction.social
+    private String appearanceJson; // physique, skin_tone, eyes, hair, attire, etc.
+    private String personalityJson; // core_traits, flaws, values
+    private String relationsJson; // graph[], event_refs[], location_context
+    private String currentMoodJson; // emotion, intensity, trigger
+    private String inventoryJson; // [{item_id, name, description}, ...]
+    private String metaJson; // created_at, updated_at, data_version, lock_version
+    private String embeddingJson; // 1024-dim vector as JSON array
+
+    // Legacy fields for backward compatibility
     private String visualJson;
-    private String personalityJson;
-    private String currentMoodJson;
-
-    // 추가 필드 (v2.0 스키마)
-    private String motivation; // 캐릭터 동기
-    private String firstAppearance; // 첫 등장 장소
-
-    // extras를 단일 JSON 문자열로 저장
+    private String motivation;
+    private String firstAppearance;
     private String extrasJson;
 
     @Relationship(type = "RELATED_TO", direction = Relationship.Direction.OUTGOING)

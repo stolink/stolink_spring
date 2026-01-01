@@ -1,6 +1,0 @@
-spring:
-  config:
-    activate:
-      on-profile: default # 별도 설정 없으면 이게 실행됨
-  datasource:
-    url: jdbc:postgresql://localhost:5432/stolink_db

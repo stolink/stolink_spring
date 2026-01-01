@@ -131,9 +131,9 @@ public class AIController {
         @PostMapping("/internal/ai/jobs/{jobId}/status")
         public ApiResponse<Void> updateJobStatus(
                         @PathVariable String jobId,
-                        @RequestBody Map<String, String> request) {
-                String status = request.get("status");
-                String message = request.get("message");
+                        @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
+                String status = request.getStatus();
+                String message = request.getMessage();
 
                 log.info("Updating job status: {} -> {}", jobId, status);
 

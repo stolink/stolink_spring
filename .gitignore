@@ -31,22 +31,13 @@ logs/
 .env.local
 application.yml
 
-FASTAPI*.md
+# FASTAPI*.md
 JOB*.md
 PROJECT*.md
 *.json
 SPRING*.md
 
 smart-commit-md.md
-
-FASTAPI*.md
-JOB*.md
-PROJECT*.md
-SPRING*.md
-*.json
-
-# Compiled class files
-bin/
 
 # Compiled class files
 bin/

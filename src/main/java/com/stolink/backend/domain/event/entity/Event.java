@@ -65,8 +65,18 @@ public class Event extends BaseEntity {
     @Column(name = "chapter_ref")
     private Integer chapterRef;
 
+    // New fields for AI schema
+    @Column(name = "timestamp_json", columnDefinition = "TEXT")
+    private String timestampJson; // { relative, absolute, chapter, sequence_order }
+
+    @Column(name = "changes_json", columnDefinition = "TEXT")
+    private String changesJson; // changes_made field
+
+    @Column(name = "embedding_json", columnDefinition = "TEXT")
+    private String embeddingJson; // 1024-dim vector
+
     public enum EventType {
         ACTION, DIALOGUE, EMOTION, DISCOVERY, DECISION, FLASHBACK,
-        TRANSITION, CONFLICT, RESOLUTION, APPEARANCE
+        TRANSITION, CONFLICT, RESOLUTION, APPEARANCE, CONFRONTATION
     }
 }

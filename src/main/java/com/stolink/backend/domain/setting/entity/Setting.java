@@ -33,6 +33,9 @@ public class Setting extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
+    @Column(name = "location_name", length = 100)
+    private String locationName; // AI schema: location_name field
+
     @Enumerated(EnumType.STRING)
     @Column(name = "location_type", length = 30)
     private LocationType locationType;
@@ -49,7 +52,7 @@ public class Setting extends BaseEntity {
     @Column(name = "lighting_description", columnDefinition = "TEXT")
     private String lightingDescription;
 
-    @Column(name = "atmosphere_keywords", columnDefinition = "TEXT")
+    @Column(name = "atmosphere", columnDefinition = "TEXT")
     private String atmosphereKeywords; // 쉼표 구분
 
     @Column(name = "weather_condition", length = 30)
@@ -73,6 +76,6 @@ public class Setting extends BaseEntity {
 
     public enum LocationType {
         FOREST, CITY, CASTLE, VILLAGE, MOUNTAIN, OCEAN, DESERT,
-        CAVE, TEMPLE, BATTLEFIELD, TAVERN, PALACE, SHIP, OTHER
+        CAVE, TEMPLE, BATTLEFIELD, TAVERN, PALACE, SHIP, INDOOR, OUTDOOR, OTHER
     }
 }
