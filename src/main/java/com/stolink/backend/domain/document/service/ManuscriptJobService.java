@@ -104,7 +104,6 @@ public class ManuscriptJobService {
      */
     private List<Document> parseManuscriptWithProgress(ManuscriptJob job) {
         String content = job.getManuscriptContent();
-        String[] lines = content.split("\\r?\\n");
         Project project = job.getProject();
 
         Document rootParent = null;
@@ -112,71 +111,30 @@ public class ManuscriptJobService {
             rootParent = documentRepository.findById(job.getParentId()).orElse(null);
         }
 
-        // 챕터 제목 패턴 (제N장, Chapter N 등)
-        Pattern chapterPattern = Pattern.compile(
-                "^\\s*(?:(?:제|第)\\s*[0-9一二三四五六七八九十]+\\s*(?:부|권|편|장)|(?:Part|Chapter|Book|Volume)\\s+[0-9IVXLCDM]+)\\s*[.:\\-]?\\s*.*$",
-                Pattern.CASE_INSENSITIVE);
-        // 섹션 구분선 패턴 (***, ---)
-        Pattern sectionDividerPattern = Pattern.compile("^\\s*[*=-]{3,}\\s*$");
-
-        StringBuilder contentBuilder = new StringBuilder();
-        String pendingChapterTitle = null; // 다음 섹션에 적용할 챕터 제목
-        int sectionNumber = 1; // 섹션 번호 (챕터 제목이 없을 때 사용)
-        List<Document> createdDocuments = new ArrayList<>();
-
-        int rootOrder = getNextOrder(project, rootParent);
-        int documentOrder = 0;
-
-        int totalLines = lines.length;
-        int processedLines = 0;
-
         job.updateProgress(10, "챕터 구조 분석 중...");
         jobRepository.save(job);
 
-        for (String line : lines) {
-            String trimmedLine = line.trim();
-            Matcher chapterMatcher = chapterPattern.matcher(line);
-            Matcher dividerMatcher = sectionDividerPattern.matcher(line);
+        // 정규식 없는 상태 기반 파서 사용 (Defensive Parsing)
+        List<ImprovedManuscriptParser.ParsedSection> sections = ImprovedManuscriptParser.parse(content);
 
-            // 챕터 제목 발견 (폴더를 만들지 않고 다음 섹션에 적용할 제목으로 저장)
-            if (chapterMatcher.find()) {
-                // 이전 섹션이 있으면 먼저 저장
-                if (contentBuilder.length() > 0) {
-                    String sectionTitle = pendingChapterTitle != null ? pendingChapterTitle : "섹션 " + sectionNumber++;
-                    createdDocuments.addAll(saveSection(project, rootParent, contentBuilder, sectionTitle, rootOrder + documentOrder++));
-                    pendingChapterTitle = null;
-                }
-                // 다음 섹션에 사용할 제목으로 저장
-                pendingChapterTitle = trimmedLine;
-            }
-            // 섹션 구분선 발견
-            else if (dividerMatcher.find()) {
-                if (contentBuilder.length() > 0) {
-                    String sectionTitle = pendingChapterTitle != null ? pendingChapterTitle : "섹션 " + sectionNumber++;
-                    createdDocuments.addAll(saveSection(project, rootParent, contentBuilder, sectionTitle, rootOrder + documentOrder++));
-                    pendingChapterTitle = null;
-                }
-            }
-            // 일반 텍스트
-            else {
-                if (!trimmedLine.isEmpty() || contentBuilder.length() > 0) {
-                    contentBuilder.append(line).append("\n");
-                }
-            }
+        List<Document> createdDocuments = new ArrayList<>();
+        int rootOrder = getNextOrder(project, rootParent);
+        int documentOrder = 0;
+        int totalSections = sections.size();
 
-            // 진행률 업데이트 (매 1000줄마다)
-            processedLines++;
-            if (processedLines % 1000 == 0) {
-                int progress = 10 + (int) ((processedLines / (double) totalLines) * 80);
-                job.updateProgress(progress, String.format("처리 중... (%d/%d 줄)", processedLines, totalLines));
+        for (int i = 0; i < totalSections; i++) {
+            ImprovedManuscriptParser.ParsedSection section = sections.get(i);
+
+            // 섹션 저장
+            createdDocuments.addAll(saveSection(project, rootParent, section.getContent(), section.getTitle(),
+                    rootOrder + documentOrder++));
+
+            // 진행률 업데이트
+            if (i % 5 == 0 || i == totalSections - 1) { // 너무 잦은 업데이트 방지
+                int progress = 10 + (int) (((double) (i + 1) / totalSections) * 80);
+                job.updateProgress(progress, String.format("문서 생성 중... (%d/%d 챕터)", i + 1, totalSections));
                 jobRepository.save(job);
             }
-        }
-
-        // 마지막 데이터 저장
-        if (contentBuilder.length() > 0) {
-            String sectionTitle = pendingChapterTitle != null ? pendingChapterTitle : "섹션 " + sectionNumber;
-            createdDocuments.addAll(saveSection(project, rootParent, contentBuilder, sectionTitle, rootOrder + documentOrder));
         }
 
         job.updateProgress(95, "문서 저장 완료, 마무리 중...");
@@ -192,32 +150,30 @@ public class ManuscriptJobService {
     }
 
     private List<Document> saveSection(Project project, Document parent,
-            StringBuilder builder, String title, int order) {
+            String contentRaw, String title, int order) {
         List<Document> created = new ArrayList<>();
-        if (builder.length() == 0)
+        String content = contentRaw.trim();
+
+        if (content.isEmpty())
             return created;
 
-        String content = builder.toString().trim();
-        // 5000자 제한 로직 제거 (통으로 저장)
-        if (!content.isEmpty()) {
-            String finalTitle = (title != null && !title.isEmpty()) ? title : (parent != null ? "본문" : "프롤로그");
+        String finalTitle = (title != null && !title.isEmpty()) ? title : (parent != null ? "본문" : "프롤로그");
 
-            Document doc = Document.builder()
-                    .project(project)
-                    .parent(parent)
-                    .type(Document.DocumentType.TEXT)
-                    .title(finalTitle)
-                    .content(content) // 전체 내용 저장
-                    .wordCount(content.length())
-                    .targetWordCount(0)
-                    .order(order++)
-                    .status(Document.DocumentStatus.DRAFT)
-                    .includeInCompile(true)
-                    .build();
-            documentRepository.save(doc);
-            created.add(doc);
-        }
-        builder.setLength(0);
+        Document doc = Document.builder()
+                .project(project)
+                .parent(parent)
+                .type(Document.DocumentType.TEXT)
+                .title(finalTitle)
+                .content(content) // 전체 내용 저장
+                .wordCount(content.length())
+                .targetWordCount(0)
+                .order(order++)
+                .status(Document.DocumentStatus.DRAFT)
+                .includeInCompile(true)
+                .build();
+        documentRepository.save(doc);
+        created.add(doc);
+
         return created;
     }
 }
