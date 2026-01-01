@@ -8,8 +8,7 @@ import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
-import com.stolink.backend.domain.dialogue.entity.Dialogue;
-import com.stolink.backend.domain.dialogue.repository.DialogueRepository;
+
 import com.stolink.backend.domain.event.entity.Event;
 import com.stolink.backend.domain.event.repository.EventRepository;
 import com.stolink.backend.domain.project.entity.Project;
@@ -48,7 +47,7 @@ public class AICallbackService {
     private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
     private final EventRepository eventRepository;
     private final SettingRepository settingRepository;
-    private final DialogueRepository dialogueRepository;
+
     private final AnalysisJobRepository analysisJobRepository;
     private final PlotIntegrationRepository plotIntegrationRepository;
     private final ConsistencyReportRepository consistencyReportRepository;
@@ -117,9 +116,6 @@ public class AICallbackService {
 
         // 5. 설정(장소) 저장 (PostgreSQL)
         saveSettings(result, project);
-
-        // 6. 대화 저장 (PostgreSQL)
-        saveDialogues(result, project);
 
         // 7. 플롯 통합 저장 (PostgreSQL)
         savePlotIntegration(result, project, job.getDocumentId());
@@ -303,10 +299,6 @@ public class AICallbackService {
             if (charData.get("current_mood") != null)
                 entity.setCurrentMoodJson(objectMapper.writeValueAsString(charData.get("current_mood")));
 
-            // Inventory
-            if (charData.get("inventory") != null)
-                entity.setInventoryJson(objectMapper.writeValueAsString(charData.get("inventory")));
-
             // Meta
             if (charData.get("meta") != null)
                 entity.setMetaJson(objectMapper.writeValueAsString(charData.get("meta")));
@@ -385,11 +377,6 @@ public class AICallbackService {
             Map<String, Object> currentMood = (Map<String, Object>) charData.get("current_mood");
             if (currentMood != null) {
                 character.setCurrentMoodJson(objectMapper.writeValueAsString(currentMood));
-            }
-
-            // Inventory
-            if (charData.get("inventory") != null) {
-                character.setInventoryJson(objectMapper.writeValueAsString(charData.get("inventory")));
             }
 
             // Meta
@@ -650,71 +637,6 @@ public class AICallbackService {
 
             settingRepository.save(setting);
             log.info("Saved setting: {} ({})", name, locationType);
-        }
-    }
-
-    /**
-     * 대화 저장 (PostgreSQL)
-     */
-    @SuppressWarnings("unchecked")
-    private void saveDialogues(Map<String, Object> result, Project project) {
-        Map<String, Object> dialoguesData = (Map<String, Object>) result.get("dialogues");
-        if (dialoguesData == null) {
-            log.info("No dialogues to save");
-            return;
-        }
-
-        List<Map<String, Object>> keyDialogues = (List<Map<String, Object>>) dialoguesData.get("key_dialogues");
-        if (keyDialogues == null || keyDialogues.isEmpty()) {
-            log.info("No key dialogues to save");
-            return;
-        }
-
-        for (Map<String, Object> dialogueData : keyDialogues) {
-            String dialogueId = (String) dialogueData.get("dialogue_id");
-            String speaker = (String) dialogueData.get("speaker");
-            String listener = (String) dialogueData.get("listener");
-            String line = (String) dialogueData.get("line");
-            String content = (String) dialogueData.get("content");
-            String significance = (String) dialogueData.get("significance");
-            String subtext = (String) dialogueData.get("subtext");
-            String emotion = (String) dialogueData.get("emotion");
-
-            // participants를 JSON 문자열로
-            String participantsJson = null;
-            List<String> participants = (List<String>) dialogueData.get("participants");
-            if (participants != null) {
-                try {
-                    participantsJson = objectMapper.writeValueAsString(participants);
-                } catch (JsonProcessingException e) {
-                    log.error("Failed to serialize participants: {}", e.getMessage());
-                }
-            }
-
-            // 기존 대화 조회 또는 새로 생성
-            Optional<Dialogue> existingDialogue = dialogueRepository.findByProjectAndDialogueId(project, dialogueId);
-
-            Dialogue dialogue;
-            if (existingDialogue.isPresent()) {
-                dialogue = existingDialogue.get();
-            } else {
-                dialogue = Dialogue.builder()
-                        .project(project)
-                        .dialogueId(dialogueId)
-                        .build();
-            }
-
-            dialogue.setSpeaker(speaker);
-            dialogue.setListener(listener);
-            dialogue.setLine(line);
-            dialogue.setContent(content);
-            dialogue.setSignificance(significance);
-            dialogue.setSubtext(subtext);
-            dialogue.setEmotion(emotion);
-            dialogue.setParticipants(participantsJson);
-
-            dialogueRepository.save(dialogue);
-            log.info("Saved dialogue: {} (speaker: {}, listener: {})", dialogueId, speaker, listener);
         }
     }
 

@@ -88,9 +88,6 @@ public class CharacterEntity extends BaseEntity {
     @Column(name = "current_mood_json", columnDefinition = "TEXT")
     private String currentMoodJson;
 
-    @Column(name = "inventory_json", columnDefinition = "TEXT")
-    private String inventoryJson;
-
     @Column(name = "meta_json", columnDefinition = "TEXT")
     private String metaJson;
 
