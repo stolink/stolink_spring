@@ -20,15 +20,25 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
       SPRING_DATASOURCE_USERNAME: stolink
       SPRING_DATASOURCE_PASSWORD: stolink123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       # Neo4j
       SPRING_NEO4J_URI: bolt://stolink-neo4j:7687
       SPRING_NEO4J_AUTHENTICATION_USERNAME: neo4j
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
       # RabbitMQ
-      SPRING_RABBITMQ_HOST: stolink-rabbitmq
-      SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: guest
-      SPRING_RABBITMQ_PASSWORD: guest
+      # RabbitMQ Configuration for Custom Config
+      # Image RabbitMQ
+      APP_RABBITMQ_IMAGE_HOST: stolink-rabbitmq
+      APP_RABBITMQ_IMAGE_PORT: 5672
+      APP_RABBITMQ_IMAGE_USERNAME: stolink
+      APP_RABBITMQ_IMAGE_PASSWORD: stolink123
+      APP_RABBITMQ_IMAGE_VIRTUAL_HOST: /
+      # Agent RabbitMQ
+      APP_RABBITMQ_AGENT_HOST: stolink-rabbitmq
+      APP_RABBITMQ_AGENT_PORT: 5672
+      APP_RABBITMQ_AGENT_USERNAME: stolink
+      APP_RABBITMQ_AGENT_PASSWORD: stolink123
+      APP_RABBITMQ_AGENT_VIRTUAL_HOST: /
       # AI Callback URL
       APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
       # Storage path

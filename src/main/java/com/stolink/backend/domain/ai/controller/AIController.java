@@ -4,9 +4,14 @@ import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
+import com.stolink.backend.domain.ai.entity.AnalysisJob;
+import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.ai.service.AICallbackService;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
+import com.stolink.backend.domain.project.entity.Project;
+import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.global.common.dto.ApiResponse;
+import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +31,8 @@ public class AIController {
 
         private final RabbitMQProducerService producerService;
         private final AICallbackService callbackService;
+        private final AnalysisJobRepository analysisJobRepository;
+        private final ProjectRepository projectRepository;
 
         @Value("${app.ai.callback-base-url}")
         private String callbackBaseUrl;
@@ -42,13 +49,31 @@ public class AIController {
                 String jobId = UUID.randomUUID().toString();
                 String traceId = generateTraceId();
 
+                UUID projectId = UUID.fromString((String) request.get("projectId"));
+                UUID documentId = UUID.fromString((String) request.get("documentId"));
+
+                // Project 조회
+                Project project = projectRepository.findById(projectId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+
+                // Job 생성 및 저장
+                AnalysisJob job = AnalysisJob.builder()
+                                .jobId(jobId)
+                                .project(project)
+                                .documentId(documentId)
+                                .traceId(traceId)
+                                .status(AnalysisJob.JobStatus.PENDING)
+                                .build();
+                analysisJobRepository.save(job);
+                log.info("Created analysis job: {}", jobId);
+
                 // Context 빌드 (선택적)
                 AnalysisContext context = buildContext(request);
 
                 AnalysisTaskDTO task = AnalysisTaskDTO.builder()
                                 .jobId(jobId)
-                                .projectId(UUID.fromString((String) request.get("projectId")))
-                                .documentId(UUID.fromString((String) request.get("documentId")))
+                                .projectId(projectId)
+                                .documentId(documentId)
                                 .content((String) request.get("content"))
                                 .callbackUrl(callbackBaseUrl + "/analysis/callback")
                                 .traceId(traceId)
@@ -56,6 +81,10 @@ public class AIController {
                                 .build();
 
                 producerService.sendAnalysisTask(task);
+
+                // Job 상태를 PROCESSING으로 업데이트
+                job.markAsProcessing();
+                analysisJobRepository.save(job);
 
                 log.info("Analysis request sent: jobId={}, traceId={}", jobId, traceId);
 
@@ -73,11 +102,16 @@ public class AIController {
          * Job 상태 조회
          */
         @GetMapping("/ai/jobs/{jobId}")
-        public ApiResponse<Map<String, String>> getJobStatus(@PathVariable String jobId) {
-                // TODO: Query job status from database
+        public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {
+                AnalysisJob job = analysisJobRepository.findByJobId(jobId)
+                                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+
                 return ApiResponse.ok(Map.of(
-                                "jobId", jobId,
-                                "status", "processing"));
+                                "jobId", job.getJobId(),
+                                "projectId", job.getProject().getId().toString(),
+                                "status", job.getStatus().name(),
+                                "traceId", job.getTraceId() != null ? job.getTraceId() : "",
+                                "processingTimeMs", job.getProcessingTimeMs() != null ? job.getProcessingTimeMs() : 0));
         }
 
         /**
@@ -88,6 +122,37 @@ public class AIController {
                 log.info("Received analysis callback for job: {}, status: {}",
                                 callback.getJobId(), callback.getStatus());
                 callbackService.handleAnalysisCallback(callback);
+                return ApiResponse.ok();
+        }
+
+        /**
+         * Internal endpoint for Job status update (FastAPI에서 호출)
+         */
+        @PostMapping("/internal/ai/jobs/{jobId}/status")
+        public ApiResponse<Void> updateJobStatus(
+                        @PathVariable String jobId,
+                        @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
+                String status = request.getStatus();
+                String message = request.getMessage();
+
+                log.info("Updating job status: {} -> {}", jobId, status);
+
+                AnalysisJob job = analysisJobRepository.findByJobId(jobId)
+                                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+
+                try {
+                        AnalysisJob.JobStatus newStatus = AnalysisJob.JobStatus.valueOf(status.toUpperCase());
+                        job.updateStatus(newStatus, message);
+                        analysisJobRepository.save(job);
+                        log.info("Job {} status updated to {}", jobId, newStatus);
+                } catch (IllegalArgumentException e) {
+                        log.error("Invalid job status: {}", status);
+                        return ApiResponse.<Void>builder()
+                                        .status(HttpStatus.BAD_REQUEST)
+                                        .message("Invalid status: " + status)
+                                        .build();
+                }
+
                 return ApiResponse.ok();
         }
 
@@ -125,7 +190,6 @@ public class AIController {
                                 .chapterNumber((Integer) contextMap.get("chapterNumber"))
                                 .totalChapters((Integer) contextMap.get("totalChapters"))
                                 .worldRulesSummary((String) contextMap.get("worldRulesSummary"))
-                                // TODO: 기존 캐릭터/이벤트/관계/설정 참조는 DB에서 조회하여 빌드
                                 .build();
         }
 }

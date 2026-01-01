@@ -29,5 +29,15 @@ logs/
 # Environment
 .env
 .env.local
+application.yml
+
+# FASTAPI*.md
+JOB*.md
+PROJECT*.md
+*.json
+SPRING*.md
 
 smart-commit-md.md
+
+# Compiled class files
+bin/

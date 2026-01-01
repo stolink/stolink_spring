@@ -1,6 +1,5 @@
 package com.stolink.backend.global.config;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neo4j.driver.Value;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;

@@ -22,13 +22,16 @@ public class CharacterRelationship {
 
     private String source;
 
-    private String type; // friend, lover, enemy
+    private String type; // friend, lover, enemy, ally
     private Integer strength; // 1-10
 
     @com.fasterxml.jackson.annotation.JsonProperty("label")
     private String description;
 
     private String since; // When the relationship started
+
+    private Boolean bidirectional; // 양방향 관계 여부
+    private Integer revealedInChapter; // 관계가 드러난 챕터
 
     @com.fasterxml.jackson.annotation.JsonProperty("target")
     public String getTargetId() {

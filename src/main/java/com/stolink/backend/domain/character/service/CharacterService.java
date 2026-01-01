@@ -36,7 +36,6 @@ public class CharacterService {
     private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
     private final org.neo4j.driver.Driver driver;
     private final jakarta.persistence.EntityManager entityManager;
-    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     @Value("${app.ai.callback-base-url:http://localhost:8080}")
     private String callbackBaseUrl;
@@ -172,12 +171,14 @@ public class CharacterService {
                 String pid = targetProjectId.toString();
                 log.info("Seeding 20 characters for project: {}...", pid);
 
-                session.writeTransaction(tx -> {
+                // @SuppressWarnings("deprecation") // Suppress if writeTransaction is
+                // deprecated but available
+                session.executeWrite(tx -> {
                     tx.run("MATCH (n:Character {projectId: $pid}) DETACH DELETE n", java.util.Map.of("pid", pid));
                     return null;
                 });
 
-                session.writeTransaction(tx -> {
+                session.executeWrite(tx -> {
                     tx.run("""
                             // 20 Characters
                             CREATE (v:Character {id: randomUUID(), projectId: $pid, name: 'Jean Valjean', role: 'protagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Valjean'})

@@ -224,7 +224,7 @@ public class DocumentService {
 
     @Transactional
     public void reorderDocuments(UUID userId, ReorderDocumentsRequest request) {
-        User user = getUserOrThrow(userId);
+        getUserOrThrow(userId);
 
         for (int i = 0; i < request.getOrderedIds().size(); i++) {
             UUID documentId = request.getOrderedIds().get(i);
