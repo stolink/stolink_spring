@@ -54,7 +54,7 @@ public class Character {
     private String personalityJson; // core_traits, flaws, values
     private String relationsJson; // graph[], event_refs[], location_context
     private String currentMoodJson; // emotion, intensity, trigger
-    private String inventoryJson; // [{item_id, name, description}, ...]
+
     private String metaJson; // created_at, updated_at, data_version, lock_version
     private String embeddingJson; // 1024-dim vector as JSON array
 
