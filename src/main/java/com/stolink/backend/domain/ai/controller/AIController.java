@@ -1,8 +1,13 @@
 package com.stolink.backend.domain.ai.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
+import com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO;
+import com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
@@ -34,6 +39,7 @@ public class AIController {
         private final AICallbackService callbackService;
         private final AnalysisJobRepository analysisJobRepository;
         private final ProjectRepository projectRepository;
+        private final ObjectMapper objectMapper;
 
         @Value("${app.ai.callback-base-url}")
         private String callbackBaseUrl;
@@ -116,7 +122,54 @@ public class AIController {
         }
 
         /**
-         * Internal callback endpoint for Analysis Worker
+         * AI Callback 엔드포인트 (Python → Spring)
+         * 
+         * message_type 필드로 분기하여 처리합니다:
+         * - DOCUMENT_ANALYSIS_RESULT: 1차 Pass 문서별 분석 결과
+         * - GLOBAL_MERGE_RESULT: 2차 Pass 캐릭터 병합 결과
+         * - 그 외: 기존 FULL_DOCUMENT 분석 결과
+         */
+        @PostMapping("/ai-callback")
+        public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
+                try {
+                        JsonNode root = objectMapper.readTree(rawPayload);
+                        String messageType = root.path("message_type").asText(null);
+
+                        log.info("Received AI callback, message_type: {}", messageType);
+
+                        if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
+                                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                DocumentAnalysisCallbackDTO.class);
+                                callbackService.handleDocumentAnalysisCallback(callback);
+                                log.info("Document analysis callback processed for document: {}",
+                                                callback.getDocumentId());
+
+                        } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
+                                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                GlobalMergeCallbackDTO.class);
+                                callbackService.handleGlobalMergeCallback(callback);
+                                log.info("Global merge callback processed for project: {}", callback.getProjectId());
+
+                        } else {
+                                // 기존 FULL_DOCUMENT 분석 결과 또는 message_type 없는 경우
+                                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                AnalysisCallbackDTO.class);
+                                callbackService.handleAnalysisCallback(callback);
+                                log.info("Legacy analysis callback processed for job: {}", callback.getJobId());
+                        }
+
+                        return ApiResponse.ok();
+                } catch (JsonProcessingException e) {
+                        log.error("Failed to parse AI callback payload: {}", e.getMessage());
+                        return ApiResponse.<Void>builder()
+                                        .status(HttpStatus.BAD_REQUEST)
+                                        .message("Invalid JSON payload: " + e.getMessage())
+                                        .build();
+                }
+        }
+
+        /**
+         * Internal callback endpoint for Analysis Worker (기존 유지)
          */
         @PostMapping("/internal/ai/analysis/callback")
         public ApiResponse<Void> handleAnalysisCallback(@RequestBody AnalysisCallbackDTO callback) {
