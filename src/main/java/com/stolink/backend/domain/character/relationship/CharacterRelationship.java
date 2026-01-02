@@ -29,6 +29,7 @@ public class CharacterRelationship {
     private String description;
 
     private String since; // When the relationship started
+    private String history; // History of the relationship (nullable)
 
     private Boolean bidirectional; // 양방향 관계 여부
     private Integer revealedInChapter; // 관계가 드러난 챕터

@@ -97,6 +97,9 @@ public class CharacterEntity extends BaseEntity {
     @Column(name = "motivation", columnDefinition = "TEXT")
     private String motivation;
 
+    @Column(name = "inventory_json", columnDefinition = "TEXT")
+    private String inventoryJson;
+
     @Column(name = "first_appearance", length = 255)
     private String firstAppearance;
 }

@@ -1,13 +1,19 @@
 package com.stolink.backend.domain.character.dto;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.relationship.CharacterRelationship;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Getter
 @Builder
 public class CharacterResponse {
@@ -25,77 +31,31 @@ public class CharacterResponse {
     private String faction;
     private String imageUrl;
 
-    // JSON fields (returning raw JSON string or parsed object depends on frontend
-    // needs, keeping as string for now to match entity)
-    private String aliasesJson;
-    private String profileJson;
-    private String appearanceJson;
-    private String personalityJson;
-    private String relationsJson;
-    private String currentMoodJson;
-    private String metaJson;
-    private String embeddingJson;
+    private Object aliases;
+    private Object profile;
+    private Object appearance;
+    private Object personality;
+    private Object relations;
+    private Object currentMood;
+    private Object meta;
+    private Object embedding;
+    private Object inventory;
 
-    // Legacy
-    private String visualJson;
+    private Object visual;
     private String motivation;
     private String firstAppearance;
-    private String extrasJson;
+    private Object extras;
 
     private List<CharacterRelationshipResponse> relationships;
-
-    public static CharacterResponse from(Character character) {
-        return CharacterResponse.builder()
-                .id(character.getId())
-                .projectId(character.getProjectId())
-                .characterId(character.getCharacterId())
-                .name(character.getName())
-                .role(character.getRole())
-                .status(character.getStatus())
-                .age(character.getAge())
-                .gender(character.getGender())
-                .race(character.getRace())
-                .mbti(character.getMbti())
-                .backstory(character.getBackstory())
-                .faction(character.getFaction())
-                .imageUrl(character.getImageUrl())
-                .aliasesJson(character.getAliasesJson())
-                .profileJson(character.getProfileJson())
-                .appearanceJson(character.getAppearanceJson())
-                .personalityJson(character.getPersonalityJson())
-                .relationsJson(character.getRelationsJson())
-                .currentMoodJson(character.getCurrentMoodJson())
-                .metaJson(character.getMetaJson())
-                .embeddingJson(character.getEmbeddingJson())
-                .visualJson(character.getVisualJson())
-                .motivation(character.getMotivation())
-                .firstAppearance(character.getFirstAppearance())
-                .extrasJson(character.getExtrasJson())
-                .relationships(character.getRelationships().stream()
-                        .map(CharacterRelationshipResponse::from)
-                        .collect(Collectors.toList()))
-                .build();
-    }
 
     @Getter
     @Builder
     public static class CharacterRelationshipResponse {
         private String id;
-        private String targetCharacterName;
+        private String sourceId;
+        private String targetId;
         private String type;
         private Integer strength;
         private String description;
-
-        public static CharacterRelationshipResponse from(CharacterRelationship relationship) {
-            return CharacterRelationshipResponse.builder()
-                    .id(relationship.getId() != null ? relationship.getId().toString() : null)
-                    .targetCharacterName(
-                            relationship.getTarget() != null ? relationship.getTarget().getName()
-                                    : null)
-                    .type(relationship.getType())
-                    .strength(relationship.getStrength())
-                    .description(relationship.getDescription())
-                    .build();
-        }
     }
 }

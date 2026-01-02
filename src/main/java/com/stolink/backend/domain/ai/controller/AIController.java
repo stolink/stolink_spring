@@ -39,6 +39,7 @@ public class AIController {
         private final RabbitMQProducerService producerService;
         private final AICallbackService callbackService;
         private final AnalysisJobRepository analysisJobRepository;
+        private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
         private final ProjectRepository projectRepository;
         private final ObjectMapper objectMapper;
 
@@ -123,8 +124,9 @@ public class AIController {
         }
 
         /**
+         * /**
          * AI Callback 엔드포인트 (Python → Spring)
-         * 
+         *
          * message_type 필드로 분기하여 처리합니다:
          * - DOCUMENT_ANALYSIS_RESULT: 1차 Pass 문서별 분석 결과
          * - GLOBAL_MERGE_RESULT: 2차 Pass 캐릭터 병합 결과
@@ -170,7 +172,32 @@ public class AIController {
         }
 
         /**
-         * Internal callback endpoint for Analysis Worker (기존 유지)
+         * 이미지 생성 Job 상태 조회 (프론트엔드 폴링용 - 분리된 엔드포인트)
+         */
+        @GetMapping("/ai/image/jobs/{jobId}")
+        public ApiResponse<Map<String, Object>> getImageJobStatus(@PathVariable String jobId) {
+                com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
+                                .findById(jobId)
+                                .orElseThrow(() -> new ResourceNotFoundException("ImageJob", "jobId", jobId));
+
+                java.util.Map<String, Object> response = new java.util.HashMap<>();
+                response.put("jobId", task.getJobId());
+                response.put("status", task.getStatus().name());
+                response.put("imageUrl", task.getImageUrl() != null ? task.getImageUrl() : "");
+                response.put("errorMessage", task.getErrorMessage() != null ? task.getErrorMessage() : "");
+
+                if (task.getProjectId() != null) {
+                        response.put("projectId", task.getProjectId().toString());
+                }
+                if (task.getCharacterId() != null) {
+                        response.put("characterId", task.getCharacterId().toString());
+                }
+
+                return ApiResponse.ok(response);
+        }
+
+        /**
+         * Internal callback endpoint for Analysis Worker
          */
         @PostMapping("/internal/ai/analysis/callback")
         public ApiResponse<Void> handleAnalysisCallback(@RequestBody AnalysisCallbackDTO callback) {
@@ -190,7 +217,7 @@ public class AIController {
                 String status = request.getStatus();
                 String message = request.getMessage();
 
-                log.info("Updating job status: {} -> {}", jobId, status);
+                log.info("Updating analysis job status: {} -> {}", jobId, status);
 
                 AnalysisJob job = analysisJobRepository.findByJobId(jobId)
                                 .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
@@ -199,16 +226,49 @@ public class AIController {
                         AnalysisJob.JobStatus newStatus = AnalysisJob.JobStatus.valueOf(status.toUpperCase());
                         job.updateStatus(newStatus, message);
                         analysisJobRepository.save(job);
-                        log.info("Job {} status updated to {}", jobId, newStatus);
+                        log.info("AnalysisJob {} status updated to {}", jobId, newStatus);
+                        return ApiResponse.ok();
                 } catch (IllegalArgumentException e) {
-                        log.error("Invalid job status: {}", status);
+                        log.error("Invalid analysis status: {}", status);
                         return ApiResponse.<Void>builder()
                                         .status(HttpStatus.BAD_REQUEST)
                                         .message("Invalid status: " + status)
                                         .build();
                 }
+        }
 
-                return ApiResponse.ok();
+        /**
+         * 이미지 생성 작업 상태 업데이트 (FastAPI에서 호출 - 분리된 엔드포인트)
+         */
+        @PostMapping("/internal/ai/image/jobs/{jobId}/status")
+        public ApiResponse<Void> updateImageJobStatus(
+                        @PathVariable String jobId,
+                        @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
+                String status = request.getStatus();
+                String message = request.getMessage();
+
+                log.info("Updating image job status: {} -> {}", jobId, status);
+
+                com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
+                                .findById(jobId)
+                                .orElseThrow(() -> new ResourceNotFoundException("ImageJob", "jobId", jobId));
+
+                try {
+                        com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus newStatus = com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus
+                                        .valueOf(status.toUpperCase());
+                        task.setStatus(newStatus);
+                        if (message != null)
+                                task.setErrorMessage(message);
+                        imageGenerationTaskRepository.save(task);
+                        log.info("ImageJob {} status updated to {}", jobId, newStatus);
+                        return ApiResponse.ok();
+                } catch (IllegalArgumentException e) {
+                        log.error("Invalid image task status: {}", status);
+                        return ApiResponse.<Void>builder()
+                                        .status(HttpStatus.BAD_REQUEST)
+                                        .message("Invalid status: " + status)
+                                        .build();
+                }
         }
 
         /**
