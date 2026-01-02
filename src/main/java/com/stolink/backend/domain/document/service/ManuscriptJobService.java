@@ -11,6 +11,7 @@ import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
+import com.stolink.backend.domain.ai.service.AIAnalysisService;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class ManuscriptJobService {
     private final DocumentRepository documentRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final AIAnalysisService aiAnalysisService;
 
     private static final int MAX_CHARS = 5000;
 
@@ -86,6 +88,13 @@ public class ManuscriptJobService {
             jobRepository.save(job);
 
             log.info("Manuscript job {} completed. Created {} documents.", jobId, createdDocuments.size());
+
+            // AI 분석 자동 트리거
+            if (!createdDocuments.isEmpty()) {
+                UUID projectId = job.getProject().getId();
+                log.info("Triggering AI analysis for project: {}", projectId);
+                aiAnalysisService.triggerProjectAnalysis(projectId);
+            }
 
         } catch (Exception e) {
             log.error("Manuscript job {} failed: {}", jobId, e.getMessage(), e);
