@@ -32,7 +32,7 @@ logs/
 application.yml
 
 # FASTAPI*.md
-# JOB*.md
+JOB*.md
 PROJECT*.md
 *.json
 # SPRING*.md
