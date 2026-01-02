@@ -35,7 +35,7 @@ import java.util.UUID;
 
 /**
  * AI Worker 콜백 처리 서비스
- * 
+ *
  * Multi-Agent 파이프라인 분석 결과를 처리하고 DB에 저장합니다.
  */
 @Slf4j
@@ -927,7 +927,7 @@ public class AICallbackService {
 
     /**
      * 문서 분석 결과 콜백 처리 (1차 Pass)
-     * 
+     *
      * 각 Document(TEXT)의 분석 결과를 처리하고 Section을 저장합니다.
      * 모든 문서 분석 완료 시 2차 Pass(글로벌 병합)를 트리거합니다.
      */
@@ -1041,7 +1041,7 @@ public class AICallbackService {
 
     /**
      * 글로벌 병합 결과 콜백 처리 (2차 Pass)
-     * 
+     *
      * Entity Resolution(캐릭터 병합) 결과를 적용합니다.
      */
     @Transactional
