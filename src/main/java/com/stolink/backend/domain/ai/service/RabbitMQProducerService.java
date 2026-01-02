@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
+import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
@@ -8,6 +9,8 @@ import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Slf4j
 @Service
@@ -22,6 +25,12 @@ public class RabbitMQProducerService {
     @Value("${app.rabbitmq.queues.image}")
     private String imageQueue;
 
+    @Value("${app.rabbitmq.queues.document-analysis}")
+    private String documentAnalysisQueue;
+
+    @Value("${app.rabbitmq.queues.global-merge}")
+    private String globalMergeQueue;
+
     public RabbitMQProducerService(
             @Qualifier("imageRabbitTemplate") RabbitTemplate imageRabbitTemplate,
             @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
@@ -34,12 +43,53 @@ public class RabbitMQProducerService {
      */
     public void sendAnalysisTask(AnalysisTaskDTO task) {
         try {
-            agentRabbitTemplate.convertAndSend(analysisQueue, task);
+            // NOTE: Using documentAnalysisQueue for the new architecture
+            agentRabbitTemplate.convertAndSend(documentAnalysisQueue, task);
             log.info("Analysis task sent to Agent RabbitMQ: jobId={}, projectId={}",
-                     task.getJobId(), task.getProjectId());
+                    task.getJobId(), task.getProjectId());
         } catch (AmqpException e) {
             log.error("Failed to send analysis task: jobId={}, projectId={}",
-                      task.getJobId(), task.getProjectId(), e);
+                    task.getJobId(), task.getProjectId(), e);
+            throw new RuntimeException("RabbitMQ message delivery failed", e);
+        }
+    }
+
+    /**
+     * Analysis 작업 배치 전송 (성능 최적화)
+     * 
+     * 여러 문서를 한 번에 발행합니다.
+     */
+    public int sendAnalysisTaskBatch(List<AnalysisTaskDTO> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return 0;
+        }
+
+        int successCount = 0;
+        for (AnalysisTaskDTO task : tasks) {
+            try {
+                agentRabbitTemplate.convertAndSend(documentAnalysisQueue, task);
+                successCount++;
+            } catch (AmqpException e) {
+                log.error("Failed to send analysis task in batch: jobId={}, projectId={}",
+                        task.getJobId(), task.getProjectId(), e);
+            }
+        }
+
+        log.info("Batch analysis tasks sent: {}/{} successful", successCount, tasks.size());
+        return successCount;
+    }
+
+    /**
+     * Global Merge 요청 전송
+     */
+    public void sendGlobalMergeRequest(GlobalMergeRequestDTO request) {
+        try {
+            agentRabbitTemplate.convertAndSend(globalMergeQueue, request);
+            log.info("Global merge request sent to Agent RabbitMQ: projectId={}, traceId={}",
+                    request.getProjectId(), request.getTraceId());
+        } catch (AmqpException e) {
+            log.error("Failed to send global merge request: projectId={}",
+                    request.getProjectId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
     }
@@ -51,10 +101,10 @@ public class RabbitMQProducerService {
         try {
             imageRabbitTemplate.convertAndSend(imageQueue, task);
             log.info("Image generation task sent to Image RabbitMQ: jobId={}, userId={}, projectId={}, characterId={}",
-                     task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId());
+                    task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId());
         } catch (AmqpException e) {
             log.error("Failed to send image generation task: jobId={}, userId={}, projectId={}, characterId={}",
-                      task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId(), e);
+                    task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
     }

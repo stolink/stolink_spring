@@ -15,6 +15,7 @@ public class ImprovedManuscriptParser {
 
     private static final int MAX_TITLE_LENGTH = 100; // 제목 길이 상한 상향
     private static final int MIN_EMPTY_LINES_BEFORE_CHAPTER = 2; // 더 엄격하게: 최소 2줄 공백
+    private static final int FALLBACK_CHUNK_SIZE = 10000; // 고정 글자 수 Fallback 크기
     private static final List<String> CHAPTER_MARKERS = List.of(
             "제", "第", "Chapter", "Part", "Book", "Volume", "Section", "편", "부", "권", "서문", "프롤로그", "에필로그");
 
@@ -307,7 +308,93 @@ public class ImprovedManuscriptParser {
         }
 
         log.info("Manuscript parsing complete. Found {} sections.", sections.size());
+
+        // Fallback: 챕터가 하나도 감지되지 않았거나(통째로 1개), 너무 큰 경우
+        if (sections.isEmpty()
+                || (sections.size() == 1 && sections.get(0).getContent().length() > FALLBACK_CHUNK_SIZE * 1.5)) {
+            log.warn("Chapter detection ineffective. Applying fixed-length splitting ({} chars).", FALLBACK_CHUNK_SIZE);
+            return splitByLength(manuscriptContent);
+        }
+
         return sections;
+    }
+
+    private static List<ParsedSection> splitByLength(String content) {
+        List<ParsedSection> sections = new ArrayList<>();
+        int length = content.length();
+        int chunkCount = (int) Math.ceil((double) length / FALLBACK_CHUNK_SIZE);
+
+        for (int i = 0; i < chunkCount; i++) {
+            int start = i * FALLBACK_CHUNK_SIZE;
+            int end = Math.min(start + FALLBACK_CHUNK_SIZE, length);
+
+            // 문장이 잘리지 않도록 조정 (마침표, 줄바꿈 등 탐색)
+            if (end < length) {
+                int safeEnd = findSafeCutPoint(content, end);
+                if (safeEnd > start) {
+                    end = safeEnd;
+                }
+            }
+
+            String chunk = content.substring(start, end).trim();
+            if (!chunk.isEmpty()) {
+                sections.add(new ParsedSection("Part " + (i + 1), chunk));
+            }
+
+            // 다음 시작 위치 조정 (겹치지 않게)
+            // findSafeCutPoint가 뒤로 밀었을 수 있으므로 i 기반 계산 대신 end를 저장해야 함.
+            // (하지만 여기서는 단순화를 위해 loop 변수 조작 대신 start를 직접 제어하는 while문이 나을 수 있음)
+        }
+
+        // Loop 방식 개선 (While문으로 재작성)
+        return splitByLengthIterative(content);
+    }
+
+    private static List<ParsedSection> splitByLengthIterative(String content) {
+        List<ParsedSection> sections = new ArrayList<>();
+        int length = content.length();
+        int start = 0;
+        int partNumber = 1;
+
+        while (start < length) {
+            int end = Math.min(start + FALLBACK_CHUNK_SIZE, length);
+
+            if (end < length) {
+                end = findSafeCutPoint(content, end);
+            }
+
+            String chunk = content.substring(start, end).trim();
+            if (!chunk.isEmpty()) {
+                sections.add(new ParsedSection("Part " + partNumber++, chunk));
+            }
+
+            start = end;
+        }
+
+        return sections;
+    }
+
+    private static int findSafeCutPoint(String content, int targetIndex) {
+        // targetIndex 주변에서 안전한 자르기 위치 탐색 (최대 500자까지 뒤로 탐색)
+        // 우선순위: 줄바꿈 > 마침표 > 공백
+        int searchLimit = Math.max(0, targetIndex - 500);
+
+        // 1. 줄바꿈 탐색
+        for (int i = targetIndex; i > searchLimit; i--) {
+            if (content.charAt(i) == '\n') {
+                return i + 1; // 줄바꿈 다음부터 시작
+            }
+        }
+
+        // 2. 마침표 탐색
+        for (int i = targetIndex; i > searchLimit; i--) {
+            char c = content.charAt(i);
+            if (c == '.' || c == '!' || c == '?') {
+                return i + 1;
+            }
+        }
+
+        return targetIndex; // 못 찾으면 원래 위치 반환
     }
 
     private static void saveCurrentSection(List<ParsedSection> sections, StringBuilder contentBuilder, String title,

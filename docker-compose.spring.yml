@@ -16,6 +16,7 @@ services:
       dockerfile: Dockerfile
     container_name: stolink-backend
     environment:
+      SPRING_PROFILES_ACTIVE: local
       # PostgreSQL (컨테이너 이름으로 접근)
       SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
       SPRING_DATASOURCE_USERNAME: stolink
@@ -27,20 +28,28 @@ services:
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: stolink123
       # RabbitMQ
       # RabbitMQ Configuration for Custom Config
-      # Image RabbitMQ
-      APP_RABBITMQ_IMAGE_HOST: stolink-rabbitmq
-      APP_RABBITMQ_IMAGE_PORT: 5672
-      APP_RABBITMQ_IMAGE_USERNAME: stolink
-      APP_RABBITMQ_IMAGE_PASSWORD: stolink123
-      APP_RABBITMQ_IMAGE_VIRTUAL_HOST: /
-      # Agent RabbitMQ
-      APP_RABBITMQ_AGENT_HOST: stolink-rabbitmq
-      APP_RABBITMQ_AGENT_PORT: 5672
-      APP_RABBITMQ_AGENT_USERNAME: stolink
-      APP_RABBITMQ_AGENT_PASSWORD: stolink123
-      APP_RABBITMQ_AGENT_VIRTUAL_HOST: /
+      # Image RabbitMQ (application-local.yml 환경변수명과 일치)
+      RABBITMQ_IMAGE_HOST: stolink-rabbitmq
+      RABBITMQ_IMAGE_PORT: 5672
+      RABBITMQ_IMAGE_USERNAME: stolink
+      RABBITMQ_IMAGE_PASSWORD: stolink123
+      RABBITMQ_IMAGE_VHOST: stolink
+      # Agent RabbitMQ (AI 분석용) - application-local.yml 환경변수명과 일치
+      SPRING_RABBITMQ_HOST: stolink-rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: stolink
+      SPRING_RABBITMQ_PASSWORD: stolink123
+      SPRING_RABBITMQ_VIRTUAL_HOST: stolink
+      # RabbitMQ Queue Names
+      APP_RABBITMQ_QUEUES_ANALYSIS: stolink.analysis.queue
+      APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue
+      APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
+      APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
       # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/ai-callback
+      APP_CALLBACK_BASE_URL: http://stolink-backend:8080
+      # Analysis Settings
+      APP_ANALYSIS_MAX_RETRY_COUNT: 3
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
     ports:

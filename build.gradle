@@ -71,10 +71,12 @@ dependencies {
 
 	// Hypersistence Utils for PostgreSQL JSONB and Array types
 	implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.9.0'
+	implementation 'org.hibernate.orm:hibernate-vector:6.4.1.Final'
 
 	// Test
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.amqp:spring-rabbit-test'
+	testImplementation 'org.springframework.security:spring-security-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

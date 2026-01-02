@@ -1,5 +1,7 @@
 package com.stolink.backend.global.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 @Configuration
 public class RabbitMQConfig {
@@ -86,11 +89,14 @@ public class RabbitMQConfig {
     }
 
     /**
-     * JSON 메시지 변환기 (snake_case 직렬화 지원)
+     * JSON 메시지 변환기 (UTF-8 인코딩 및 snake_case 직렬화 지원)
      */
     @Bean
     public Jackson2JsonMessageConverter messageConverter() {
-        return new Jackson2JsonMessageConverter();
+        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json()
+                .featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
+        return new Jackson2JsonMessageConverter(objectMapper);
     }
 
     /**

@@ -9,28 +9,18 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AnalysisTaskDTO {
+public class GlobalMergeRequestDTO {
 
     @JsonProperty("message_type")
     @Builder.Default
-    private String messageType = "DOCUMENT_ANALYSIS";
-
-    @JsonProperty("job_id")
-    private String jobId;
+    private String messageType = "GLOBAL_MERGE";
 
     @JsonProperty("project_id")
     private UUID projectId;
-
-    @JsonProperty("document_id")
-    private UUID documentId;
-
-    private String content;
 
     @JsonProperty("callback_url")
     private String callbackUrl;
 
     @JsonProperty("trace_id")
     private String traceId;
-
-    private AnalysisContext context;
 }

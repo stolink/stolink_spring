@@ -32,12 +32,14 @@ logs/
 application.yml
 
 # FASTAPI*.md
-# JOB*.md
+JOB*.md
 PROJECT*.md
 *.json
 # SPRING*.md
+remi.txt
 
 smart-commit-md.md
 
 # Compiled class files
 bin/
+access_token.txt
