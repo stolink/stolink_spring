@@ -65,9 +65,6 @@ public class ManuscriptJobService {
     /**
      * 비동기로 원고를 처리합니다.
      */
-    /**
-     * 비동기로 원고를 처리합니다.
-     */
     @Async
     public void processJobAsync(UUID jobId) {
         ManuscriptJob job = jobRepository.findById(jobId)
