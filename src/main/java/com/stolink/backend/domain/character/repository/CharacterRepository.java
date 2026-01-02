@@ -48,4 +48,10 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         Character updateImageUrl(
                         @Param("characterId") String characterId,
                         @Param("imageUrl") String imageUrl);
+
+        @Query("MATCH (p:Character {id: $primaryId}) " +
+                        "MATCH (m:Character {id: $mergedId}) " +
+                        "CALL apoc.refactor.mergeNodes([p, m], {properties: 'discard', mergeRels: true}) YIELD node " +
+                        "RETURN node")
+        Character mergeNodes(@Param("primaryId") String primaryId, @Param("mergedId") String mergedId);
 }

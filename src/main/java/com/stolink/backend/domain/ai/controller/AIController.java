@@ -8,6 +8,7 @@ import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO;
+import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
@@ -82,7 +83,7 @@ public class AIController {
                                 .projectId(projectId)
                                 .documentId(documentId)
                                 .content((String) request.get("content"))
-                                .callbackUrl(callbackBaseUrl + "/analysis/callback")
+                                .callbackUrl(callbackBaseUrl + "/ai-callback")
                                 .traceId(traceId)
                                 .context(context)
                                 .build();
@@ -245,5 +246,29 @@ public class AIController {
                                 .totalChapters((Integer) contextMap.get("totalChapters"))
                                 .worldRulesSummary((String) contextMap.get("worldRulesSummary"))
                                 .build();
+        }
+
+        /**
+         * Global Merge 수동 트리거 (Integration Test Scenario B)
+         */
+        @PostMapping("/project/{projectId}/merge")
+        public ApiResponse<Void> triggerGlobalMerge(
+                        @PathVariable UUID projectId,
+                        @AuthenticationPrincipal UUID userId) {
+
+                log.info("Triggering global merge for project: {} (User: {})", projectId, userId);
+
+                String traceId = generateTraceId();
+                GlobalMergeCallbackDTO.builder().build(); // Just to ensure import if needed, or better just use the DTO
+
+                GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
+                                .projectId(projectId)
+                                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                                .traceId(traceId)
+                                .build();
+
+                producerService.sendGlobalMergeRequest(request);
+
+                return ApiResponse.ok();
         }
 }
