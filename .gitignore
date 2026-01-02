@@ -40,4 +40,4 @@ PROJECT*.md
 smart-commit-md.md
 
 # Compiled class files
-bin/
+bin/access_token.txt
