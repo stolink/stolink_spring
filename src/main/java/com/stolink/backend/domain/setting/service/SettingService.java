@@ -1,16 +1,17 @@
 package com.stolink.backend.domain.setting.service;
 
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.setting.dto.SettingResponse;
 import com.stolink.backend.domain.setting.repository.SettingNeo4jRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor

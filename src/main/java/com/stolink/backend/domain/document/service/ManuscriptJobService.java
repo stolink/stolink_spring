@@ -1,6 +1,14 @@
 package com.stolink.backend.domain.document.service;
 
-import com.stolink.backend.domain.document.dto.DocumentTreeResponse;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.stolink.backend.domain.ai.service.AIAnalysisService;
 import com.stolink.backend.domain.document.dto.ManuscriptJobResponse;
 import com.stolink.backend.domain.document.dto.ManuscriptUploadRequest;
 import com.stolink.backend.domain.document.entity.Document;
@@ -11,19 +19,10 @@ import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
-import com.stolink.backend.domain.ai.service.AIAnalysisService;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -35,8 +34,6 @@ public class ManuscriptJobService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final AIAnalysisService aiAnalysisService;
-
-    private static final int MAX_CHARS = 5000;
 
     /**
      * 원고 처리 작업을 생성하고 즉시 jobId를 반환합니다.
