@@ -58,6 +58,7 @@ app:
     queues:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
+      document-analysis: stolink.analysis.queue
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST}

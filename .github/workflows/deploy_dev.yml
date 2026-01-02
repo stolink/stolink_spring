@@ -106,7 +106,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_COOKIE_DOMAIN: ${{ vars.CLOUDFRONT_URL_DEV }}
-          OAUTH2_REDIRECT_URI: ${{ vars.OAUTH2_REDIRECT_URI }}
+          OAUTH2_REDIRECT_URI: ${{ vars.CLOUDFRONT_URL_DEV }}/oauth2/callback
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           # .env 파일 내용 생성
