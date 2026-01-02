@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.document.service;
 
+import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -8,13 +9,11 @@ import java.util.regex.Pattern;
  * 정규식을 최소화하고 상태 기반 휴리스틱 검증을 사용하는 개선된 원고 파서
  *
  * 이 버전은 "방어적 파싱(Defensive Parsing)" 원칙을 따릅니다.
- * 1. 명시적인 금지 조건 (쿼트 포함, 문장부호로 끝남 등)을 우선 검사
- * 2. 챕터 마커가 있더라도 문맥(공백 라인)이 맞지 않으면 기각
- * 3. 정규식은 매우 제한적으로만 사용 (숫자 패턴 등)
  */
+@Slf4j
 public class ImprovedManuscriptParser {
 
-    private static final int MAX_TITLE_LENGTH = 50;
+    private static final int MAX_TITLE_LENGTH = 100; // 제목 길이 상한 상향
     private static final int MIN_EMPTY_LINES_BEFORE_CHAPTER = 2; // 더 엄격하게: 최소 2줄 공백
     private static final List<String> CHAPTER_MARKERS = List.of(
             "제", "第", "Chapter", "Part", "Book", "Volume", "Section", "편", "부", "권", "서문", "프롤로그", "에필로그");
@@ -22,8 +21,11 @@ public class ImprovedManuscriptParser {
     // 대화문이나 문장 감지를 위한 금지 문자들
     private static final List<String> FORBIDDEN_CHARS = List.of(
             "\"", "'", "“", "”", "‘", "’", // 따옴표 (대화문)
-            "?", "!", "..." // 문장 끝맺음 부호 (제목에는 잘 안 쓰임)
+            "..." // 말줄임표 (제목에 잘 안 쓰임)
     );
+
+    // 강력한 마커인 경우에만 허용할 문장 부호
+    private static final List<String> ALLOWED_PUNCTUATION_IN_STRONG_HEADER = List.of("?", "!", ":", "-");
 
     /**
      * 챕터 헤더 검증 클래스
@@ -50,6 +52,9 @@ public class ImprovedManuscriptParser {
                 return false;
             }
 
+            // 강력한 헤더 패턴인 경우, 문장 부호를 포함하고 있어도 후보로 인정
+            boolean isStrong = isStrongHeaderPattern(trimmed);
+
             // 금지 문자 포함 여부 확인 (대화문 등 제외)
             for (String forbidden : FORBIDDEN_CHARS) {
                 if (trimmed.contains(forbidden)) {
@@ -57,21 +62,23 @@ public class ImprovedManuscriptParser {
                 }
             }
 
-            // 제목이 마침표로 끝나는 경우, 숫자로 시작하지 않으면 의심스러움 (문장일 가능성)
-            // 예: "그는 집에 갔다." vs "1. 서론."
-            if (trimmed.endsWith(".") && !Character.isDigit(trimmed.charAt(0))) {
+            // 강력한 마커가 없는데 ?, ! 등이 포함되어 있으면 기각 (문장일 가능성)
+            if (!isStrong) {
+                for (String punc : List.of("?", "!")) {
+                    if (trimmed.contains(punc))
+                        return false;
+                }
+            }
+
+            // 제목이 마침표로 끝나는 경우, 숫자로 시작하거나 강력한 마커가 아니면 의심스러움
+            if (trimmed.endsWith(".") && !Character.isDigit(trimmed.charAt(0)) && !isStrong) {
                 return false;
             }
 
             // 문맥 고려: 챕터 제목 앞에는 보통 빈 줄이 있음
-            // 파일 시작이거나, 페이지 넘김(Form Feed) 문자 등이 있는 경우는 예외로 칠 수도 있으나 여기선 공백 라인만 봄
-            // 명확한 키워드(Chapter 등)로 시작하면 공백 기준을 조금 완화(1줄)할 수도 있지만,
-            // 사용자가 "엄격한" 기준을 원했으므로 기본적으로 2줄 이상을 요구하되,
-            // "제N장" 처럼 매우 강력한 패턴은 1줄도 허용하도록 로직 세분화 가능.
-            // 여기서는 안전하게: 첫 줄이 아니고 공백이 부족하면 일단 의심.
             if (!isFirstLine && emptyLineCount < MIN_EMPTY_LINES_BEFORE_CHAPTER) {
                 // 공백이 부족해도, "강력한 마커"로 시작하고 길이가 아주 짧으면 허용 (예: "제1장")
-                if (emptyLineCount >= 1 && isStrongHeaderPattern(trimmed)) {
+                if (emptyLineCount >= 1 && isStrong) {
                     return true;
                 }
                 return false;
@@ -82,10 +89,12 @@ public class ImprovedManuscriptParser {
 
         // 공백이 부족해도 인정해줄 만한 강력한 패턴인지 확인
         private static boolean isStrongHeaderPattern(String text) {
-            // "제"로 시작하고 "장/편/부"가 들어있는 짧은 문자열
-            if (text.startsWith("제") && (text.contains("장") || text.contains("편") || text.contains("부")))
+            String upper = text.toUpperCase();
+            // "제"로 시작하고 "장/편/부/권"이 들어있는 짧은 문자열
+            if (text.startsWith("제")
+                    && (text.contains("장") || text.contains("편") || text.contains("부") || text.contains("권")))
                 return true;
-            if (text.startsWith("Chapter") || text.startsWith("Part"))
+            if (upper.startsWith("CHAPTER") || upper.startsWith("PART") || upper.startsWith("BOOK"))
                 return true;
             return false;
         }
@@ -95,12 +104,11 @@ public class ImprovedManuscriptParser {
          */
         public static boolean validateHeader(String line) {
             String trimmed = line.trim();
+            String upper = trimmed.toUpperCase();
 
             // Case 1: 숫자로 시작 ("1.", "1장", "IV" 등)
             if (startsWithNumber(trimmed)) {
                 // 숫자로 시작하더라도 뒤에 텍스트가 따라올 때, 그 형식이 "1. 제목" 형태여야 함.
-                // "10년 뒤에 만났다" 같은 문장은 걸러야 함.
-                // 숫자가 나오고 점(.)이나 공백, 또는 챕터 단위(장, 편)가 바로 나와야 함.
                 if (isValidNumberedHeader(trimmed)) {
                     return true;
                 }
@@ -108,7 +116,15 @@ public class ImprovedManuscriptParser {
 
             // Case 2: 챕터 마커로 시작 ("제", "Chapter", "프롤로그" 등)
             for (String marker : CHAPTER_MARKERS) {
-                if (trimmed.startsWith(marker)) {
+                // 영문 마커는 대소문자 구분 없이 확인
+                boolean matches;
+                if (isEnglishMarker(marker)) {
+                    matches = upper.startsWith(marker.toUpperCase());
+                } else {
+                    matches = trimmed.startsWith(marker);
+                }
+
+                if (matches) {
                     // "제"로 시작하는 경우 "제1장" 형태인지 추가 검증
                     if (marker.equals("제") || marker.equals("第")) {
                         return containsChapterKeyword(trimmed);
@@ -118,7 +134,7 @@ public class ImprovedManuscriptParser {
                         return true;
                     }
                     // Chapter, Part 등은 뒤에 숫자가 와야 함
-                    if (marker.equals("Chapter") || marker.equals("Part") || marker.equals("Book")) {
+                    if (isEnglishMarker(marker)) {
                         return containsNumberAfterMarker(trimmed, marker);
                     }
                     return true;
@@ -126,6 +142,11 @@ public class ImprovedManuscriptParser {
             }
 
             return false;
+        }
+
+        private static boolean isEnglishMarker(String marker) {
+            return marker.equals("Chapter") || marker.equals("Part") || marker.equals("Book") ||
+                    marker.equals("Volume") || marker.equals("Section");
         }
 
         private static boolean isStandaloneTitle(String marker) {
@@ -138,7 +159,7 @@ public class ImprovedManuscriptParser {
                 return false;
             // 마커 뒤에 숫자가 시작되어야 함 (아라비아 or 로마)
             char first = contentAfterMarker.charAt(0);
-            return Character.isDigit(first) || "IVXLCDM".indexOf(first) >= 0;
+            return Character.isDigit(first) || "IVXLCDM".indexOf(Character.toUpperCase(first)) >= 0;
         }
 
         /**
@@ -148,23 +169,19 @@ public class ImprovedManuscriptParser {
             if (text.isEmpty())
                 return false;
             char first = text.charAt(0);
-            return Character.isDigit(first) || "IVXLCDM".indexOf(first) >= 0;
+            return Character.isDigit(first) || "IVXLCDM".indexOf(Character.toUpperCase(first)) >= 0;
         }
 
         /**
          * 숫자 헤더 유효성 검사 (예: "1. 서론" OK, "10년 뒤" False)
          */
         private static boolean isValidNumberedHeader(String text) {
-            // 패턴: 숫자 + [. 혹은 공백 혹은 '장']
-            // 정규식을 여기서 살짝 써서 검증 (state machine으로 하기엔 복잡함)
-            // ^[0-9IVXLCDM]+(\.|장|부|편)?\s*.*
-            // 하지만 정규식을 안 쓰기로 했으므로 char loop으로 확인
-
             int i = 0;
             int len = text.length();
 
             // 숫자 부분 스킵
-            while (i < len && (Character.isDigit(text.charAt(i)) || "IVXLCDM".indexOf(text.charAt(i)) >= 0)) {
+            while (i < len && (Character.isDigit(text.charAt(i))
+                    || "IVXLCDM".indexOf(Character.toUpperCase(text.charAt(i))) >= 0)) {
                 i++;
             }
 
@@ -221,7 +238,8 @@ public class ImprovedManuscriptParser {
         int emptyLineCount = 10; // 파일 시작 버퍼
         boolean isFirstContentLine = true;
 
-        for (String line : lines) {
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
             String trimmed = line.trim();
 
             boolean isHeader = false;
@@ -235,27 +253,37 @@ public class ImprovedManuscriptParser {
             }
 
             if (isHeader) {
+                log.debug("Detected header at line: {}", trimmed);
                 // 이전 섹션 저장 (내용이 있을 경우)
                 if (contentBuilder.length() > 0) {
-                    String sectionTitle = pendingChapterTitle != null ? pendingChapterTitle : "섹션 " + sectionNumber++;
-                    sections.add(new ParsedSection(sectionTitle, contentBuilder.toString().trim()));
-                    contentBuilder.setLength(0); // reset
+                    saveCurrentSection(sections, contentBuilder, pendingChapterTitle, sectionNumber++);
                     pendingChapterTitle = null;
                 }
 
                 // 새 챕터 시작
                 pendingChapterTitle = trimmed;
+
+                // [보강] 다음 줄이 부제인지 확인 (멀티라인 제목 처리)
+                if (i + 1 < lines.length) {
+                    String nextLine = lines[i + 1];
+                    String nextTrimmed = nextLine.trim();
+                    if (!nextTrimmed.isEmpty() && nextTrimmed.length() < 50 &&
+                            !nextTrimmed.contains("\"") && !nextTrimmed.endsWith(".")) {
+                        pendingChapterTitle += " " + nextTrimmed;
+                        i++; // 다음 줄 소모
+                        log.debug("Merged subtitle: {}", nextTrimmed);
+                    }
+                }
+
                 emptyLineCount = 0;
                 isFirstContentLine = false;
-                continue; // 헤더 라인은 본문에 포함하지 않고 스킵
+                continue;
             }
 
             // 섹션 구분선 처리 (***, ---)
             if (isSectionDivider(trimmed)) {
                 if (contentBuilder.length() > 0) {
-                    String sectionTitle = pendingChapterTitle != null ? pendingChapterTitle : "섹션 " + sectionNumber++;
-                    sections.add(new ParsedSection(sectionTitle, contentBuilder.toString().trim()));
-                    contentBuilder.setLength(0);
+                    saveCurrentSection(sections, contentBuilder, pendingChapterTitle, sectionNumber++);
                     pendingChapterTitle = null;
                 }
                 emptyLineCount = 0;
@@ -270,20 +298,23 @@ public class ImprovedManuscriptParser {
                 isFirstContentLine = false;
             }
 
-            // 첫 빈 줄들을 스킵하고 싶다면 condition 추가 가능하지만,
-            // 원본 보존을 위해 빈 줄도 포함하되, 섹션 간 경계에서의 빈 줄은 파싱 과정에서 자연스럽게 정리됨(title 앞 빈 줄은
-            // emptyLineCount로 소모됨)
-            // 단, contentBuilder에 넣을 때 너무 많은 빈 줄이 들어가는 것은 나중에 trim()으로 정리
             contentBuilder.append(line).append("\n");
         }
 
         // 마지막 섹션 저장
         if (contentBuilder.length() > 0) {
-            String sectionTitle = pendingChapterTitle != null ? pendingChapterTitle : "섹션 " + sectionNumber;
-            sections.add(new ParsedSection(sectionTitle, contentBuilder.toString().trim()));
+            saveCurrentSection(sections, contentBuilder, pendingChapterTitle, sectionNumber);
         }
 
+        log.info("Manuscript parsing complete. Found {} sections.", sections.size());
         return sections;
+    }
+
+    private static void saveCurrentSection(List<ParsedSection> sections, StringBuilder contentBuilder, String title,
+            int sectionNumber) {
+        String sectionTitle = title != null ? title : "섹션 " + sectionNumber;
+        sections.add(new ParsedSection(sectionTitle, contentBuilder.toString().trim()));
+        contentBuilder.setLength(0); // reset
     }
 
     /**

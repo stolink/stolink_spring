@@ -70,10 +70,11 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
                 response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
 
-                // 프론트엔드로 리다이렉트 (Access Token을 Fragment로 전달 - 보안 강화)
+                // 프론트엔드로 리다이렉트 (임시 원복: 프론트엔드 호환성을 위해 Query Param 사용)
+                // TODO: 프론트엔드 수정 후 보안 강화를 위해 Fragment 방식으로 전환 필요
                 String targetUrl = UriComponentsBuilder.fromUriString(redirectUri)
-                                .fragment("accessToken=" + accessToken + "&expiresIn="
-                                                + jwtTokenProvider.getAccessTokenExpirySeconds())
+                                .queryParam("accessToken", accessToken)
+                                .queryParam("expiresIn", jwtTokenProvider.getAccessTokenExpirySeconds())
                                 .build().toUriString();
 
                 getRedirectStrategy().sendRedirect(request, response, targetUrl);
