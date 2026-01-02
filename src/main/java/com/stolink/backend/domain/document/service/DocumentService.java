@@ -340,6 +340,15 @@ public class DocumentService {
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
     }
 
+    /**
+     * 프로젝트 소유자 ID를 반환합니다. (E2E 테스트용)
+     */
+    public UUID getProjectOwnerId(UUID projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+        return project.getUser().getId();
+    }
+
     @Transactional
     public List<DocumentTreeResponse> parseManuscript(UUID userId, ManuscriptUploadRequest request) {
         User user = getUserOrThrow(userId);

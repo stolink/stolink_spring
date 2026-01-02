@@ -141,12 +141,25 @@ public class DocumentController {
         return ApiResponse.ok(null);
     }
 
-    @PostMapping("/projects/{pid}/manuscript/upload")
+    @PostMapping(value = "/projects/{pid}/manuscript/upload", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<ManuscriptJobResponse> uploadManuscript(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID pid,
-            @RequestBody ManuscriptUploadRequest request) {
+            @RequestPart("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestPart(value = "request", required = false) ManuscriptUploadRequest request) {
+
+        if (request == null) {
+            request = new ManuscriptUploadRequest();
+        }
+
+        try {
+            String content = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            request.setContent(content);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("Failed to read file content", e);
+        }
+
         request.setProjectId(pid);
         ManuscriptJobResponse job = manuscriptJobService.createJob(userId, pid, request);
         // 비동기로 처리 시작

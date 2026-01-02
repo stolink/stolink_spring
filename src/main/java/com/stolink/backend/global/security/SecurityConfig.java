@@ -96,9 +96,9 @@ public class SecurityConfig {
                 // 환경 변수에서 allowed origins 읽기 (쉼표로 구분된 값)
                 String[] origins = allowedOrigins.split(",");
                 configuration.setAllowedOrigins(Arrays.stream(origins)
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .toList());
+                                .map(String::trim)
+                                .filter(s -> !s.isEmpty())
+                                .toList());
 
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
                 configuration.setAllowedHeaders(List.of("*"));
