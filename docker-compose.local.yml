@@ -113,6 +113,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: stolink-backend
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
