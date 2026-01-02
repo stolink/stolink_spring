@@ -68,7 +68,7 @@ app:
       password: ${SPRING_RABBITMQ_PASSWORD:guest}
       virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:stolink}
   ai:
-    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://localhost:8080/api/internal/ai}
+    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://stolink-backend:8080/api}
   callback:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:

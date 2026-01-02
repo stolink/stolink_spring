@@ -3,6 +3,8 @@ package com.stolink.backend.domain.document.entity;
 import com.stolink.backend.global.common.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.util.UUID;
 
@@ -37,12 +39,9 @@ public class Section extends BaseEntity {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
-    /**
-     * 임베딩 벡터 (1536차원)
-     * JSON 배열 형태로 저장 - 추후 pgvector 네이티브 타입으로 마이그레이션 가능
-     */
-    @Column(columnDefinition = "TEXT")
-    private String embeddingJson;
+    @Column(columnDefinition = "vector(1024)")
+    @JdbcTypeCode(SqlTypes.VECTOR)
+    private float[] embedding;
 
     /**
      * 관련 캐릭터 이름 목록
@@ -58,13 +57,13 @@ public class Section extends BaseEntity {
 
     @Builder
     public Section(UUID id, Document document, Integer sequenceOrder, String navTitle,
-            String content, String embeddingJson, String relatedCharactersJson, String relatedEventsJson) {
+            String content, float[] embedding, String relatedCharactersJson, String relatedEventsJson) {
         this.id = id;
         this.document = document;
         this.sequenceOrder = sequenceOrder;
         this.navTitle = navTitle;
         this.content = content;
-        this.embeddingJson = embeddingJson;
+        this.embedding = embedding;
         this.relatedCharactersJson = relatedCharactersJson;
         this.relatedEventsJson = relatedEventsJson;
     }
@@ -77,8 +76,8 @@ public class Section extends BaseEntity {
         this.navTitle = navTitle;
     }
 
-    public void updateEmbedding(String embeddingJson) {
-        this.embeddingJson = embeddingJson;
+    public void updateEmbedding(float[] embedding) {
+        this.embedding = embedding;
     }
 
     public void updateRelatedCharacters(String relatedCharactersJson) {

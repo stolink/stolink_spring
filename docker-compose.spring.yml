@@ -16,6 +16,7 @@ services:
       dockerfile: Dockerfile
     container_name: stolink-backend
     environment:
+      SPRING_PROFILES_ACTIVE: local
       # PostgreSQL (컨테이너 이름으로 접근)
       SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
       SPRING_DATASOURCE_USERNAME: stolink
@@ -45,7 +46,7 @@ services:
       APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
       # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/ai-callback
       APP_CALLBACK_BASE_URL: http://stolink-backend:8080
       # Analysis Settings
       APP_ANALYSIS_MAX_RETRY_COUNT: 3

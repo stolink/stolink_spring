@@ -9,7 +9,7 @@
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:16.11-alpine
+    image: pgvector/pgvector:pg16
     container_name: stolink-postgres-local
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -23,7 +23,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stolink -d stolink"]
+      test: [ "CMD-SHELL", "pg_isready -U stolink -d stolink" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -45,15 +45,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:7474",
-        ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7474" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -75,9 +67,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: >
-        rabbitmq-diagnostics -q ping &&
-        rabbitmqctl list_vhosts | grep -q stolink ||
-        (rabbitmqctl add_vhost stolink && rabbitmqctl set_permissions -p stolink guest ".*" ".*" ".*")
+        rabbitmq-diagnostics -q ping && rabbitmqctl list_vhosts | grep -q stolink || (rabbitmqctl add_vhost stolink && rabbitmqctl set_permissions -p stolink guest ".*" ".*" ".*")
       interval: 10s
       timeout: 10s
       retries: 5
@@ -99,9 +89,7 @@ services:
     restart: unless-stopped
     healthcheck:
       test: >
-        rabbitmq-diagnostics -q ping &&
-        rabbitmqctl list_vhosts | grep -q stolink ||
-        (rabbitmqctl add_vhost stolink && rabbitmqctl set_permissions -p stolink guest ".*" ".*" ".*")
+        rabbitmq-diagnostics -q ping && rabbitmqctl list_vhosts | grep -q stolink || (rabbitmqctl add_vhost stolink && rabbitmqctl set_permissions -p stolink guest ".*" ".*" ".*")
       interval: 10s
       timeout: 10s
       start_period: 30s
@@ -166,15 +154,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8080/actuator/health",
-        ]
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
       interval: 30s
       timeout: 3s
       start_period: 60s
@@ -187,6 +167,7 @@ volumes:
   rabbitmq_data:
   rabbitmq_agent_data:
   backend_storage:
+
 
 networks:
   stolink-local-network:

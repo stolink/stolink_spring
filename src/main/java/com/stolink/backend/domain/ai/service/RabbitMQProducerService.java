@@ -1,7 +1,9 @@
 package com.stolink.backend.domain.ai.service;
 
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
+import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -22,6 +24,12 @@ public class RabbitMQProducerService {
     @Value("${app.rabbitmq.queues.image}")
     private String imageQueue;
 
+    @Value("${app.rabbitmq.queues.document-analysis}")
+    private String documentAnalysisQueue;
+
+    @Value("${app.rabbitmq.queues.global-merge}")
+    private String globalMergeQueue;
+
     public RabbitMQProducerService(
             @Qualifier("imageRabbitTemplate") RabbitTemplate imageRabbitTemplate,
             @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
@@ -34,12 +42,28 @@ public class RabbitMQProducerService {
      */
     public void sendAnalysisTask(AnalysisTaskDTO task) {
         try {
-            agentRabbitTemplate.convertAndSend(analysisQueue, task);
+            // NOTE: Using documentAnalysisQueue for the new architecture
+            agentRabbitTemplate.convertAndSend(documentAnalysisQueue, task);
             log.info("Analysis task sent to Agent RabbitMQ: jobId={}, projectId={}",
-                     task.getJobId(), task.getProjectId());
+                    task.getJobId(), task.getProjectId());
         } catch (AmqpException e) {
             log.error("Failed to send analysis task: jobId={}, projectId={}",
-                      task.getJobId(), task.getProjectId(), e);
+                    task.getJobId(), task.getProjectId(), e);
+            throw new RuntimeException("RabbitMQ message delivery failed", e);
+        }
+    }
+
+    /**
+     * Global Merge 요청 전송
+     */
+    public void sendGlobalMergeRequest(GlobalMergeRequestDTO request) {
+        try {
+            agentRabbitTemplate.convertAndSend(globalMergeQueue, request);
+            log.info("Global merge request sent to Agent RabbitMQ: projectId={}, traceId={}",
+                    request.getProjectId(), request.getTraceId());
+        } catch (AmqpException e) {
+            log.error("Failed to send global merge request: projectId={}",
+                    request.getProjectId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
     }
@@ -51,10 +75,10 @@ public class RabbitMQProducerService {
         try {
             imageRabbitTemplate.convertAndSend(imageQueue, task);
             log.info("Image generation task sent to Image RabbitMQ: jobId={}, userId={}, projectId={}, characterId={}",
-                     task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId());
+                    task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId());
         } catch (AmqpException e) {
             log.error("Failed to send image generation task: jobId={}, userId={}, projectId={}, characterId={}",
-                      task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId(), e);
+                    task.getJobId(), task.getUserId(), task.getProjectId(), task.getCharacterId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
     }

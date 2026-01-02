@@ -1006,7 +1006,7 @@ public class AICallbackService {
                     .sequenceOrder(sectionDTO.getSequenceOrder())
                     .navTitle(sectionDTO.getNavTitle())
                     .content(sectionDTO.getContent())
-                    .embeddingJson(toJson(sectionDTO.getEmbedding()))
+                    .embedding(toFloatArray(sectionDTO.getEmbedding()))
                     .relatedCharactersJson(toJson(sectionDTO.getRelatedCharacters()))
                     .relatedEventsJson(toJson(sectionDTO.getRelatedEvents()))
                     .build();
@@ -1116,14 +1116,25 @@ public class AICallbackService {
         // 중복 캐릭터 삭제
         for (String oldId : mergedIds) {
             try {
-                characterRepository.deleteById(oldId);
-                log.info("Deleted merged character: {} (merged into {})", oldId, primaryId);
+                characterRepository.mergeNodes(primaryId, oldId);
+                log.info("Merged character: {} -> {}", oldId, primaryId);
             } catch (Exception e) {
-                log.warn("Failed to delete merged character {}: {}", oldId, e.getMessage());
+                log.warn("Failed to merge character {}: {}", oldId, e.getMessage());
             }
         }
 
         log.info("Applied character merge: {} <- {} (aliases: {})",
                 primaryId, mergedIds, merge.getMergedAliases());
+    }
+
+    private float[] toFloatArray(java.util.List<Double> embedding) {
+        if (embedding == null) {
+            return null;
+        }
+        float[] floatArray = new float[embedding.size()];
+        for (int i = 0; i < embedding.size(); i++) {
+            floatArray[i] = embedding.get(i).floatValue();
+        }
+        return floatArray;
     }
 }
