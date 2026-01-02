@@ -10,7 +10,7 @@ services:
       dockerfile: Dockerfile
     environment:
       # Spring Profile
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       # PostgreSQL
       POSTGRESQL_URL: ${POSTGRESQL_URL}
       POSTGRESQL_PORT: ${POSTGRESQL_PORT}
@@ -39,8 +39,14 @@ services:
       APP_STORAGE_BASE_PATH: /app/storage/uploads
       # CORS
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:5174}
-      # JWT secret (required)
-      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+      # OAuth2 (Google)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # JWT
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_COOKIE_DOMAIN: ${JWT_COOKIE_DOMAIN:-localhost}
+      # OAuth2 Redirect
+      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost:3000/oauth2/callback}
     ports:
       - "8080:8080"
     volumes:
