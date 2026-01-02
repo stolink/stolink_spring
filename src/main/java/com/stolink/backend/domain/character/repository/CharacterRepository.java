@@ -15,12 +15,12 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         List<Character> findAll();
 
-        @Query("MATCH (c:Character {project_id: $projectId}) " +
+        @Query("MATCH (c:Character {projectId: $projectId}) " +
                         "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
                         "RETURN c, collect(r), collect(other)")
         List<Character> findAllWithRelationshipsByProjectId(@Param("projectId") String projectId);
 
-        @Query("MATCH (c:Character {id: $characterId, project_id: $projectId}) " +
+        @Query("MATCH (c:Character {id: $characterId, projectId: $projectId}) " +
                         "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
                         "RETURN c, collect(r), collect(other)")
         Character findByIdAndProjectIdWithRelationships(

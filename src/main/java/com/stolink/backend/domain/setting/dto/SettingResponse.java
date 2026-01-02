@@ -1,15 +1,14 @@
 package com.stolink.backend.domain.setting.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.stolink.backend.domain.setting.entity.Setting;
+import com.stolink.backend.domain.setting.node.Setting;
 import lombok.Builder;
 import lombok.Getter;
-import java.util.UUID;
 
 @Getter
 @Builder
 public class SettingResponse {
-    private UUID id;
+    private String id;
 
     @JsonProperty("setting_id")
     private String settingId;
@@ -45,9 +44,9 @@ public class SettingResponse {
 
     public static SettingResponse from(Setting setting) {
         java.util.List<String> features = java.util.Collections.emptyList();
-        if (setting.getStaticObjects() != null) {
+        if (setting.getStaticObjectsJson() != null) {
             try {
-                features = objectMapper.readValue(setting.getStaticObjects(),
+                features = objectMapper.readValue(setting.getStaticObjectsJson(),
                         new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
                         });
             } catch (Exception e) {
@@ -60,7 +59,7 @@ public class SettingResponse {
                 .settingId(setting.getSettingId())
                 .name(setting.getName())
                 .locationName(setting.getLocationName())
-                .locationType(setting.getLocationType() != null ? setting.getLocationType().name().toLowerCase() : null)
+                .locationType(setting.getLocationType() != null ? setting.getLocationType().toLowerCase() : null)
                 .visualBackground(setting.getVisualBackground())
                 .atmosphere(setting.getAtmosphereKeywords())
                 .timeOfDay(setting.getTimeOfDay())

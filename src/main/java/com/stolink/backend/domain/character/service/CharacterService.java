@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.character.service;
 
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
+import com.stolink.backend.domain.ai.service.ImageServerHealthChecker;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
 import com.stolink.backend.domain.character.event.ImageGenerationRequestedEvent;
 import com.stolink.backend.domain.character.node.Character;
@@ -20,6 +21,7 @@ import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +42,7 @@ public class CharacterService {
     private final org.neo4j.driver.Driver driver;
     private final jakarta.persistence.EntityManager entityManager;
     private final ObjectMapper objectMapper;
+    private final ImageServerHealthChecker imageServerHealthChecker;
 
     @Value("${app.ai.callback-base-url:http://localhost:8080}")
     private String callbackBaseUrl;
@@ -74,6 +77,7 @@ public class CharacterService {
         return characters;
     }
 
+    @Transactional(readOnly = true)
     public Character getCharacterById(UUID userId, String characterId) {
         // Verify user existence
         getUserOrThrow(userId);
@@ -195,33 +199,33 @@ public class CharacterService {
                 // @SuppressWarnings("deprecation") // Suppress if writeTransaction is
                 // deprecated but available
                 session.executeWrite(tx -> {
-                    tx.run("MATCH (n:Character {project_id: $pid}) DETACH DELETE n", java.util.Map.of("pid", pid));
+                    tx.run("MATCH (n:Character {projectId: $pid}) DETACH DELETE n", java.util.Map.of("pid", pid));
                     return null;
                 });
 
                 session.executeWrite(tx -> {
                     tx.run("""
                             // 20 Characters
-                            CREATE (v:Character {id: randomUUID(), project_id: $pid, name: 'Jean Valjean', role: 'protagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Valjean'})
-                            CREATE (j:Character {id: randomUUID(), project_id: $pid, name: 'Javert', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Javert'})
-                            CREATE (f:Character {id: randomUUID(), project_id: $pid, name: 'Fantine', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Fantine'})
-                            CREATE (c:Character {id: randomUUID(), project_id: $pid, name: 'Cosette', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Cosette'})
-                            CREATE (m:Character {id: randomUUID(), project_id: $pid, name: 'Marius', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Marius'})
-                            CREATE (e:Character {id: randomUUID(), project_id: $pid, name: 'Eponine', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Eponine'})
-                            CREATE (t:Character {id: randomUUID(), project_id: $pid, name: 'Thenardier', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Thenardier'})
-                            CREATE (mt:Character {id: randomUUID(), project_id: $pid, name: 'Mme Thenardier', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=MmeThenardier'})
-                            CREATE (g:Character {id: randomUUID(), project_id: $pid, name: 'Gavroche', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Gavroche'})
-                            CREATE (en:Character {id: randomUUID(), project_id: $pid, name: 'Enjolras', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Enjolras'})
-                            CREATE (gr:Character {id: randomUUID(), project_id: $pid, name: 'Grantaire', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Grantaire'})
-                            CREATE (bm:Character {id: randomUUID(), project_id: $pid, name: 'Bishop Myriel', role: 'mentor', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bishop'})
-                            CREATE (co:Character {id: randomUUID(), project_id: $pid, name: 'Combeferre', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Combeferre'})
-                            CREATE (cu:Character {id: randomUUID(), project_id: $pid, name: 'Courfeyrac', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Courfeyrac'})
-                            CREATE (jp:Character {id: randomUUID(), project_id: $pid, name: 'Jean Prouvaire', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Prouvaire'})
-                            CREATE (fe:Character {id: randomUUID(), project_id: $pid, name: 'Feuilly', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Feuilly'})
-                            CREATE (ba:Character {id: randomUUID(), project_id: $pid, name: 'Bahorel', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bahorel'})
-                            CREATE (jo:Character {id: randomUUID(), project_id: $pid, name: 'Joly', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Joly'})
-                            CREATE (bo:Character {id: randomUUID(), project_id: $pid, name: 'Bossuet', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bossuet'})
-                            CREATE (az:Character {id: randomUUID(), project_id: $pid, name: 'Azelma', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Azelma'})
+                            CREATE (v:Character {id: randomUUID(), projectId: $pid, name: 'Jean Valjean', role: 'protagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Valjean'})
+                            CREATE (j:Character {id: randomUUID(), projectId: $pid, name: 'Javert', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Javert'})
+                            CREATE (f:Character {id: randomUUID(), projectId: $pid, name: 'Fantine', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Fantine'})
+                            CREATE (c:Character {id: randomUUID(), projectId: $pid, name: 'Cosette', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Cosette'})
+                            CREATE (m:Character {id: randomUUID(), projectId: $pid, name: 'Marius', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Marius'})
+                            CREATE (e:Character {id: randomUUID(), projectId: $pid, name: 'Eponine', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Eponine'})
+                            CREATE (t:Character {id: randomUUID(), projectId: $pid, name: 'Thenardier', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Thenardier'})
+                            CREATE (mt:Character {id: randomUUID(), projectId: $pid, name: 'Mme Thenardier', role: 'antagonist', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=MmeThenardier'})
+                            CREATE (g:Character {id: randomUUID(), projectId: $pid, name: 'Gavroche', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Gavroche'})
+                            CREATE (en:Character {id: randomUUID(), projectId: $pid, name: 'Enjolras', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Enjolras'})
+                            CREATE (gr:Character {id: randomUUID(), projectId: $pid, name: 'Grantaire', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Grantaire'})
+                            CREATE (bm:Character {id: randomUUID(), projectId: $pid, name: 'Bishop Myriel', role: 'mentor', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bishop'})
+                            CREATE (co:Character {id: randomUUID(), projectId: $pid, name: 'Combeferre', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Combeferre'})
+                            CREATE (cu:Character {id: randomUUID(), projectId: $pid, name: 'Courfeyrac', role: 'sidekick', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Courfeyrac'})
+                            CREATE (jp:Character {id: randomUUID(), projectId: $pid, name: 'Jean Prouvaire', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Prouvaire'})
+                            CREATE (fe:Character {id: randomUUID(), projectId: $pid, name: 'Feuilly', role: 'supporting', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Feuilly'})
+                            CREATE (ba:Character {id: randomUUID(), projectId: $pid, name: 'Bahorel', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bahorel'})
+                            CREATE (jo:Character {id: randomUUID(), projectId: $pid, name: 'Joly', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Joly'})
+                            CREATE (bo:Character {id: randomUUID(), projectId: $pid, name: 'Bossuet', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bossuet'})
+                            CREATE (az:Character {id: randomUUID(), projectId: $pid, name: 'Azelma', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Azelma'})
 
                             // Relationships
                             CREATE (v)-[:RELATED_TO {type: 'enemy', strength: 9, description: 'Obsessive Pursuer'}]->(j)
@@ -288,7 +292,15 @@ public class CharacterService {
         String originalImageUrl = "edit".equalsIgnoreCase(safeAction) ? character.getImageUrl() : null;
 
         // Generate comprehensive prompt
-        String fullPrompt = generatePrompt(character, setting, description);
+        Map<String, Object> appearance = Collections.emptyMap();
+        if (character.getAppearanceJson() != null) {
+            try {
+                appearance = objectMapper.readValue(character.getAppearanceJson(), Map.class);
+            } catch (Exception e) {
+                log.warn("Failed to parse appearanceJson for character {}", character.getId());
+            }
+        }
+        String fullPrompt = generatePrompt(character, appearance, setting, description);
 
         // ImageGenerationTask를 DB에 저장 (콜백 처리 및 재시도를 위함)
         com.stolink.backend.domain.character.entity.ImageGenerationTask task = com.stolink.backend.domain.character.entity.ImageGenerationTask
@@ -319,6 +331,9 @@ public class CharacterService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
         try {
+            // 헬스체크: 이미지 서버가 정상이 아니면 예외 발생
+            imageServerHealthChecker.checkHealthOrThrow();
+
             ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
                     .jobId(event.jobId())
                     .userId(event.userId())
@@ -355,7 +370,7 @@ public class CharacterService {
 
     // AI 콜백 URL 생성
     private String buildCallbackUrl() {
-        return callbackBaseUrl + "/internal/ai/image/callback";
+        return callbackBaseUrl + "/image/callback";
     }
 
     /**
@@ -377,58 +392,51 @@ public class CharacterService {
         log.info("Character imageUrl updated: characterId={}, imageUrl={}", characterId, imageUrl);
     }
 
-    private String generatePrompt(Character character, Map<String, Object> setting, String userInstructions) {
+    private String generatePrompt(Character character, Map<String, Object> appearance, Map<String, Object> setting,
+            String userInstructions) {
         StringBuilder prompt = new StringBuilder();
 
         // 1. Basic Stats
         prompt.append("Character: ");
         if (character.getAge() != null)
-            prompt.append(character.getAge()).append(" year old ");
+            prompt.append(character.getAge()).append("-year-old ");
         if (character.getGender() != null)
             prompt.append(character.getGender()).append(" ");
         if (character.getRace() != null)
             prompt.append(character.getRace()).append(" ");
+        if (character.getName() != null)
+            prompt.append(character.getName());
         if (character.getRole() != null)
-            prompt.append(character.getRole());
+            prompt.append(" (").append(character.getRole()).append(")");
         prompt.append(". ");
 
-        // 2. Appearance (Parse JSON)
-        if (character.getAppearanceJson() != null) {
-            try {
-                Map<String, Object> appearance = objectMapper.readValue(character.getAppearanceJson(), Map.class);
-                prompt.append("Appearance: ");
-                appearance.forEach((k, v) -> {
-                    if (v != null && !v.toString().isBlank()) {
-                        prompt.append(k).append(": ").append(v).append(", ");
-                    }
-                });
-                prompt.append(" ");
-            } catch (Exception e) {
-                log.warn("Failed to parse appearanceJson for character {}", character.getId());
-            }
+        // 2. Appearance
+        if (appearance != null && !appearance.isEmpty()) {
+            prompt.append("Appearance: ");
+            appearance.forEach((k, v) -> {
+                if (v != null && !v.toString().isBlank()) {
+                    prompt.append(k).append(": ").append(v).append(", ");
+                }
+            });
+            prompt.append(" ");
         }
 
-        // 3. Visual / Legacy
-        if (character.getVisualJson() != null) {
-            prompt.append("Visual traits: ").append(character.getVisualJson()).append(". ");
-        }
-
-        // 4. Setting / Background
+        // 3. Setting / Background
         if (setting != null) {
             prompt.append("\nBackground: ");
-            if (setting.get("name") != null)
-                prompt.append("Location: ").append(setting.get("name")).append(". ");
+            if (setting.get("location_name") != null)
+                prompt.append(setting.get("location_name")).append(", ");
             if (setting.get("visual_background") != null)
-                prompt.append(setting.get("visual_background")).append(". ");
+                prompt.append(setting.get("visual_background")).append(", ");
             if (setting.get("atmosphere") != null)
-                prompt.append("Atmosphere: ").append(setting.get("atmosphere")).append(". ");
+                prompt.append("Atmosphere: ").append(setting.get("atmosphere")).append(", ");
             if (setting.get("lighting") != null)
-                prompt.append("Lighting: ").append(setting.get("lighting")).append(". ");
+                prompt.append("Lighting: ").append(setting.get("lighting")).append(", ");
             if (setting.get("time_of_day") != null)
-                prompt.append("Time: ").append(setting.get("time_of_day")).append(". ");
+                prompt.append("Time: ").append(setting.get("time_of_day")).append(", ");
         }
 
-        // 5. User Instructions
+        // 4. User Instructions
         if (userInstructions != null && !userInstructions.isBlank()) {
             prompt.append("\nAdditional Request: ").append(userInstructions);
         }

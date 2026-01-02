@@ -68,6 +68,7 @@ public class SecurityConfig {
                                                                 "/login/oauth2/**",
                                                                 "/actuator/health",
                                                                 "/actuator/info",
+                                                                "/api/internal/**",
                                                                 "/error")
                                                 .permitAll()
                                                 // 그 외 모든 요청은 인증 필요

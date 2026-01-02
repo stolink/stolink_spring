@@ -22,6 +22,7 @@ import java.util.stream.Collectors;
 public class CharacterController {
 
     private final CharacterService characterService;
+    private final com.stolink.backend.domain.character.mapper.CharacterMapper characterMapper;
 
     @GetMapping("/projects/{projectId}/characters")
     public ApiResponse<List<CharacterResponse>> getCharacters(
@@ -29,7 +30,7 @@ public class CharacterController {
             @PathVariable UUID projectId) {
         List<Character> characters = characterService.getCharactersWithRelationships(userId, projectId);
         return ApiResponse.ok(characters.stream()
-                .map(CharacterResponse::from)
+                .map(characterMapper::toResponse)
                 .collect(Collectors.toList()));
     }
 
@@ -37,7 +38,7 @@ public class CharacterController {
     public ApiResponse<List<CharacterResponse>> getAllCharacters() {
         List<Character> characters = characterService.getAllCharacters();
         return ApiResponse.ok(characters.stream()
-                .map(CharacterResponse::from)
+                .map(characterMapper::toResponse)
                 .collect(Collectors.toList()));
     }
 
@@ -46,7 +47,7 @@ public class CharacterController {
             @AuthenticationPrincipal UUID userId,
             @PathVariable String characterId) {
         Character character = characterService.getCharacterById(userId, characterId);
-        return ApiResponse.ok(CharacterResponse.from(character));
+        return ApiResponse.ok(characterMapper.toResponse(character));
     }
 
     @PostMapping("/projects/{projectId}/characters")
@@ -56,7 +57,7 @@ public class CharacterController {
             @PathVariable UUID projectId,
             @RequestBody Character character) {
         Character created = characterService.createCharacter(userId, projectId, character);
-        return ApiResponse.created(CharacterResponse.from(created));
+        return ApiResponse.created(characterMapper.toResponse(created));
     }
 
     @PostMapping("/relationships")

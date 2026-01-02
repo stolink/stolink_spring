@@ -1,10 +1,24 @@
 package com.stolink.backend.global.config;
 
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.neo4j.repository.config.EnableNeo4jRepositories;
 
 @Configuration
-@EnableNeo4jRepositories(basePackages = "com.stolink.backend.domain.character.repository", transactionManagerRef = "neo4jTransactionManager")
+@EnableNeo4jRepositories(
+    basePackages = {
+        "com.stolink.backend.domain.character.repository",
+        "com.stolink.backend.domain.setting.repository",
+        "com.stolink.backend.domain.event.repository"
+    },
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.ASSIGNABLE_TYPE,
+        classes = JpaRepository.class
+    ),
+    transactionManagerRef = "neo4jTransactionManager"
+)
 public class Neo4jConfig {
 
     @org.springframework.context.annotation.Bean("neo4jTransactionManager")

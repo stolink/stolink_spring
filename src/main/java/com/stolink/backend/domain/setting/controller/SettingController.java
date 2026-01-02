@@ -24,7 +24,12 @@ public class SettingController {
     public ApiResponse<List<SettingResponse>> getSettings(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId) {
-        List<SettingResponse> settings = settingService.getSettingsByProject(userId, projectId);
-        return ApiResponse.ok(settings);
+        try {
+            List<SettingResponse> settings = settingService.getSettingsByProject(userId, projectId);
+            return ApiResponse.ok(settings);
+        } catch (Exception e) {
+            e.printStackTrace(); // 로컬 콘솔에 스택 트레이스 출력
+            throw e; // 다시 던져서 500 응답 유지
+        }
     }
 }
