@@ -5,7 +5,6 @@ import com.stolink.backend.domain.character.relationship.CharacterRelationship;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 

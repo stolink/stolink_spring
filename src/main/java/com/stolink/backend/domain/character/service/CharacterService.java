@@ -1,5 +1,19 @@
 package com.stolink.backend.domain.character.service;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
 import com.stolink.backend.domain.ai.service.ImageServerHealthChecker;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
@@ -11,21 +25,9 @@ import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -295,7 +297,9 @@ public class CharacterService {
         Map<String, Object> appearance = Collections.emptyMap();
         if (character.getAppearanceJson() != null) {
             try {
-                appearance = objectMapper.readValue(character.getAppearanceJson(), Map.class);
+                appearance = objectMapper.readValue(character.getAppearanceJson(),
+                        new TypeReference<Map<String, Object>>() {
+                        });
             } catch (Exception e) {
                 log.warn("Failed to parse appearanceJson for character {}", character.getId());
             }
