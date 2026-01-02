@@ -59,6 +59,7 @@ app:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
       document-analysis: stolink.analysis.queue
+      global-merge: stolink.global-merge.queue
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST}
@@ -75,6 +76,8 @@ app:
       virtual-host: ${RABBITMQ_AGENT_VHOST}
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
+  callback:
+    base-url: ${APP_AI_CALLBACK_BASE_URL}
 
 # Development Logging
 logging:
