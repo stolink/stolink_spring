@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -48,8 +49,13 @@ public class AIAnalysisService {
             return 0;
         }
 
+        if (textDocuments.isEmpty()) {
+            log.warn("No TEXT documents found for project: {}", projectId);
+            return 0;
+        }
+
         int totalChapters = textDocuments.size();
-        int publishedCount = 0;
+        List<AnalysisTaskDTO> batchTasks = new ArrayList<>();
 
         for (int i = 0; i < totalChapters; i++) {
             Document doc = textDocuments.get(i);
@@ -60,13 +66,48 @@ public class AIAnalysisService {
                 continue;
             }
 
-            triggerDocumentAnalysis(doc, i + 1, totalChapters);
-            publishedCount++;
+            // Batch Task 생성
+            AnalysisTaskDTO task = createAnalysisTask(doc, i + 1, totalChapters);
+            batchTasks.add(task);
+
+            // 상태 업데이트 (DB)
+            doc.updateAnalysisStatus(Document.AnalysisStatus.QUEUED);
         }
+
+        // DB 일괄 업데이트
+        documentRepository.saveAll(textDocuments);
+
+        // RabbitMQ 배치 발행
+        int publishedCount = producerService.sendAnalysisTaskBatch(batchTasks);
 
         log.info("Project analysis triggered: projectId={}, published={}/{} documents",
                 projectId, publishedCount, totalChapters);
         return publishedCount;
+    }
+
+    /**
+     * 내부 메서드: 문서 분석 요청 생성 (발행하지 않음)
+     */
+    private AnalysisTaskDTO createAnalysisTask(Document doc, int chapterNumber, int totalChapters) {
+        String jobId = UUID.randomUUID().toString();
+        String traceId = generateTraceId();
+
+        // Context 생성
+        AnalysisContext context = AnalysisContext.builder()
+                .chapterNumber(chapterNumber)
+                .totalChapters(totalChapters)
+                .build();
+
+        // DTO 생성
+        return AnalysisTaskDTO.builder()
+                .jobId(jobId)
+                .projectId(doc.getProject().getId())
+                .documentId(doc.getId())
+                .content(doc.getContent())
+                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                .traceId(traceId)
+                .context(context)
+                .build();
     }
 
     /**
@@ -87,35 +128,17 @@ public class AIAnalysisService {
      * 내부 메서드: 문서 분석 요청 발행
      */
     private void triggerDocumentAnalysis(Document doc, int chapterNumber, int totalChapters) {
-        String jobId = UUID.randomUUID().toString();
-        String traceId = generateTraceId();
-
-        // Context 생성
-        AnalysisContext context = AnalysisContext.builder()
-                .chapterNumber(chapterNumber)
-                .totalChapters(totalChapters)
-                .build();
-
-        // DTO 생성
-        AnalysisTaskDTO task = AnalysisTaskDTO.builder()
-                .jobId(jobId)
-                .projectId(doc.getProject().getId())
-                .documentId(doc.getId())
-                .content(doc.getContent())
-                .callbackUrl(callbackBaseUrl + "/ai-callback")
-                .traceId(traceId)
-                .context(context)
-                .build();
+        AnalysisTaskDTO task = createAnalysisTask(doc, chapterNumber, totalChapters);
 
         // 상태 업데이트
         doc.updateAnalysisStatus(Document.AnalysisStatus.QUEUED);
         documentRepository.save(doc);
 
-        // 메시지 발행
+        // 메시지 발행 (단건)
         producerService.sendAnalysisTask(task);
 
         log.info("Document analysis triggered: documentId={}, jobId={}, chapter={}/{}",
-                doc.getId(), jobId, chapterNumber, totalChapters);
+                doc.getId(), task.getJobId(), chapterNumber, totalChapters);
     }
 
     /**

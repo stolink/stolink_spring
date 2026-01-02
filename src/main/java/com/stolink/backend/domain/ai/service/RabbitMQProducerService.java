@@ -3,13 +3,14 @@ package com.stolink.backend.domain.ai.service;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Slf4j
 @Service
@@ -51,6 +52,31 @@ public class RabbitMQProducerService {
                     task.getJobId(), task.getProjectId(), e);
             throw new RuntimeException("RabbitMQ message delivery failed", e);
         }
+    }
+
+    /**
+     * Analysis 작업 배치 전송 (성능 최적화)
+     * 
+     * 여러 문서를 한 번에 발행합니다.
+     */
+    public int sendAnalysisTaskBatch(List<AnalysisTaskDTO> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return 0;
+        }
+
+        int successCount = 0;
+        for (AnalysisTaskDTO task : tasks) {
+            try {
+                agentRabbitTemplate.convertAndSend(documentAnalysisQueue, task);
+                successCount++;
+            } catch (AmqpException e) {
+                log.error("Failed to send analysis task in batch: jobId={}, projectId={}",
+                        task.getJobId(), task.getProjectId(), e);
+            }
+        }
+
+        log.info("Batch analysis tasks sent: {}/{} successful", successCount, tasks.size());
+        return successCount;
     }
 
     /**
