@@ -22,6 +22,7 @@ import com.stolink.backend.domain.validation.entity.ValidationResult;
 import com.stolink.backend.domain.validation.repository.ValidationResultRepository;
 import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
+import com.stolink.backend.global.sse.SseEmitterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -54,6 +55,7 @@ public class AICallbackService {
     private final ValidationResultRepository validationResultRepository;
     private final ForeshadowingRepository foreshadowingRepository;
     private final ObjectMapper objectMapper;
+    private final SseEmitterService sseEmitterService;
 
     @Value("${app.ai.callback-base-url}")
     private String callbackBaseUrl;
@@ -984,6 +986,9 @@ public class AICallbackService {
 
         log.info("Document analysis callback processed for: {} (processing_time: {}ms)",
                 callback.getDocumentId(), callback.getProcessingTimeMs());
+
+        // SSE 알림 전송 (1차 Pass 진행률)
+        sendProgressNotification(project);
     }
 
     /**
@@ -1037,6 +1042,26 @@ public class AICallbackService {
             log.info("Project {} - 모든 문서 분석 완료! 2차 Pass(글로벌 병합) 트리거", projectId);
             documentAnalysisPublisher.publishGlobalMerge(projectId, traceId);
         }
+        if (completedDocuments == totalTextDocuments && totalTextDocuments > 0) {
+            log.info("Project {} - 모든 문서 분석 완료! 2차 Pass(글로벌 병합) 트리거", projectId);
+            documentAnalysisPublisher.publishGlobalMerge(projectId, traceId);
+
+            // SSE 알림: 글로벌 병합 시작
+            sseEmitterService.sendStatus(projectId, new SseEmitterService.AnalysisStatusEvent(
+                    "MERGING", (int) completedDocuments, (int) totalTextDocuments, "글로벌 병합 시작..."));
+        }
+    }
+
+    // SSE 진행률 알림 헬퍼
+    private void sendProgressNotification(Project project) {
+        UUID projectId = project.getId();
+        long total = documentRepository.countTextDocumentsByProjectId(projectId);
+        long completed = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                projectId, com.stolink.backend.domain.document.entity.Document.AnalysisStatus.COMPLETED);
+
+        sseEmitterService.sendStatus(projectId, new SseEmitterService.AnalysisStatusEvent(
+                "ANALYZING", (int) completed, (int) total,
+                String.format("분석 진행 중: %d/%d 챕터", completed, total)));
     }
 
     /**
