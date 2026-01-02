@@ -38,6 +38,7 @@ public class SecurityConfig {
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
         private final CustomOAuth2UserService customOAuth2UserService;
         private final OAuth2SuccessHandler oAuth2SuccessHandler;
+        private final org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository;
 
         @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:5174}")
         private String allowedOrigins;
@@ -74,6 +75,10 @@ public class SecurityConfig {
 
                                 // OAuth2 로그인 설정
                                 .oauth2Login(oauth2 -> oauth2
+                                                .authorizationEndpoint(endpoint -> endpoint
+                                                                .authorizationRequestResolver(
+                                                                                customAuthorizationRequestResolver(
+                                                                                                clientRegistrationRepository)))
                                                 .userInfoEndpoint(userInfo -> userInfo
                                                                 .userService(customOAuth2UserService))
                                                 .successHandler(oAuth2SuccessHandler))
@@ -89,6 +94,18 @@ public class SecurityConfig {
                                 .build();
         }
 
+        private org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver customAuthorizationRequestResolver(
+                        org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository) {
+
+                org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver = new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
+                                clientRegistrationRepository, "/oauth2/authorization");
+
+                resolver.setAuthorizationRequestCustomizer(builder -> builder
+                                .additionalParameters(params -> params.remove("prompt")));
+
+                return resolver;
+        }
+
         @Bean
         public CorsConfigurationSource corsConfigurationSource() {
                 CorsConfiguration configuration = new CorsConfiguration();
@@ -96,9 +113,9 @@ public class SecurityConfig {
                 // 환경 변수에서 allowed origins 읽기 (쉼표로 구분된 값)
                 String[] origins = allowedOrigins.split(",");
                 configuration.setAllowedOrigins(Arrays.stream(origins)
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .toList());
+                                .map(String::trim)
+                                .filter(s -> !s.isEmpty())
+                                .toList());
 
                 configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
                 configuration.setAllowedHeaders(List.of("*"));

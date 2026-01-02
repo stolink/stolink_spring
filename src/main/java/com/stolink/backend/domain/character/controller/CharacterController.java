@@ -41,6 +41,14 @@ public class CharacterController {
                 .collect(Collectors.toList()));
     }
 
+    @GetMapping("/characters/{characterId}")
+    public ApiResponse<CharacterResponse> getCharacter(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable String characterId) {
+        Character character = characterService.getCharacterById(userId, characterId);
+        return ApiResponse.ok(CharacterResponse.from(character));
+    }
+
     @PostMapping("/projects/{projectId}/characters")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<CharacterResponse> createCharacter(
@@ -94,7 +102,7 @@ public class CharacterController {
             @Valid @RequestBody ImageGenerationRequest request) {
 
         String jobId = characterService.triggerImageGeneration(
-                userId, projectId, characterId, request.description());
+                userId, projectId, characterId, request.description(), request.action(), request.setting());
 
         return ApiResponse.accepted(Map.of("jobId", jobId));
     }

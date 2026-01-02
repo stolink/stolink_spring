@@ -32,7 +32,7 @@ public class ProjectResponse {
                 .genre(project.getGenre() != null ? project.getGenre().name() : null)
                 .description(project.getDescription())
                 .coverImage(project.getCoverImage())
-                .status(project.getStatus().name().toLowerCase())
+                .status(project.getStatus() != null ? project.getStatus().name().toLowerCase() : "unknown")
                 .author(project.getAuthor())
                 .createdAt(project.getCreatedAt())
                 .updatedAt(project.getUpdatedAt())

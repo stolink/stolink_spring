@@ -42,6 +42,9 @@ public class ImageGenerationTaskDTO {
     // @Builder.Default
     // private String style = "anime";
 
+    @JsonProperty("original_image_url")
+    private String originalImageUrl;
+
     @JsonProperty("callback_url")
     private String callbackUrl;
 }

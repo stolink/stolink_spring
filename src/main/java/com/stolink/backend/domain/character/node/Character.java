@@ -57,6 +57,7 @@ public class Character {
 
     private String metaJson; // created_at, updated_at, data_version, lock_version
     private String embeddingJson; // 1024-dim vector as JSON array
+    private String inventoryJson; // [{ item_id, name, description }]
 
     // Legacy fields for backward compatibility
     private String visualJson;
