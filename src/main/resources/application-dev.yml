@@ -1,6 +1,10 @@
 # Development Profile - Uses environment variables from GitHub Secrets
 server:
   forward-headers-strategy: framework
+  tomcat:
+    remote-ip-header: x-forwarded-for
+    protocol-header: x-forwarded-proto
+    internal-proxies: ".*"
 
 spring:
   # PostgreSQL Configuration
