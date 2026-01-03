@@ -84,13 +84,26 @@ fi
 
 ```bash
 export PATH="/opt/homebrew/bin:$PATH"
-PR_URL=$(gh pr view --json url,state --jq 'select(.state == "OPEN") | .url' 2>/dev/null || echo "")
+PR_INFO=$(gh pr view --json url,state --jq '{url: .url, state: .state}' 2>/dev/null || echo "{}")
+PR_URL=$(echo $PR_INFO | jq -r .url)
+PR_STATE=$(echo $PR_INFO | jq -r .state)
+
+# 상태에 따른 분기 처리
+if [[ "$PR_STATE" == "OPEN" ]]; then
+  echo "✅ 이미 열린 PR이 존재합니다: $PR_URL"
+elif [[ -n "$PR_STATE" ]]; then
+  echo "ℹ️ 이전 PR($PR_URL) 상태: $PR_STATE"
+  echo "🆕 새로운 PR을 생성하기 위해 URL 정보를 초기화합니다."
+  PR_URL="" # 4-A(생성)로 유도
+else
+  echo "🆕 발견된 PR이 없습니다."
+fi
 ```
 
-| 결과     | 상태                                  |
-| -------- | ------------------------------------- |
-| URL 있음 | PR이 이미 존재 → **4-B로** (업데이트) |
-| 비어있음 | PR 없음 → **4-A로** (생성)            |
+| 결과 변수       | 상태                     | 조치                  |
+| --------------- | ------------------------ | --------------------- |
+| `$PR_URL` 있음  | **OPEN** 상태의 PR 존재  | **4-B로** (업데이트)  |
+| `$PR_URL` 빈 값 | PR 없음 또는 닫힘/병합됨 | **4-A로** (신규 생성) |
 
 ---
 
