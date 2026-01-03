@@ -28,6 +28,7 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
             client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
             scope: email, profile
+            redirect-uri: http://localhost:8080/api/login/oauth2/code/google
 
 # JWT Configuration
 jwt:
