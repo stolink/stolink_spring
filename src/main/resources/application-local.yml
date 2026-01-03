@@ -39,7 +39,7 @@ jwt:
 
 # OAuth2 Redirect URI
 oauth2:
-  redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth2/callback}
+  redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:5173/oauth2/callback}
 
 # Application Configuration
 app:
