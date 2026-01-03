@@ -106,7 +106,7 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_COOKIE_DOMAIN: ${{ vars.CLOUDFRONT_URL_DEV }}
-          OAUTH2_REDIRECT_URI: ${{ vars.CLOUDFRONT_URL_DEV }}/oauth2/callback
+          OAUTH2_REDIRECT_URI: https://${{ vars.CLOUDFRONT_URL_DEV }}/oauth2/callback
           # Storead API 연동
           STOREAD_SPRING_URL: ${{ secrets.STOREAD_SPRING_URL }}
           STOREAD_SPRING_SERVICE_KEY: ${{ secrets.STOREAD_SPRING_SERVICE_KEY }}
@@ -199,13 +199,13 @@ jobs:
           for i in {1..5}; do
             echo "Health check attempt $i/5..."
             HTTP_CODE=$(curl -s -o /tmp/health_response.txt -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>&1)
-            
+
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Health check passed!"
               cat /tmp/health_response.txt
               exit 0
             fi
-            
+
             echo "❌ Attempt $i failed with HTTP code: $HTTP_CODE"
             echo "Response body:"
             cat /tmp/health_response.txt 2>/dev/null || echo "(no response body)"

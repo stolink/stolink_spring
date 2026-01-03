@@ -37,7 +37,7 @@ public class CookieUtils {
                 .path("/api")
                 .domain(cookieDomain)
                 .maxAge(accessTokenExpiry / 1000)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .build();
     }
 
@@ -52,7 +52,7 @@ public class CookieUtils {
                 .path("/api/auth")
                 .domain(cookieDomain)
                 .maxAge(refreshTokenExpiry / 1000)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .build();
     }
 
@@ -77,7 +77,7 @@ public class CookieUtils {
                 .path(path)
                 .domain(cookieDomain)
                 .maxAge(0)
-                .sameSite("Strict")
+                .sameSite("Lax")
                 .build();
     }
 }
