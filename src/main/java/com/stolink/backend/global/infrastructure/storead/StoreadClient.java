@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+
 @Component
 public class StoreadClient {
 
@@ -27,6 +29,8 @@ public class StoreadClient {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(StoreadPublishResponse.class)
-                .block(); // Synchronous for now
+                .timeout(Duration.ofSeconds(10))
+                .block();
     }
 }
+
