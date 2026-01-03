@@ -1,4 +1,7 @@
 # Production Profile - Uses environment variables from GitHub Secrets
+server:
+  forward-headers-strategy: framework
+
 spring:
   # PostgreSQL Configuration
   datasource:
