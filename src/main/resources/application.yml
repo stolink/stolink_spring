@@ -24,6 +24,11 @@ spring:
 # Server Configuration
 server:
   port: 8080
+  forward-headers-strategy: framework
+  tomcat:
+    remote-ip-header: x-forwarded-for
+    protocol-header: x-forwarded-proto
+    internal-proxies: ".*"
   error:
     include-message: always
     include-binding-errors: always
