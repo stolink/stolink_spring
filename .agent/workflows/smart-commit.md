@@ -83,6 +83,7 @@ fi
 ## 4. PR 존재 여부 확인 (필수!)
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 PR_URL=$(gh pr view --json url,state --jq 'select(.state == "OPEN") | .url' 2>/dev/null || echo "")
 ```
 
@@ -135,6 +136,7 @@ COMMITS=$(git log origin/$TARGET_BRANCH..$CURRENT_BRANCH --oneline)
 브랜치 이름에서 Issue 번호를 찾거나, 없으면 새로 생성하여 연결합니다.
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 # 0. 설정
 MANAGEMENT_REPO="stolink/stolink-manage"
 PROJECT_NUMBER="1"  # stolink board 프로젝트 번호
@@ -187,6 +189,7 @@ echo -e "\n\nCloses $MANAGEMENT_REPO#$ISSUE_NUM" >> .pr_body_temp.md
 ### Step 4: PR 생성
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 gh pr create \
   --title "$PR_TITLE" \
   --body-file .pr_body_temp.md \
@@ -217,6 +220,7 @@ git log origin/$TARGET_BRANCH..$CURRENT_BRANCH --oneline
 ### Step 3: PR 업데이트
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 gh pr edit \
   --title "<종합된 변경 제목>" \
   --body-file .pr_body_temp.md

@@ -9,19 +9,21 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.neo4j.repository.Neo4jRepository;
 import org.springframework.scheduling.annotation.EnableAsync;
 
+import io.github.cdimascio.dotenv.Dotenv;
+
 @SpringBootApplication
 @EnableJpaAuditing
 @EnableAsync
-@EnableJpaRepositories(
-    basePackages = "com.stolink.backend.domain",
-    excludeFilters = @ComponentScan.Filter(
-        type = FilterType.ASSIGNABLE_TYPE,
-        classes = Neo4jRepository.class
-    )
-)
+@EnableJpaRepositories(basePackages = "com.stolink.backend.domain", excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = Neo4jRepository.class))
 public class BackendApplication {
 
     public static void main(String[] args) {
+        // Load .env file into System properties properly
+        Dotenv.configure()
+                .ignoreIfMissing()
+                .systemProperties()
+                .load();
+
         SpringApplication.run(BackendApplication.class, args);
     }
 
