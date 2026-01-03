@@ -34,6 +34,10 @@ public class DraftService {
                 .title(request.title())
                 .content(request.content())
                 .graphSnapshot(request.graphSnapshot())
+                .workTitle(request.workTitle())
+                .workSynopsis(request.workSynopsis())
+                .workGenre(request.workGenre())
+                .workCoverUrl(request.workCoverUrl())
                 .build();
 
         Draft savedDraft = draftRepository.save(draft);
@@ -45,4 +49,26 @@ public class DraftService {
                 .orElseThrow(() -> new ResourceNotFoundException("Draft", "id", draftId));
         return DraftDetailResponse.from(draft);
     }
+
+    @Transactional
+    public Draft getDraftEntity(UUID draftId) {
+        return draftRepository.findByIdWithUser(draftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Draft", "id", draftId));
+    }
+
+
+    @Transactional
+    public void updatePublishStatus(UUID draftId, Draft.PublishStatus status) {
+        Draft draft = draftRepository.findById(draftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Draft", "id", draftId));
+        draft.updatePublishStatus(status);
+    }
+
+    @Transactional
+    public void updatePublishResult(UUID draftId, Long workId, Long chapterId) {
+        Draft draft = draftRepository.findById(draftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Draft", "id", draftId));
+        draft.updatePublishResult(workId, chapterId);
+    }
 }
+

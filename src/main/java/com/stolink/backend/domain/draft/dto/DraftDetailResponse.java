@@ -12,6 +12,13 @@ public record DraftDetailResponse(
     String title,
     String content,
     Map<String, Object> graphSnapshot,
+    String workTitle,
+    String workSynopsis,
+    String workGenre,
+    String workCoverUrl,
+    Draft.PublishStatus publishStatus,
+    Long externalWorkId,
+    Long externalChapterId,
     LocalDateTime createdAt,
     LocalDateTime expiresAt
 ) {
@@ -23,9 +30,17 @@ public record DraftDetailResponse(
             draft.getTitle(),
             draft.getContent(),
             draft.getGraphSnapshot(),
+            draft.getWorkTitle(),
+            draft.getWorkSynopsis(),
+            draft.getWorkGenre(),
+            draft.getWorkCoverUrl(),
+            draft.getPublishStatus(),
+            draft.getExternalWorkId(),
+            draft.getExternalChapterId(),
             draft.getCreatedAt(),
             draft.getExpiresAt()
         );
     }
 }
+
 

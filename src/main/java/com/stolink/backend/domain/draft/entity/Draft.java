@@ -43,6 +43,40 @@ public class Draft {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> graphSnapshot;
 
+    // Work 생성용 필드 (storead에서 사용)
+    @Column(name = "work_title", nullable = false, length = 255)
+    private String workTitle;
+
+    @Column(name = "work_synopsis", columnDefinition = "TEXT")
+    private String workSynopsis;
+
+    @Column(name = "work_genre", length = 50)
+    private String workGenre;
+
+    @Column(name = "work_cover_url", length = 512)
+    private String workCoverUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private PublishStatus publishStatus = PublishStatus.DRAFT;
+
+    @Column(name = "external_work_id")
+    private Long externalWorkId;
+
+    @Column(name = "external_chapter_id")
+    private Long externalChapterId;
+
+    public void updatePublishStatus(PublishStatus status) {
+        this.publishStatus = status;
+    }
+
+    public void updatePublishResult(Long workId, Long chapterId) {
+        this.externalWorkId = workId;
+        this.externalChapterId = chapterId;
+        this.publishStatus = PublishStatus.PUBLISHED;
+    }
+
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -50,4 +84,12 @@ public class Draft {
     @Column(nullable = false)
     @Builder.Default
     private LocalDateTime expiresAt = LocalDateTime.now().plusHours(24);
+
+    public enum PublishStatus {
+        DRAFT,
+        PUBLISHING,
+        PUBLISHED,
+        FAILED
+    }
 }
+
