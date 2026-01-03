@@ -83,13 +83,27 @@ fi
 ## 4. PR 존재 여부 확인 (필수!)
 
 ```bash
-PR_URL=$(gh pr view --json url,state --jq 'select(.state == "OPEN") | .url' 2>/dev/null || echo "")
+export PATH="/opt/homebrew/bin:$PATH"
+PR_INFO=$(gh pr view --json url,state --jq '{url: .url, state: .state}' 2>/dev/null || echo "{}")
+PR_URL=$(echo $PR_INFO | jq -r .url)
+PR_STATE=$(echo $PR_INFO | jq -r .state)
+
+# 상태에 따른 분기 처리
+if [[ "$PR_STATE" == "OPEN" ]]; then
+  echo "✅ 이미 열린 PR이 존재합니다: $PR_URL"
+elif [[ -n "$PR_STATE" ]]; then
+  echo "ℹ️ 이전 PR($PR_URL) 상태: $PR_STATE"
+  echo "🆕 새로운 PR을 생성하기 위해 URL 정보를 초기화합니다."
+  PR_URL="" # 4-A(생성)로 유도
+else
+  echo "🆕 발견된 PR이 없습니다."
+fi
 ```
 
-| 결과     | 상태                                  |
-| -------- | ------------------------------------- |
-| URL 있음 | PR이 이미 존재 → **4-B로** (업데이트) |
-| 비어있음 | PR 없음 → **4-A로** (생성)            |
+| 결과 변수       | 상태                     | 조치                  |
+| --------------- | ------------------------ | --------------------- |
+| `$PR_URL` 있음  | **OPEN** 상태의 PR 존재  | **4-B로** (업데이트)  |
+| `$PR_URL` 빈 값 | PR 없음 또는 닫힘/병합됨 | **4-A로** (신규 생성) |
 
 ---
 
@@ -135,6 +149,7 @@ COMMITS=$(git log origin/$TARGET_BRANCH..$CURRENT_BRANCH --oneline)
 브랜치 이름에서 Issue 번호를 찾거나, 없으면 새로 생성하여 연결합니다.
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 # 0. 설정
 MANAGEMENT_REPO="stolink/stolink-manage"
 PROJECT_NUMBER="1"  # stolink board 프로젝트 번호
@@ -187,6 +202,7 @@ echo -e "\n\nCloses $MANAGEMENT_REPO#$ISSUE_NUM" >> .pr_body_temp.md
 ### Step 4: PR 생성
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 gh pr create \
   --title "$PR_TITLE" \
   --body-file .pr_body_temp.md \
@@ -217,6 +233,7 @@ git log origin/$TARGET_BRANCH..$CURRENT_BRANCH --oneline
 ### Step 3: PR 업데이트
 
 ```bash
+export PATH="/opt/homebrew/bin:$PATH"
 gh pr edit \
   --title "<종합된 변경 제목>" \
   --body-file .pr_body_temp.md

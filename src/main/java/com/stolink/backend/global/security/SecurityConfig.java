@@ -4,6 +4,7 @@ import com.stolink.backend.global.security.jwt.JwtAuthenticationFilter;
 import com.stolink.backend.global.security.oauth2.CustomOAuth2UserService;
 import com.stolink.backend.global.security.oauth2.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +32,7 @@ import java.util.List;
  * - 세션 정책: STATELESS
  * - BCrypt 비밀번호 인코더
  */
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
@@ -81,21 +83,21 @@ public class SecurityConfig {
 
                                 // OAuth2 로그인 설정
                                 .oauth2Login(oauth2 -> oauth2
-                                                .authorizationEndpoint(endpoint -> endpoint
-                                                                .authorizationRequestResolver(
-                                                                                customAuthorizationRequestResolver(
-                                                                                                clientRegistrationRepository)))
+
                                                 .userInfoEndpoint(userInfo -> userInfo
                                                                 .userService(customOAuth2UserService))
                                                 .successHandler(oAuth2SuccessHandler)
-                                                // OAuth2 실패 시 프론트엔드로 리다이렉트 (prompt=none 실패 등)
+                                                // OAuth2 실패 시 프론트엔드로 리다이렉트
                                                 .failureHandler((request, response, exception) -> {
+                                                        log.error("OAuth2 login failed", exception);
                                                         String errorMessage = exception.getMessage();
-                                                        String errorCode = "oauth_failed";
-                                                        if (errorMessage != null && errorMessage.contains("login_required")) {
-                                                                errorCode = "login_required";
+                                                        if (errorMessage == null) {
+                                                                errorMessage = "oauth_failed";
                                                         }
-                                                        response.sendRedirect(oauth2RedirectUri + "?error=" + errorCode);
+                                                        String encodedMessage = java.net.URLEncoder.encode(errorMessage,
+                                                                        java.nio.charset.StandardCharsets.UTF_8);
+                                                        response.sendRedirect(
+                                                                        oauth2RedirectUri + "?error=" + encodedMessage);
                                                 }))
 
                                 // 인증 되지 않은 경우 401 반환 (기본값인 302 redirect 방지)
@@ -108,20 +110,6 @@ public class SecurityConfig {
                                 .addFilterBefore(jwtAuthenticationFilter, CsrfOriginFilter.class)
 
                                 .build();
-        }
-
-        private org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver customAuthorizationRequestResolver(
-                        org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository) {
-
-                org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver = new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
-                                clientRegistrationRepository, "/oauth2/authorization");
-
-                // prompt=none: 계정 선택 화면 없이 자동 로그인
-                // 주의: 구글에 로그인 안 되어 있으면 에러 발생 → 프론트에서 처리 필요
-                resolver.setAuthorizationRequestCustomizer(builder -> builder
-                                .additionalParameters(params -> params.put("prompt", "none")));
-
-                return resolver;
         }
 
         @Bean
