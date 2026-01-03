@@ -10,7 +10,7 @@ services:
       dockerfile: Dockerfile
     environment:
       # Spring Profile
-      SPRING_PROFILES_ACTIVE: dev
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       # PostgreSQL
       POSTGRESQL_URL: ${POSTGRESQL_URL}
       POSTGRESQL_PORT: ${POSTGRESQL_PORT}

@@ -101,6 +101,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: stolink-backend
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,6 +148,8 @@ services:
       # Security (JWT)
       JWT_SECRET: ${JWT_SECRET}
       JWT_COOKIE_DOMAIN: ${JWT_COOKIE_DOMAIN}
+      # Image Server URL (FastAPI)
+      IMAGE_SERVER_URL: ${IMAGE_SERVER_URL:-http://host.docker.internal:8001}
     ports:
       - "8080:8080"
     volumes:

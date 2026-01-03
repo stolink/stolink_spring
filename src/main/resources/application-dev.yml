@@ -26,6 +26,28 @@ spring:
       hibernate:
         format_sql: false
 
+  # Google OAuth2 Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: email, profile
+
+# JWT Configuration (shared with storead_spring)
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiry: 1800000 # 30분 (ms)
+  refresh-token-expiry: 604800000 # 7일 (ms)
+  cookie-domain: ${JWT_COOKIE_DOMAIN}
+  cookie-secure: true # HTTPS 환경
+
+# OAuth2 Configuration
+oauth2:
+  redirect-uri: ${OAUTH2_REDIRECT_URI}
+
 # Application Configuration
 app:
   cors:
@@ -36,6 +58,8 @@ app:
     queues:
       analysis: stolink.analysis.queue
       image: stolink.image.queue
+      document-analysis: stolink.analysis.queue
+      global-merge: stolink.global-merge.queue
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST}
@@ -52,6 +76,8 @@ app:
       virtual-host: ${RABBITMQ_AGENT_VHOST}
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
+  callback:
+    base-url: ${APP_AI_CALLBACK_BASE_URL}
 
 # Development Logging
 logging:

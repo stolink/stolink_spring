@@ -27,6 +27,11 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         @Param("characterId") String characterId,
                         @Param("projectId") String projectId);
 
+        @Query("MATCH (c:Character {id: $characterId}) " +
+                        "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
+                        "RETURN c, collect(r), collect(other)")
+        java.util.Optional<Character> findByIdWithRelationships(@Param("characterId") String characterId);
+
         @Query("MATCH (source:Character {id: $sourceId}), (target:Character {id: $targetId}) " +
                         "CREATE (source)-[r:RELATED_TO {id: randomUUID(), type: $type, strength: $strength, description: $description}]->(target) "
                         +

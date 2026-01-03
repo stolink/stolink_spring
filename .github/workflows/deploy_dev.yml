@@ -101,6 +101,12 @@ jobs:
           ALB_DNS_NAME: ${{ secrets.ALB_DNS_NAME }}
           CLOUDFRONT_URL: ${{ vars.CLOUDFRONT_URL }}
           CLOUDFRONT_URL_DEV: ${{ vars.CLOUDFRONT_URL_DEV }}
+          # OAuth2 & JWT
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_COOKIE_DOMAIN: ${{ vars.CLOUDFRONT_URL_DEV }}
+          OAUTH2_REDIRECT_URI: ${{ vars.CLOUDFRONT_URL_DEV }}/oauth2/callback
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           # .env 파일 내용 생성
@@ -124,7 +130,13 @@ jobs:
           RABBITMQ_AGENT_PASSWORD=${RABBITMQ_AGENT_PASSWORD}
           APP_AI_CALLBACK_BASE_URL=http://${ALB_DNS_NAME}/api/internal/ai
           IMAGE_NAME=ghcr.io/stolink/stolink-spring:dev-latest
-          CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,https://${CLOUDFRONT_URL},https://${CLOUDFRONT_URL_DEV}"
+          CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,https://${CLOUDFRONT_URL},https://${CLOUDFRONT_URL_DEV}
+          GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+          GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+          JWT_SECRET=${JWT_SECRET}
+          JWT_COOKIE_DOMAIN=${JWT_COOKIE_DOMAIN}
+          OAUTH2_REDIRECT_URI=${OAUTH2_REDIRECT_URI}
+          SPRING_PROFILES_ACTIVE=dev"
 
           # Base64로 인코딩하여 SSM으로 전달 (특수문자 이스케이프 문제 해결)
           ENV_BASE64=$(echo "$ENV_CONTENT" | base64 -w 0)

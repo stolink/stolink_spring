@@ -1,13 +1,11 @@
 package com.stolink.backend.domain.user.dto;
 
 import com.stolink.backend.domain.user.entity.User;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * JWT 토큰 응답 DTO

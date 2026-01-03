@@ -38,6 +38,7 @@ public class SecurityConfig {
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
         private final CustomOAuth2UserService customOAuth2UserService;
         private final OAuth2SuccessHandler oAuth2SuccessHandler;
+        private final org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository;
 
         @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:5174}")
         private String allowedOrigins;
@@ -67,6 +68,7 @@ public class SecurityConfig {
                                                                 "/login/oauth2/**",
                                                                 "/actuator/health",
                                                                 "/actuator/info",
+                                                                "/api/internal/**",
                                                                 "/error")
                                                 .permitAll()
                                                 // 그 외 모든 요청은 인증 필요
@@ -74,6 +76,10 @@ public class SecurityConfig {
 
                                 // OAuth2 로그인 설정
                                 .oauth2Login(oauth2 -> oauth2
+                                                .authorizationEndpoint(endpoint -> endpoint
+                                                                .authorizationRequestResolver(
+                                                                                customAuthorizationRequestResolver(
+                                                                                                clientRegistrationRepository)))
                                                 .userInfoEndpoint(userInfo -> userInfo
                                                                 .userService(customOAuth2UserService))
                                                 .successHandler(oAuth2SuccessHandler))
@@ -87,6 +93,18 @@ public class SecurityConfig {
                                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
 
                                 .build();
+        }
+
+        private org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver customAuthorizationRequestResolver(
+                        org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository) {
+
+                org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver = new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
+                                clientRegistrationRepository, "/oauth2/authorization");
+
+                resolver.setAuthorizationRequestCustomizer(builder -> builder
+                                .additionalParameters(params -> params.remove("prompt")));
+
+                return resolver;
         }
 
         @Bean
