@@ -88,6 +88,7 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
                         .provider(AuthProvider.GOOGLE)
                         .providerId(googleId)
                         .build();
+
                 user = userRepository.save(user);
                 log.info("New Google user registered: {}", email);
             }
