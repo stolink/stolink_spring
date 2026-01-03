@@ -52,9 +52,10 @@ public class DraftService {
 
     @Transactional
     public Draft getDraftEntity(UUID draftId) {
-        return draftRepository.findById(draftId)
+        return draftRepository.findByIdWithUser(draftId)
                 .orElseThrow(() -> new ResourceNotFoundException("Draft", "id", draftId));
     }
+
 
     @Transactional
     public void updatePublishStatus(UUID draftId, Draft.PublishStatus status) {
