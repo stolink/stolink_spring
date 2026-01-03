@@ -16,7 +16,7 @@ services:
       dockerfile: Dockerfile
     container_name: stolink-backend
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      SPRING_PROFILES_ACTIVE: dev
       # PostgreSQL (컨테이너 이름으로 접근)
       SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
       SPRING_DATASOURCE_USERNAME: stolink
@@ -74,3 +74,4 @@ networks:
   ai-backend-network:
     external: true
     name: sto-link-ai-backend_stolink-network
+
