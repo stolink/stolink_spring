@@ -47,6 +47,9 @@ services:
       OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost:5173/oauth2/callback}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      # Storead API 연동
+      STOREAD_SPRING_URL: ${STOREAD_SPRING_URL}
+      STOREAD_SPRING_SERVICE_KEY: ${STOREAD_SPRING_SERVICE_KEY:-temp-key}
     ports:
       - "8080:8080"
     volumes:

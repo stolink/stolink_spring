@@ -107,6 +107,9 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_COOKIE_DOMAIN: ${{ vars.CLOUDFRONT_URL_DEV }}
           OAUTH2_REDIRECT_URI: ${{ vars.CLOUDFRONT_URL_DEV }}/oauth2/callback
+          # Storead API 연동
+          STOREAD_SPRING_URL: ${{ secrets.STOREAD_SPRING_URL }}
+          STOREAD_SPRING_SERVICE_KEY: ${{ secrets.STOREAD_SPRING_SERVICE_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           # .env 파일 내용 생성
@@ -136,6 +139,8 @@ jobs:
           JWT_SECRET=${JWT_SECRET}
           JWT_COOKIE_DOMAIN=${JWT_COOKIE_DOMAIN}
           OAUTH2_REDIRECT_URI=${OAUTH2_REDIRECT_URI}
+          STOREAD_SPRING_URL=${STOREAD_SPRING_URL}
+          STOREAD_SPRING_SERVICE_KEY=${STOREAD_SPRING_SERVICE_KEY}
           SPRING_PROFILES_ACTIVE=dev"
 
           # Base64로 인코딩하여 SSM으로 전달 (특수문자 이스케이프 문제 해결)
