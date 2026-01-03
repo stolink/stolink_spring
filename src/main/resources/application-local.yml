@@ -73,3 +73,6 @@ app:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:
     max-retry-count: ${APP_ANALYSIS_MAX_RETRY_COUNT:3}
+  storead:
+    base-url: ${STOREAD_API_URL:http://localhost:8081}
+    service-key: ${STOREAD_SERVICE_KEY:stolink-service-key}

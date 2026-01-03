@@ -6,12 +6,14 @@ import java.util.UUID;
 
 public record DraftResponse(
     UUID id,
+    Draft.PublishStatus publishStatus,
     LocalDateTime createdAt,
     LocalDateTime expiresAt
 ) {
     public static DraftResponse from(Draft draft) {
         return new DraftResponse(
             draft.getId(),
+            draft.getPublishStatus(),
             draft.getCreatedAt(),
             draft.getExpiresAt()
         );

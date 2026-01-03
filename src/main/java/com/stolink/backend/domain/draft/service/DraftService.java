@@ -34,6 +34,10 @@ public class DraftService {
                 .title(request.title())
                 .content(request.content())
                 .graphSnapshot(request.graphSnapshot())
+                .workTitle(request.workTitle())
+                .workSynopsis(request.workSynopsis())
+                .workGenre(request.workGenre())
+                .workCoverUrl(request.workCoverUrl())
                 .build();
 
         Draft savedDraft = draftRepository.save(draft);
