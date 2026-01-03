@@ -25,13 +25,13 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID}
-            client-secret: ${GOOGLE_CLIENT_SECRET}
+            client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
             scope: email, profile
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:very-long-and-secure-random-secret-key-that-is-at-least-512-bits-for-hs512-algorithm-security-must-be-kept-secret}
+  secret: ${JWT_SECRET:b411fedd3642d49a3ec3d060dc7f2cd911d5b6fa54544d6ed2b9454d7f5f0449f136f51de13bc7a5fba5d0de1a3ad866bffa64fd473b9ba2b974088ff1dca733}
   access-token-expiry: 1800000 # 30분 (ms)
   refresh-token-expiry: 604800000 # 7일 (ms)
   cookie-domain: ${JWT_COOKIE_DOMAIN:localhost}
@@ -68,7 +68,7 @@ app:
       password: ${SPRING_RABBITMQ_PASSWORD:guest}
       virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:stolink}
   ai:
-    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://stolink-backend:8080/api}
+    callback-base-url: http://host.docker.internal:8080/api/internal/ai
   callback:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:
@@ -76,3 +76,8 @@ app:
   storead:
     base-url: ${STOREAD_API_URL:http://localhost:8081}
     service-key: ${STOREAD_SERVICE_KEY:stolink-service-key}
+  image-server:
+    url: ${IMAGE_SERVER_URL:http://localhost:8001}
+    health-endpoint: ${IMAGE_SERVER_HEALTH_ENDPOINT:/health}
+    health-check-enabled: ${IMAGE_SERVER_HEALTH_CHECK_ENABLED:true}
+    health-timeout-ms: ${IMAGE_SERVER_HEALTH_TIMEOUT_MS:5000}
