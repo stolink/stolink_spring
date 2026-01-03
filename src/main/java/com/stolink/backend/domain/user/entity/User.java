@@ -21,7 +21,7 @@ public class User extends BaseEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @Column // OAuth2 사용자는 null 가능
+    @Column(nullable = true) // OAuth2 사용자는 null 가능
     private String password;
 
     @Column(nullable = false, length = 100)
