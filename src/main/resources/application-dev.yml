@@ -78,6 +78,10 @@ app:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
   callback:
     base-url: ${APP_AI_CALLBACK_BASE_URL}
+  # Storead API 연동 (Draft 퍼블리시)
+  storead:
+    base-url: ${STOREAD_SPRING_URL}
+    service-key: ${STOREAD_SPRING_SERVICE_KEY:temp-key}
 
 # Development Logging
 logging:

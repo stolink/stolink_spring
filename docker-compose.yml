@@ -47,6 +47,9 @@ services:
       JWT_COOKIE_DOMAIN: ${JWT_COOKIE_DOMAIN:-localhost}
       # OAuth2 Redirect
       OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI:-http://localhost:3000/oauth2/callback}
+      # Storead API 연동
+      STOREAD_SPRING_URL: ${STOREAD_SPRING_URL}
+      STOREAD_SPRING_SERVICE_KEY: ${STOREAD_SPRING_SERVICE_KEY:-temp-key}
     ports:
       - "8080:8080"
     volumes:
