@@ -1,9 +1,9 @@
 package com.stolink.backend.domain.document.service;
 
-import lombok.extern.slf4j.Slf4j;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 정규식을 최소화하고 상태 기반 휴리스틱 검증을 사용하는 개선된 원고 파서
@@ -24,9 +24,6 @@ public class ImprovedManuscriptParser {
             "\"", "'", "“", "”", "‘", "’", // 따옴표 (대화문)
             "..." // 말줄임표 (제목에 잘 안 쓰임)
     );
-
-    // 강력한 마커인 경우에만 허용할 문장 부호
-    private static final List<String> ALLOWED_PUNCTUATION_IN_STRONG_HEADER = List.of("?", "!", ":", "-");
 
     /**
      * 챕터 헤더 검증 클래스

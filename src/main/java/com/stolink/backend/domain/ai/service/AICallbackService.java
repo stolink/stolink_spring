@@ -8,12 +8,14 @@ import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
+import com.stolink.backend.domain.character.entity.ImageGenerationTask;
+import com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository;
 
-import com.stolink.backend.domain.event.entity.Event;
-import com.stolink.backend.domain.event.repository.EventRepository;
+import com.stolink.backend.domain.event.node.Event;
+import com.stolink.backend.domain.event.repository.EventNeo4jRepository;
 import com.stolink.backend.domain.project.entity.Project;
-import com.stolink.backend.domain.setting.entity.Setting;
-import com.stolink.backend.domain.setting.repository.SettingRepository;
+import com.stolink.backend.domain.setting.node.Setting;
+import com.stolink.backend.domain.setting.repository.SettingNeo4jRepository;
 import com.stolink.backend.domain.plot.entity.PlotIntegration;
 import com.stolink.backend.domain.plot.repository.PlotIntegrationRepository;
 import com.stolink.backend.domain.consistency.entity.ConsistencyReport;
@@ -46,8 +48,10 @@ public class AICallbackService {
 
     private final CharacterRepository characterRepository;
     private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
-    private final EventRepository eventRepository;
-    private final SettingRepository settingRepository;
+    private final EventNeo4jRepository eventNeo4jRepository;
+
+    private final SettingNeo4jRepository settingNeo4jRepository;
+    private final ImageGenerationTaskRepository imageGenerationTaskRepository;
 
     private final AnalysisJobRepository analysisJobRepository;
     private final PlotIntegrationRepository plotIntegrationRepository;
@@ -454,7 +458,7 @@ public class AICallbackService {
     }
 
     /**
-     * 이벤트 저장 (PostgreSQL)
+     * 이벤트 저장 (Neo4j)
      */
     @SuppressWarnings("unchecked")
     private void saveEvents(Map<String, Object> result, Project project) {
@@ -464,9 +468,11 @@ public class AICallbackService {
             return;
         }
 
+        String projectId = project.getId().toString();
+
         for (Map<String, Object> eventData : events) {
             String eventId = (String) eventData.get("event_id");
-            String eventTypeStr = (String) eventData.get("event_type");
+            String eventType = (String) eventData.get("event_type");
             String narrativeSummary = (String) eventData.get("narrative_summary");
             String description = (String) eventData.get("description");
             String visualScene = (String) eventData.get("visual_scene");
@@ -489,30 +495,20 @@ public class AICallbackService {
                 }
             }
 
-            // EventType 변환
-            Event.EventType eventType = null;
-            if (eventTypeStr != null) {
-                try {
-                    eventType = Event.EventType.valueOf(eventTypeStr.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    log.warn("Unknown event type: {}", eventTypeStr);
-                }
-            }
-
             // 기존 이벤트 조회 또는 새로 생성
-            Optional<Event> existingEvent = eventRepository.findByProjectAndEventId(project, eventId);
+            Optional<Event> existingEvent = eventNeo4jRepository.findByProjectIdAndEventId(projectId, eventId);
 
             Event event;
             if (existingEvent.isPresent()) {
                 event = existingEvent.get();
             } else {
                 event = Event.builder()
-                        .project(project)
+                        .projectId(projectId)
                         .eventId(eventId)
                         .build();
             }
 
-            event.setEventType(eventType);
+            event.setEventType(eventType != null ? eventType.toUpperCase() : null);
             event.setNarrativeSummary(narrativeSummary);
             event.setDescription(description);
             event.setVisualScene(visualScene);
@@ -521,7 +517,7 @@ public class AICallbackService {
             event.setPrevEventId(prevEventId);
             event.setImportance(importance);
             event.setIsForeshadowing(isForeshadowing != null ? isForeshadowing : false);
-            event.setParticipants(participantsJson);
+            event.setParticipantsJson(participantsJson);
 
             // New AI schema fields
             try {
@@ -538,13 +534,13 @@ public class AICallbackService {
                 log.error("Failed to serialize event JSON fields: {}", e.getMessage());
             }
 
-            eventRepository.save(event);
-            log.info("Saved event: {} ({})", eventId, narrativeSummary);
+            eventNeo4jRepository.save(event);
+            log.info("Saved event to Neo4j: {} ({})", eventId, narrativeSummary);
         }
     }
 
     /**
-     * 설정(장소) 저장 (PostgreSQL)
+     * 설정(장소) 저장 (Neo4j)
      */
     @SuppressWarnings("unchecked")
     private void saveSettings(Map<String, Object> result, Project project) {
@@ -554,10 +550,12 @@ public class AICallbackService {
             return;
         }
 
+        String projectId = project.getId().toString();
+
         for (Map<String, Object> settingData : settings) {
             String settingId = (String) settingData.get("setting_id");
             String name = (String) settingData.get("name");
-            String locationTypeStr = (String) settingData.get("location_type");
+            String locationType = (String) settingData.get("location_type");
             String visualPrompt = (String) settingData.get("static_visual_prompt");
             if (visualPrompt == null) {
                 visualPrompt = (String) settingData.get("visual_background");
@@ -598,32 +596,21 @@ public class AICallbackService {
                 }
             }
 
-            // LocationType 변환
-            Setting.LocationType locationType = null;
-            if (locationTypeStr != null) {
-                try {
-                    locationType = Setting.LocationType.valueOf(locationTypeStr.toUpperCase());
-                } catch (IllegalArgumentException e) {
-                    locationType = Setting.LocationType.OTHER;
-                    log.warn("Unknown location type: {}, defaulting to OTHER", locationTypeStr);
-                }
-            }
-
             // 기존 설정 조회 또는 새로 생성
-            Optional<Setting> existingSetting = settingRepository.findByProjectAndName(project, name);
+            Optional<Setting> existingSetting = settingNeo4jRepository.findByProjectIdAndName(projectId, name);
 
             Setting setting;
             if (existingSetting.isPresent()) {
                 setting = existingSetting.get();
             } else {
                 setting = Setting.builder()
-                        .project(project)
+                        .projectId(projectId)
                         .settingId(settingId)
                         .name(name)
                         .build();
             }
 
-            setting.setLocationType(locationType);
+            setting.setLocationType(locationType != null ? locationType.toUpperCase() : null);
             setting.setLocationName((String) settingData.get("location_name"));
             setting.setVisualPrompt(visualPrompt);
             setting.setVisualBackground((String) settingData.get("visual_background"));
@@ -635,10 +622,10 @@ public class AICallbackService {
             setting.setDescription((String) settingData.get("description"));
             setting.setIsPrimaryLocation(isPrimary != null ? isPrimary : false);
             setting.setStorySignificance(storySignificance);
-            setting.setStaticObjects(staticObjectsJson);
+            setting.setStaticObjectsJson(staticObjectsJson);
 
-            settingRepository.save(setting);
-            log.info("Saved setting: {} ({})", name, locationType);
+            settingNeo4jRepository.save(setting);
+            log.info("Saved setting to Neo4j: {} ({})", name, locationType);
         }
     }
 
@@ -708,17 +695,42 @@ public class AICallbackService {
         log.info("Processing image callback for job: {}, character: {}",
                 callback.getJobId(), callback.getCharacterId());
 
+        String jobId = callback.getJobId();
+        String characterId = callback.getCharacterId().toString();
+
+        // URL 수정 (minio -> localhost) - 로컬 환경 호환성
+        String imageUrl = callback.getImageUrl();
+        if (imageUrl != null && imageUrl.contains("minio:9000")) {
+            imageUrl = imageUrl.replace("minio:9000", "localhost:9000");
+        }
+
         if ("FAILED".equals(callback.getStatus())) {
             log.error("Image generation failed for character {}: {}",
-                    callback.getCharacterId(), callback.getErrorMessage());
+                    characterId, callback.getErrorMessage());
+
+            // Task 실패 상태 업데이트
+            final String errorMsg = callback.getErrorMessage();
+            imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
+                task.markAsFailed(errorMsg);
+                imageGenerationTaskRepository.save(task);
+            });
             return;
         }
 
-        String characterId = callback.getCharacterId().toString();
+        // 1. Character 노드 업데이트
+        final String finalImageUrl = imageUrl;
         characterRepository.findById(characterId).ifPresent(character -> {
-            character.setImageUrl(callback.getImageUrl());
+            character.setImageUrl(finalImageUrl);
             characterRepository.save(character);
-            log.info("Updated character {} with image URL: {}", characterId, callback.getImageUrl());
+            log.info("Updated character {} with image URL: {}", characterId, finalImageUrl);
+        });
+
+        // 2. ImageGenerationTask 상태 업데이트 (COMPLETED)
+        imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
+            task.setImageUrl(finalImageUrl);
+            task.setStatus(ImageGenerationTask.TaskStatus.COMPLETED);
+            imageGenerationTaskRepository.save(task);
+            log.info("Updated ImageGenerationTask {} to COMPLETED", jobId);
         });
     }
 

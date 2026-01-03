@@ -1,6 +1,21 @@
 package com.stolink.backend.domain.character.service;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
+import com.stolink.backend.domain.ai.service.ImageServerHealthChecker;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
 import com.stolink.backend.domain.character.event.ImageGenerationRequestedEvent;
 import com.stolink.backend.domain.character.node.Character;
@@ -10,17 +25,9 @@ import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
-
-import java.util.List;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -36,6 +43,8 @@ public class CharacterService {
     private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
     private final org.neo4j.driver.Driver driver;
     private final jakarta.persistence.EntityManager entityManager;
+    private final ObjectMapper objectMapper;
+    private final ImageServerHealthChecker imageServerHealthChecker;
 
     @Value("${app.ai.callback-base-url:http://localhost:8080}")
     private String callbackBaseUrl;
@@ -68,6 +77,24 @@ public class CharacterService {
         }
 
         return characters;
+    }
+
+    @Transactional(readOnly = true)
+    public Character getCharacterById(UUID userId, String characterId) {
+        // Verify user existence
+        getUserOrThrow(userId);
+
+        Character character = characterRepository.findByIdWithRelationships(characterId)
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
+
+        // Populate source ID for relationships
+        if (character.getRelationships() != null) {
+            for (var rel : character.getRelationships()) {
+                rel.setSource(character.getId());
+            }
+        }
+
+        return character;
     }
 
     @Transactional
@@ -250,12 +277,34 @@ public class CharacterService {
             UUID userId,
             UUID projectId,
             UUID characterId,
-            String description) {
+            String description,
+            String action,
+            Map<String, Object> setting) {
         // userId로 Project 소유권 검증 (경합 조건 방지)
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
 
+        // Fetch character to get current image URL (needed for edit)
+        Character character = characterRepository.findById(characterId.toString())
+                .filter(c -> c.getProjectId().equals(project.getId().toString()))
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
+
         String jobId = UUID.randomUUID().toString();
+        String safeAction = (action == null || action.isBlank()) ? "create" : action;
+        String originalImageUrl = "edit".equalsIgnoreCase(safeAction) ? character.getImageUrl() : null;
+
+        // Generate comprehensive prompt
+        Map<String, Object> appearance = Collections.emptyMap();
+        if (character.getAppearanceJson() != null) {
+            try {
+                appearance = objectMapper.readValue(character.getAppearanceJson(),
+                        new TypeReference<Map<String, Object>>() {
+                        });
+            } catch (Exception e) {
+                log.warn("Failed to parse appearanceJson for character {}", character.getId());
+            }
+        }
+        String fullPrompt = generatePrompt(character, appearance, setting, description);
 
         // ImageGenerationTask를 DB에 저장 (콜백 처리 및 재시도를 위함)
         com.stolink.backend.domain.character.entity.ImageGenerationTask task = com.stolink.backend.domain.character.entity.ImageGenerationTask
@@ -264,17 +313,18 @@ public class CharacterService {
                 .userId(userId)
                 .projectId(project.getId())
                 .characterId(characterId)
-                .description(description)
+                .description(fullPrompt) // Save the FULL generated prompt
                 .status(com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus.PENDING)
                 .build();
         imageGenerationTaskRepository.save(task);
 
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
         eventPublisher.publishEvent(new ImageGenerationRequestedEvent(
-                jobId, userId, project.getId(), characterId, description));
+                jobId, userId, project.getId(), characterId, fullPrompt, safeAction, originalImageUrl));
 
-        log.info("Image generation task created and event published: jobId={}, userId={}, projectId={}, characterId={}",
-                jobId, userId, projectId, characterId);
+        log.info(
+                "Image generation task created and event published: jobId={}, userId={}, projectId={}, characterId={}, action={}",
+                jobId, userId, projectId, characterId, safeAction);
 
         return jobId;
     }
@@ -285,13 +335,17 @@ public class CharacterService {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
         try {
+            // 헬스체크: 이미지 서버가 정상이 아니면 예외 발생
+            imageServerHealthChecker.checkHealthOrThrow();
+
             ImageGenerationTaskDTO task = ImageGenerationTaskDTO.builder()
                     .jobId(event.jobId())
                     .userId(event.userId())
                     .projectId(event.projectId())
                     .characterId(event.characterId())
                     .message(event.description())
-                    .action("create")
+                    .action(event.action())
+                    .originalImageUrl(event.originalImageUrl())
                     .callbackUrl(buildCallbackUrl())
                     .build();
 
@@ -325,7 +379,7 @@ public class CharacterService {
 
     /**
      * 캐릭터 이미지 URL 업데이트 (AI 이미지 생성 완료 후 콜백에서 호출)
-     * 
+     *
      * @param characterId 캐릭터 ID
      * @param imageUrl    생성된 이미지 URL
      */
@@ -340,5 +394,57 @@ public class CharacterService {
         }
 
         log.info("Character imageUrl updated: characterId={}, imageUrl={}", characterId, imageUrl);
+    }
+
+    private String generatePrompt(Character character, Map<String, Object> appearance, Map<String, Object> setting,
+            String userInstructions) {
+        StringBuilder prompt = new StringBuilder();
+
+        // 1. Basic Stats
+        prompt.append("Character: ");
+        if (character.getAge() != null)
+            prompt.append(character.getAge()).append("-year-old ");
+        if (character.getGender() != null)
+            prompt.append(character.getGender()).append(" ");
+        if (character.getRace() != null)
+            prompt.append(character.getRace()).append(" ");
+        if (character.getName() != null)
+            prompt.append(character.getName());
+        if (character.getRole() != null)
+            prompt.append(" (").append(character.getRole()).append(")");
+        prompt.append(". ");
+
+        // 2. Appearance
+        if (appearance != null && !appearance.isEmpty()) {
+            prompt.append("Appearance: ");
+            appearance.forEach((k, v) -> {
+                if (v != null && !v.toString().isBlank()) {
+                    prompt.append(k).append(": ").append(v).append(", ");
+                }
+            });
+            prompt.append(" ");
+        }
+
+        // 3. Setting / Background
+        if (setting != null) {
+            prompt.append("\nBackground: ");
+            if (setting.get("location_name") != null)
+                prompt.append(setting.get("location_name")).append(", ");
+            if (setting.get("visual_background") != null)
+                prompt.append(setting.get("visual_background")).append(", ");
+            if (setting.get("atmosphere") != null)
+                prompt.append("Atmosphere: ").append(setting.get("atmosphere")).append(", ");
+            if (setting.get("lighting") != null)
+                prompt.append("Lighting: ").append(setting.get("lighting")).append(", ");
+            if (setting.get("time_of_day") != null)
+                prompt.append("Time: ").append(setting.get("time_of_day")).append(", ");
+        }
+
+        // 4. User Instructions
+        if (userInstructions != null && !userInstructions.isBlank()) {
+            prompt.append("\nAdditional Request: ").append(userInstructions);
+        }
+
+        return prompt.toString().trim();
     }
 }
