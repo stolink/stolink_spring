@@ -1,10 +1,12 @@
 package com.stolink.backend.global.security.oauth2;
 
 import com.stolink.backend.global.security.jwt.JwtTokenProvider;
+import com.stolink.backend.global.util.CookieUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -19,7 +21,7 @@ import java.util.UUID;
 /**
  * OAuth2 로그인 성공 핸들러
  *
- * OAuth2 인증 성공 후 JWT 토큰을 발급하고
+ * OAuth2 인증 성공 후 JWT 토큰을 HttpOnly 쿠키로 발급하고
  * 프론트엔드로 리다이렉트합니다.
  */
 @Slf4j
@@ -29,15 +31,10 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         private final JwtTokenProvider jwtTokenProvider;
         private final com.stolink.backend.domain.user.service.AuthService authService;
+        private final CookieUtils cookieUtils;
 
         @Value("${oauth2.redirect-uri:http://localhost:3000/oauth2/callback}")
         private String redirectUri;
-
-        @Value("${jwt.cookie-domain}")
-        private String cookieDomain;
-
-        @Value("${jwt.cookie-secure}")
-        private boolean cookieSecure;
 
         @Override
         public void onAuthenticationSuccess(HttpServletRequest request,
@@ -55,26 +52,19 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
                 log.info("OAuth2 login success. Issuing JWT for user: {}", userId);
 
-                // Refresh Token을 RDB에 저장 (중요: 이 단계가 없으면 /refresh 시 400 에러 발생)
+                // Refresh Token을 RDB에 저장
                 authService.saveRefreshToken(userId, refreshToken);
 
-                // Refresh Token을 HttpOnly 쿠키로 설정
-                ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
-                                .httpOnly(true)
-                                .secure(cookieSecure)
-                                .path("/")
-                                .domain(cookieDomain)
-                                .maxAge(7 * 24 * 60 * 60)
-                                .sameSite("Lax")
-                                .build();
+                // Access Token, Refresh Token을 HttpOnly 쿠키로 설정
+                ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(accessToken);
+                ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(refreshToken);
 
-                response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
+                response.addHeader(HttpHeaders.SET_COOKIE, accessCookie.toString());
+                response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
 
-                // 프론트엔드로 리다이렉트 (임시 원복: 프론트엔드 호환성을 위해 Query Param 사용)
-                // TODO: 프론트엔드 수정 후 보안 강화를 위해 Fragment 방식으로 전환 필요
+                // 프론트엔드로 리다이렉트 (토큰은 쿠키로 전달되므로 URL에 포함하지 않음)
                 String targetUrl = UriComponentsBuilder.fromUriString(redirectUri)
-                                .queryParam("accessToken", accessToken)
-                                .queryParam("expiresIn", jwtTokenProvider.getAccessTokenExpirySeconds())
+                                .queryParam("success", "true")
                                 .build().toUriString();
 
                 getRedirectStrategy().sendRedirect(request, response, targetUrl);

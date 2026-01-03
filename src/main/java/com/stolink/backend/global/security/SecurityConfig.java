@@ -26,7 +26,8 @@ import java.util.List;
  * Spring Security 설정
  *
  * 보안 사항:
- * - CSRF 비활성화 (Stateless JWT 사용)
+ * - 쿠키 기반 JWT 인증
+ * - CSRF Origin 검증 (SameSite=Strict + Origin 헤더 검증)
  * - 세션 정책: STATELESS
  * - BCrypt 비밀번호 인코더
  */
@@ -36,12 +37,16 @@ import java.util.List;
 public class SecurityConfig {
 
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final CsrfOriginFilter csrfOriginFilter;
         private final CustomOAuth2UserService customOAuth2UserService;
         private final OAuth2SuccessHandler oAuth2SuccessHandler;
         private final org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository;
 
         @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:5174}")
         private String allowedOrigins;
+
+        @Value("${oauth2.redirect-uri:http://localhost:5173/oauth2/callback}")
+        private String oauth2RedirectUri;
 
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -82,15 +87,25 @@ public class SecurityConfig {
                                                                                                 clientRegistrationRepository)))
                                                 .userInfoEndpoint(userInfo -> userInfo
                                                                 .userService(customOAuth2UserService))
-                                                .successHandler(oAuth2SuccessHandler))
+                                                .successHandler(oAuth2SuccessHandler)
+                                                // OAuth2 실패 시 프론트엔드로 리다이렉트 (prompt=none 실패 등)
+                                                .failureHandler((request, response, exception) -> {
+                                                        String errorMessage = exception.getMessage();
+                                                        String errorCode = "oauth_failed";
+                                                        if (errorMessage != null && errorMessage.contains("login_required")) {
+                                                                errorCode = "login_required";
+                                                        }
+                                                        response.sendRedirect(oauth2RedirectUri + "?error=" + errorCode);
+                                                }))
 
                                 // 인증 되지 않은 경우 401 반환 (기본값인 302 redirect 방지)
                                 .exceptionHandling(exception -> exception
                                                 .authenticationEntryPoint(
                                                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 
-                                // JWT 필터 추가
-                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                                // 필터 순서: CSRF Origin Filter -> JWT Filter
+                                .addFilterBefore(csrfOriginFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterBefore(jwtAuthenticationFilter, CsrfOriginFilter.class)
 
                                 .build();
         }
@@ -101,8 +116,10 @@ public class SecurityConfig {
                 org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver = new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
                                 clientRegistrationRepository, "/oauth2/authorization");
 
+                // prompt=none: 계정 선택 화면 없이 자동 로그인
+                // 주의: 구글에 로그인 안 되어 있으면 에러 발생 → 프론트에서 처리 필요
                 resolver.setAuthorizationRequestCustomizer(builder -> builder
-                                .additionalParameters(params -> params.remove("prompt")));
+                                .additionalParameters(params -> params.put("prompt", "none")));
 
                 return resolver;
         }
