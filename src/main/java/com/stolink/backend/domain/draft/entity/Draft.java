@@ -44,7 +44,7 @@ public class Draft {
     private Map<String, Object> graphSnapshot;
 
     // Work 생성용 필드 (storead에서 사용)
-    @Column(name = "work_title", length = 255)
+    @Column(name = "work_title", nullable = false, length = 255)
     private String workTitle;
 
     @Column(name = "work_synopsis", columnDefinition = "TEXT")
