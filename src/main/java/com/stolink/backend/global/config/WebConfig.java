@@ -12,6 +12,9 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:5174}")
     private String allowedOrigins;
 
+    @Value("${app.storage.base-path:./storage/uploads}")
+    private String uploadPath;
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         String[] origins = allowedOrigins.split(",");
@@ -27,5 +30,18 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedHeaders("*")
                 .allowCredentials(true)
                 .maxAge(3600);
+    }
+
+    @Override
+    public void addResourceHandlers(
+            org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+        // Ensure the path ends with /
+        String path = uploadPath.endsWith("/") ? uploadPath : uploadPath + "/";
+
+        // Handle both absolute paths and relative paths
+        String resourceLocation = path.startsWith("/") ? "file:" + path : "file:./" + path;
+
+        registry.addResourceHandler("/media/**")
+                .addResourceLocations(resourceLocation);
     }
 }
