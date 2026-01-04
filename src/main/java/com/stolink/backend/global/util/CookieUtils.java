@@ -28,13 +28,13 @@ public class CookieUtils {
 
     /**
      * Access Token 쿠키 생성
-     * Path: /api (API 경로에만 전송)
+     * Path: / (모든 경로에서 전송)
      */
     public ResponseCookie createAccessTokenCookie(String accessToken) {
         return ResponseCookie.from(ACCESS_TOKEN_COOKIE, accessToken)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .path("/api")
+                .path("/")
                 .domain(cookieDomain)
                 .maxAge(accessTokenExpiry / 1000)
                 .sameSite("Lax")
@@ -43,13 +43,13 @@ public class CookieUtils {
 
     /**
      * Refresh Token 쿠키 생성
-     * Path: /api/auth (인증 경로에만 전송)
+     * Path: / (모든 경로에서 전송)
      */
     public ResponseCookie createRefreshTokenCookie(String refreshToken) {
         return ResponseCookie.from(REFRESH_TOKEN_COOKIE, refreshToken)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .path("/api/auth")
+                .path("/")
                 .domain(cookieDomain)
                 .maxAge(refreshTokenExpiry / 1000)
                 .sameSite("Lax")
@@ -60,14 +60,14 @@ public class CookieUtils {
      * Access Token 쿠키 만료 (로그아웃용)
      */
     public ResponseCookie createExpiredAccessTokenCookie() {
-        return createExpiredCookie(ACCESS_TOKEN_COOKIE, "/api");
+        return createExpiredCookie(ACCESS_TOKEN_COOKIE, "/");
     }
 
     /**
      * Refresh Token 쿠키 만료 (로그아웃용)
      */
     public ResponseCookie createExpiredRefreshTokenCookie() {
-        return createExpiredCookie(REFRESH_TOKEN_COOKIE, "/api/auth");
+        return createExpiredCookie(REFRESH_TOKEN_COOKIE, "/");
     }
 
     private ResponseCookie createExpiredCookie(String name, String path) {
