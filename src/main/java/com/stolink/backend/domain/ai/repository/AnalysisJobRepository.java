@@ -19,5 +19,7 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, String
 
     List<AnalysisJob> findByStatus(AnalysisJob.JobStatus status);
 
+    List<AnalysisJob> findByDocumentIdAndTraceIdAndStatus(java.util.UUID documentId, String traceId, AnalysisJob.JobStatus status);
+
     void deleteAllByProject(Project project);
 }

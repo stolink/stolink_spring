@@ -165,6 +165,7 @@ public class AIController {
                                 "projectId", job.getProject().getId().toString(),
                                 "status", job.getStatus().name(),
                                 "traceId", job.getTraceId() != null ? job.getTraceId() : "",
+                                "documentId", job.getDocumentId() != null ? job.getDocumentId().toString() : "",
                                 "processingTimeMs", job.getProcessingTimeMs() != null ? job.getProcessingTimeMs() : 0));
         }
 

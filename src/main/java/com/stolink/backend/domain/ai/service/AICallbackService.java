@@ -934,6 +934,9 @@ public class AICallbackService {
             log.error("Document analysis failed for {}: {}", callback.getDocumentId(), callback.getError());
             document.updateAnalysisStatus(com.stolink.backend.domain.document.entity.Document.AnalysisStatus.FAILED);
             documentRepository.save(document);
+
+            // AnalysisJob 상태 업데이트
+            updateAnalysisJobStatus(documentId, callback.getTraceId(), AnalysisJob.JobStatus.FAILED, callback.getError(), callback.getProcessingTimeMs());
             return;
         }
 
@@ -955,6 +958,9 @@ public class AICallbackService {
         // 3. 문서 상태 업데이트
         document.updateAnalysisStatus(com.stolink.backend.domain.document.entity.Document.AnalysisStatus.COMPLETED);
         documentRepository.save(document);
+
+        // AnalysisJob 상태 업데이트
+        updateAnalysisJobStatus(documentId, callback.getTraceId(), AnalysisJob.JobStatus.COMPLETED, null, callback.getProcessingTimeMs());
 
         // 4. 1차 Pass 완료 체크 및 2차 Pass 트리거
         checkAndTriggerGlobalMerge(project, callback.getTraceId());
@@ -1123,7 +1129,7 @@ public class AICallbackService {
         for (String oldId : mergedIds) {
             try {
                 characterRepository.mergeNodes(primaryId, oldId);
-                log.info("Merged character: {} -> {}", oldId, primaryId);
+                log.info("Merged character: old character name {} -> primary character name {}", oldId, primaryId);
             } catch (Exception e) {
                 log.warn("Failed to merge character {}: {}", oldId, e.getMessage());
             }
@@ -1131,6 +1137,29 @@ public class AICallbackService {
 
         log.info("Applied character merge: {} <- {} (aliases: {})",
                 primaryId, mergedIds, merge.getMergedAliases());
+    }
+
+    /**
+     * AnalysisJob 상태 업데이트 헬퍼
+     */
+    private void updateAnalysisJobStatus(UUID documentId, String traceId, AnalysisJob.JobStatus status, String errorMessage, Long processingTimeMs) {
+        List<AnalysisJob> activeJobs = analysisJobRepository.findByDocumentIdAndTraceIdAndStatus(documentId, traceId, AnalysisJob.JobStatus.PROCESSING);
+
+        if (activeJobs.isEmpty()) {
+            log.warn("No active PROCESSING job found for document: {} and traceId: {}", documentId, traceId);
+            // 만약 PROCESSING이 아니더라도 가장 최근의 PENDING 작업을 찾아서 업데이트할 수도 있음
+            return;
+        }
+
+        for (AnalysisJob job : activeJobs) {
+            if (status == AnalysisJob.JobStatus.COMPLETED) {
+                job.markAsCompleted(processingTimeMs);
+            } else if (status == AnalysisJob.JobStatus.FAILED) {
+                job.markAsFailed(errorMessage);
+            }
+            analysisJobRepository.save(job);
+            log.info("AnalysisJob {} status updated to {}", job.getJobId(), status);
+        }
     }
 
     private float[] toFloatArray(java.util.List<Double> embedding) {
