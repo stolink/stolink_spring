@@ -736,9 +736,12 @@ public class AICallbackService {
                 narrative = plotData.getPlotSummary().getNarrative();
                 centralConflict = plotData.getPlotSummary().getCentralConflict();
             }
-            // Fall back to summary field
+            // Fall back to summary field (which can now be an object)
             if (narrative == null && plotData.getSummary() != null) {
-                narrative = plotData.getSummary();
+                narrative = plotData.getSummary().getNarrative();
+                if (centralConflict == null) {
+                    centralConflict = plotData.getSummary().getCentralConflict();
+                }
             }
 
             PlotIntegration plot = PlotIntegration.builder()

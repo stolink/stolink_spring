@@ -17,7 +17,8 @@ import java.util.Map;
 @Builder
 public class PlotDTO {
 
-    private String summary;
+    @JsonProperty("summary")
+    private PlotSummaryDTO summary;
 
     @JsonProperty("plot_summary")
     private PlotSummaryDTO plotSummary;
