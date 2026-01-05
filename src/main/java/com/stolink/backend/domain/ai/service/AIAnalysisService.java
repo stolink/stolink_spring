@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
+import com.stolink.backend.domain.ai.entity.AnalysisJob;
+import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
@@ -31,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 public class AIAnalysisService {
 
     private final DocumentRepository documentRepository;
+    private final AnalysisJobRepository analysisJobRepository;
     private final RabbitMQProducerService producerService;
 
     @Value("${app.ai.callback-base-url}")
@@ -93,6 +96,18 @@ public class AIAnalysisService {
     private AnalysisTaskDTO createAnalysisTask(Document doc, int chapterNumber, int totalChapters) {
         String jobId = UUID.randomUUID().toString();
         String traceId = generateTraceId();
+
+        // AnalysisJob 생성 및 저장 (콜백 수신을 위해 필수)
+        AnalysisJob analysisJob = AnalysisJob.builder()
+                .jobId(jobId)
+                .project(doc.getProject())
+                .documentId(doc.getId())
+                .status(AnalysisJob.JobStatus.PROCESSING) // RabbitMQ로 바로 전송되므로 PROCESSING
+                .traceId(traceId)
+                .startedAt(java.time.LocalDateTime.now())
+                .build();
+        analysisJobRepository.save(analysisJob);
+        log.info("Created AnalysisJob: {}", jobId);
 
         // Context 생성
         AnalysisContext context = AnalysisContext.builder()

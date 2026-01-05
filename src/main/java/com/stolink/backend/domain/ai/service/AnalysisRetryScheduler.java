@@ -1,15 +1,17 @@
 package com.stolink.backend.domain.ai.service;
 
-import com.stolink.backend.domain.document.entity.Document;
-import com.stolink.backend.domain.document.repository.DocumentRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import com.stolink.backend.domain.document.entity.Document;
+import com.stolink.backend.domain.document.repository.DocumentRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 분석 실패 문서 재시도 스케줄러
@@ -46,7 +48,7 @@ public class AnalysisRetryScheduler {
                 doc.resetAnalysisForRetry();
                 documentRepository.save(doc);
 
-                documentAnalysisPublisher.publishAnalysisForDocument(doc);
+                documentAnalysisPublisher.publishAnalysisForDocument(doc, "retry");
 
                 log.info("문서 {} 재시도 발행 완료 (시도 횟수: {})", doc.getId(), doc.getAnalysisRetryCount());
             } catch (Exception e) {

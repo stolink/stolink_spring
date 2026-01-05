@@ -2,7 +2,8 @@
 FROM gradle:8.11-jdk21 AS builder
 WORKDIR /app
 COPY . .
-RUN gradle build -x test --no-daemon
+RUN gradle clean build -x test --no-daemon
+
 
 # Runtime stage
 FROM eclipse-temurin:21-jre-alpine

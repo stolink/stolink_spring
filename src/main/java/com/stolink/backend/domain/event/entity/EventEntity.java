@@ -47,7 +47,7 @@ public class EventEntity extends BaseEntity {
     @Column(name = "event_id", length = 100)
     private String eventId;
 
-    @Column(nullable = true, length = 200)
+    @Column(nullable = true, columnDefinition = "TEXT")
     private String name;
 
     @Column(columnDefinition = "TEXT")
@@ -82,10 +82,28 @@ public class EventEntity extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String effect;
 
+    // AI Analysis Fields from expected_result.json
+    @Column(name = "chapter")
+    private Integer chapter;
+
+    @Column(name = "sequence_order")
+    private Integer sequenceOrder;
+
+    @Column(name = "narrative_summary", columnDefinition = "TEXT")
+    private String narrativeSummary;
+
+    @Column(name = "prev_event_id", length = 100)
+    private String prevEventId;
+
+    // Document reference (required by DB constraint)
+    @Column(name = "document_id", nullable = false)
+    private UUID documentId;
+
     // --- 편의 메서드 ---
     public void updateDetails(String description, String eventType, String participants,
             String startTime, String endTime, String location,
-            Double importanceScore, String plotRelevance, String cause, String effect) {
+            Double importanceScore, String plotRelevance, String cause, String effect,
+            Integer chapter, Integer sequenceOrder, String narrativeSummary, String prevEventId) {
         this.description = description;
         this.eventType = eventType;
         this.participants = participants;
@@ -96,5 +114,9 @@ public class EventEntity extends BaseEntity {
         this.plotRelevance = plotRelevance;
         this.cause = cause;
         this.effect = effect;
+        this.chapter = chapter;
+        this.sequenceOrder = sequenceOrder;
+        this.narrativeSummary = narrativeSummary;
+        this.prevEventId = prevEventId;
     }
 }

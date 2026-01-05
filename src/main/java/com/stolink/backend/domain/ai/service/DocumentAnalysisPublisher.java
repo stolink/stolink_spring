@@ -11,6 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.stolink.backend.domain.ai.dto.DocumentAnalysisMessage;
 import com.stolink.backend.domain.ai.dto.GlobalMergeMessage;
+import com.stolink.backend.domain.ai.entity.AnalysisJob;
+import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.entity.Document.AnalysisStatus;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
@@ -29,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class DocumentAnalysisPublisher {
 
     private final DocumentRepository documentRepository;
+    private final AnalysisJobRepository analysisJobRepository;
 
     @Qualifier("agentRabbitTemplate")
     private final RabbitTemplate agentRabbitTemplate;
@@ -67,8 +70,18 @@ public class DocumentAnalysisPublisher {
             doc.updateAnalysisStatus(AnalysisStatus.PENDING);
             documentRepository.save(doc);
 
+            // AnalysisJob 생성 및 저장
+            String jobId = UUID.randomUUID().toString();
+            AnalysisJob analysisJob = AnalysisJob.builder()
+                    .jobId(jobId)
+                    .project(doc.getProject())
+                    .documentId(doc.getId()) // documentId 저장
+                    .status(AnalysisJob.JobStatus.PENDING)
+                    .build();
+            analysisJobRepository.save(analysisJob);
+
             // 메시지 생성 및 발행 (우선순위: 1 - 낮음)
-            DocumentAnalysisMessage message = buildMessage(doc, projectId, totalDocuments);
+            DocumentAnalysisMessage message = buildMessage(doc, projectId, totalDocuments, "full_manuscript", jobId);
             agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message, m -> {
                 m.getMessageProperties().setPriority(1);
                 return m;
@@ -89,14 +102,26 @@ public class DocumentAnalysisPublisher {
      * 단일 문서 분석 요청 발행
      */
     @Transactional
-    public void publishAnalysisForDocument(Document document) {
+    public void publishAnalysisForDocument(Document document, String analysisType) {
         document.updateAnalysisStatus(AnalysisStatus.PENDING);
         documentRepository.save(document);
+
+        String jobId = UUID.randomUUID().toString();
+
+        AnalysisJob analysisJob = AnalysisJob.builder()
+                .jobId(jobId)
+                .project(document.getProject())
+                .documentId(document.getId())
+                .status(AnalysisJob.JobStatus.PENDING)
+                .build();
+        analysisJobRepository.save(analysisJob);
 
         DocumentAnalysisMessage message = buildMessage(
                 document,
                 document.getProject().getId(),
-                1);
+                1,
+                analysisType,
+                jobId);
 
         // 작가가 직접 요청한 경우 심화 분석(복선 등) 수행
         message.setRequiresDeepAnalysis(true);
@@ -130,13 +155,16 @@ public class DocumentAnalysisPublisher {
     /**
      * 분석 메시지 생성
      */
-    private DocumentAnalysisMessage buildMessage(Document document, UUID projectId, int totalDocuments) {
+    private DocumentAnalysisMessage buildMessage(Document document, UUID projectId, int totalDocuments,
+            String analysisType, String jobId) {
         Document parent = document.getParent();
         String parentFolderId = parent != null ? parent.getId().toString() : null;
         String chapterTitle = parent != null ? parent.getTitle() : document.getTitle();
 
         return DocumentAnalysisMessage.builder()
+                .jobId(jobId)
                 .documentId(document.getId().toString())
+
                 .projectId(projectId.toString())
                 .parentFolderId(parentFolderId)
                 .chapterTitle(chapterTitle)
@@ -145,6 +173,7 @@ public class DocumentAnalysisPublisher {
                 .analysisPass(1)
                 .requiresDeepAnalysis(true) // 무조건 심화 분석 수행
                 .callbackUrl(callbackBaseUrl)
+                .analysisType(analysisType != null ? analysisType : "full_manuscript")
                 .context(DocumentAnalysisMessage.AnalysisContext.builder()
                         .existingCharacters(List.of()) // 1차 Pass는 빈 배열
                         .existingEvents(List.of())

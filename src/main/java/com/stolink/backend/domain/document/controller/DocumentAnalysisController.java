@@ -40,7 +40,8 @@ public class DocumentAnalysisController {
         @org.springframework.web.bind.annotation.PostMapping("/{id}/analyze")
         public ResponseEntity<?> analyzeDocument(
                         @org.springframework.security.core.annotation.AuthenticationPrincipal UUID userId,
-                        @PathVariable UUID id) {
+                        @PathVariable UUID id,
+                        @RequestBody(required = false) Map<String, String> body) {
 
                 // 1. 문서 조회 및 권한 검증
                 Document document = documentService.getDocument(userId, id);
@@ -55,8 +56,12 @@ public class DocumentAnalysisController {
                 analysisJobRepository.save(job);
                 log.info("AnalysisJob 생성 완료: jobId={}, documentId={}", job.getJobId(), document.getId());
 
-                // 3. 분석 요청 발행 (Priority: 10 - High)
-                documentAnalysisPublisher.publishAnalysisForDocument(document);
+                // 3. 분석 유형 확인 (기본값: full_manuscript)
+                String analysisType = (body != null) ? body.getOrDefault("analysis_type", "full_manuscript")
+                                : "full_manuscript";
+
+                // 4. 분석 요청 발행
+                documentAnalysisPublisher.publishAnalysisForDocument(document, analysisType);
 
                 return ResponseEntity.ok(Map.of(
                                 "documentId", id,

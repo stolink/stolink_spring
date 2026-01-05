@@ -95,7 +95,7 @@ public class TestAnalysisController {
                                         .build();
                 }
 
-                documentAnalysisPublisher.publishAnalysisForDocument(document);
+                documentAnalysisPublisher.publishAnalysisForDocument(document, "single_document");
 
                 return ApiResponse.ok(Map.of(
                                 "documentId", documentId,
@@ -222,7 +222,7 @@ public class TestAnalysisController {
                 document = documentRepository.save(document);
 
                 // 4. 분석 시작
-                documentAnalysisPublisher.publishAnalysisForDocument(document);
+                documentAnalysisPublisher.publishAnalysisForDocument(document, "e2e_test");
 
                 log.info("E2E test setup completed: userId={}, projectId={}, documentId={}",
                                 testUser.getId(), project.getId(), document.getId());

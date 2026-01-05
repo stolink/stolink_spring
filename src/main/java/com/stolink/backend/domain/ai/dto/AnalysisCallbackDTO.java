@@ -3,7 +3,6 @@ package com.stolink.backend.domain.ai.dto;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,9 +24,9 @@ public class AnalysisCallbackDTO {
     private String status; // "completed", "warning", "failed" (case-insensitive)
 
     // JSON에서는 "results" (복수형)으로 옴, but handling "result" alias too
-    @JsonProperty("results")
-    @JsonAlias("result")
-    private Map<String, Object> results;
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @Builder.Default
+    private Map<String, Object> results = new java.util.HashMap<>();
 
     private String error;
 
@@ -37,6 +36,11 @@ public class AnalysisCallbackDTO {
 
     @JsonAlias("trace_id")
     private String traceId;
+
+    @com.fasterxml.jackson.annotation.JsonAnySetter
+    public void add(String key, Object value) {
+        results.put(key, value);
+    }
 
     public Map<String, Object> getResult() {
         return results;
