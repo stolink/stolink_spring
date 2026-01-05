@@ -164,8 +164,8 @@ public class AIController {
         public ApiResponse<Void> handleAnalysisCallback(@RequestBody String rawPayload) {
                 // 디버깅용: 원본 콜백 데이터 저장
                 try {
-                        java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/result.json"), rawPayload);
-                        log.info("Saved raw callback payload to /tmp/result.json");
+                        java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/callback_result.json"), rawPayload);
+                        log.info("Saved raw callback payload to /tmp/callback_result.json");
                 } catch (java.io.IOException e) {
                         log.error("Failed to save result.json", e);
                 }
