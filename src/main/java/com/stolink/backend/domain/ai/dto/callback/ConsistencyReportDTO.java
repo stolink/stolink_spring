@@ -34,7 +34,7 @@ public class ConsistencyReportDTO {
     /**
      * List of warnings
      */
-    private List<String> warnings;
+    private List<Object> warnings;
 
     @JsonProperty("requires_reextraction")
     private Boolean requiresReextraction;
