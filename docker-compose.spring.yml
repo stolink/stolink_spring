@@ -46,7 +46,7 @@ services:
       APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
       # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/ai-callback
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai/analysis/callback
       APP_CALLBACK_BASE_URL: http://stolink-backend:8080
       # Analysis Settings
       APP_ANALYSIS_MAX_RETRY_COUNT: 3
@@ -56,6 +56,8 @@ services:
       - "8080:8080"
     volumes:
       - backend_storage:/app/storage/uploads
+      # Gradle 캐시 바인드 마운트 (빌드 속도 향상)
+      - gradle_cache:/root/.gradle
     networks:
       - ai-backend-network
     restart: unless-stopped
@@ -68,6 +70,7 @@ services:
 
 volumes:
   backend_storage:
+  gradle_cache:
 
 
 networks:

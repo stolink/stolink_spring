@@ -1,22 +1,24 @@
 package com.stolink.backend.domain.ai.service;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 
 /**
  * AI 분석 서비스
@@ -104,8 +106,9 @@ public class AIAnalysisService {
                 .projectId(doc.getProject().getId())
                 .documentId(doc.getId())
                 .content(doc.getContent())
-                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                .callbackUrl(callbackBaseUrl)
                 .traceId(traceId)
+                .requiresDeepAnalysis(true)
                 .context(context)
                 .build();
     }
@@ -139,6 +142,8 @@ public class AIAnalysisService {
 
         log.info("Document analysis triggered: documentId={}, jobId={}, chapter={}/{}",
                 doc.getId(), task.getJobId(), chapterNumber, totalChapters);
+        System.out.println(
+                "DEBUG_LOG: AIAnalysisService trigger - requiresDeepAnalysis=" + task.isRequiresDeepAnalysis());
     }
 
     /**
@@ -176,7 +181,7 @@ public class AIAnalysisService {
 
         GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
                 .projectId(projectId)
-                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                .callbackUrl(callbackBaseUrl)
                 .traceId(traceId)
                 .build();
 

@@ -1,12 +1,25 @@
 package com.stolink.backend.domain.ai.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
-import com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
@@ -18,17 +31,9 @@ import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -84,7 +89,7 @@ public class AIController {
                                 .projectId(projectId)
                                 .documentId(documentId)
                                 .content((String) request.get("content"))
-                                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                                .callbackUrl(callbackBaseUrl)
                                 .traceId(traceId)
                                 .context(context)
                                 .build();
@@ -124,54 +129,10 @@ public class AIController {
         }
 
         /**
+         * // Legacy /ai-callback endpoint removed - AI server now uses
+         * /internal/ai/analysis/callback
+         * 
          * /**
-         * AI Callback 엔드포인트 (Python → Spring)
-         *
-         * message_type 필드로 분기하여 처리합니다:
-         * - DOCUMENT_ANALYSIS_RESULT: 1차 Pass 문서별 분석 결과
-         * - GLOBAL_MERGE_RESULT: 2차 Pass 캐릭터 병합 결과
-         * - 그 외: 기존 FULL_DOCUMENT 분석 결과
-         */
-        @PostMapping("/ai-callback")
-        public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
-                try {
-                        JsonNode root = objectMapper.readTree(rawPayload);
-                        String messageType = root.path("message_type").asText(null);
-
-                        log.info("Received AI callback, message_type: {}", messageType);
-
-                        if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
-                                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                DocumentAnalysisCallbackDTO.class);
-                                callbackService.handleDocumentAnalysisCallback(callback);
-                                log.info("Document analysis callback processed for document: {}",
-                                                callback.getDocumentId());
-
-                        } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
-                                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                GlobalMergeCallbackDTO.class);
-                                callbackService.handleGlobalMergeCallback(callback);
-                                log.info("Global merge callback processed for project: {}", callback.getProjectId());
-
-                        } else {
-                                // 기존 FULL_DOCUMENT 분석 결과 또는 message_type 없는 경우
-                                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                AnalysisCallbackDTO.class);
-                                callbackService.handleAnalysisCallback(callback);
-                                log.info("Legacy analysis callback processed for job: {}", callback.getJobId());
-                        }
-
-                        return ApiResponse.ok();
-                } catch (JsonProcessingException e) {
-                        log.error("Failed to parse AI callback payload: {}", e.getMessage());
-                        return ApiResponse.<Void>builder()
-                                        .status(HttpStatus.BAD_REQUEST)
-                                        .message("Invalid JSON payload: " + e.getMessage())
-                                        .build();
-                }
-        }
-
-        /**
          * 이미지 생성 Job 상태 조회 (프론트엔드 폴링용 - 분리된 엔드포인트)
          */
         @GetMapping("/ai/image/jobs/{jobId}")
@@ -200,11 +161,28 @@ public class AIController {
          * Internal callback endpoint for Analysis Worker
          */
         @PostMapping("/internal/ai/analysis/callback")
-        public ApiResponse<Void> handleAnalysisCallback(@RequestBody AnalysisCallbackDTO callback) {
-                log.info("Received analysis callback for job: {}, status: {}",
-                                callback.getJobId(), callback.getStatus());
-                callbackService.handleAnalysisCallback(callback);
-                return ApiResponse.ok();
+        public ApiResponse<Void> handleAnalysisCallback(@RequestBody String rawPayload) {
+                // 디버깅용: 원본 콜백 데이터 저장
+                try {
+                        java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/result.json"), rawPayload);
+                        log.info("Saved raw callback payload to /tmp/result.json");
+                } catch (java.io.IOException e) {
+                        log.error("Failed to save result.json", e);
+                }
+
+                try {
+                        AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload, AnalysisCallbackDTO.class);
+                        log.info("Received analysis callback for job: {}, status: {}",
+                                        callback.getJobId(), callback.getStatus());
+                        callbackService.handleAnalysisCallback(callback);
+                        return ApiResponse.ok();
+                } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                        log.error("Failed to parse callback payload: {}", e.getMessage());
+                        return ApiResponse.<Void>builder()
+                                        .status(HttpStatus.BAD_REQUEST)
+                                        .message("Invalid JSON: " + e.getMessage())
+                                        .build();
+                }
         }
 
         /**
@@ -323,7 +301,7 @@ public class AIController {
 
                 GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
                                 .projectId(projectId)
-                                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                                .callbackUrl(callbackBaseUrl)
                                 .traceId(traceId)
                                 .build();
 

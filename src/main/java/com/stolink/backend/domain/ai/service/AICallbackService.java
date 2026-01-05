@@ -1,40 +1,51 @@
 package com.stolink.backend.domain.ai.service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
+import com.stolink.backend.domain.ai.entity.CallbackLog;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
+import com.stolink.backend.domain.ai.repository.CallbackLogRepository;
+import com.stolink.backend.domain.character.entity.ImageGenerationTask;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
-import com.stolink.backend.domain.character.entity.ImageGenerationTask;
 import com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository;
-
-import com.stolink.backend.domain.event.node.Event;
-import com.stolink.backend.domain.event.repository.EventNeo4jRepository;
-import com.stolink.backend.domain.project.entity.Project;
-import com.stolink.backend.domain.setting.node.Setting;
-import com.stolink.backend.domain.setting.repository.SettingNeo4jRepository;
-import com.stolink.backend.domain.plot.entity.PlotIntegration;
-import com.stolink.backend.domain.plot.repository.PlotIntegrationRepository;
 import com.stolink.backend.domain.consistency.entity.ConsistencyReport;
 import com.stolink.backend.domain.consistency.repository.ConsistencyReportRepository;
-import com.stolink.backend.domain.validation.entity.ValidationResult;
-import com.stolink.backend.domain.validation.repository.ValidationResultRepository;
+import com.stolink.backend.domain.document.entity.Document;
+import com.stolink.backend.domain.document.repository.DocumentRepository;
+import com.stolink.backend.domain.event.entity.EventEntity;
+import com.stolink.backend.domain.event.node.Event;
+import com.stolink.backend.domain.event.repository.EventJpaRepository;
+import com.stolink.backend.domain.event.repository.EventNeo4jRepository;
 import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
+import com.stolink.backend.domain.plot.entity.PlotIntegration;
+import com.stolink.backend.domain.plot.repository.PlotIntegrationRepository;
+import com.stolink.backend.domain.project.entity.Project;
+import com.stolink.backend.domain.setting.entity.SettingEntity;
+import com.stolink.backend.domain.setting.node.Setting;
+import com.stolink.backend.domain.setting.repository.SettingNeo4jRepository;
+import com.stolink.backend.domain.setting.repository.SettingRepository;
+import com.stolink.backend.domain.validation.entity.ValidationResult;
+import com.stolink.backend.domain.validation.repository.ValidationResultRepository;
 import com.stolink.backend.global.sse.SseEmitterService;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
 
 /**
  * AI Worker 콜백 처리 서비스
@@ -48,18 +59,27 @@ public class AICallbackService {
 
     private final CharacterRepository characterRepository;
     private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
+    private final DocumentRepository documentRepository;
     private final EventNeo4jRepository eventNeo4jRepository;
+    private final EventJpaRepository eventJpaRepository;
 
     private final SettingNeo4jRepository settingNeo4jRepository;
+    private final SettingRepository settingRepository;
     private final ImageGenerationTaskRepository imageGenerationTaskRepository;
 
     private final AnalysisJobRepository analysisJobRepository;
+    private final com.stolink.backend.domain.document.repository.SectionRepository sectionRepository;
+    private final DocumentAnalysisPublisher documentAnalysisPublisher;
     private final PlotIntegrationRepository plotIntegrationRepository;
     private final ConsistencyReportRepository consistencyReportRepository;
     private final ValidationResultRepository validationResultRepository;
     private final ForeshadowingRepository foreshadowingRepository;
+    private final CallbackLogRepository callbackLogRepository;
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Value("${app.ai.callback-base-url}")
     private String callbackBaseUrl;
@@ -69,8 +89,17 @@ public class AICallbackService {
      */
     @Transactional
     public void handleAnalysisCallback(AnalysisCallbackDTO callback) {
+        // Clear JPA L1 cache to ensure fresh reads of AI-written data
+        entityManager.clear();
+
         log.info("Processing analysis callback for job: {}, status: {}",
                 callback.getJobId(), callback.getStatus());
+
+        // Idempotent check: skip if already processed
+        if (callbackLogRepository.existsByJobId(callback.getJobId())) {
+            log.warn("Duplicate callback ignored: {}", callback.getJobId());
+            return;
+        }
 
         // Job 조회
         AnalysisJob job = analysisJobRepository.findByJobId(callback.getJobId()).orElse(null);
@@ -84,6 +113,9 @@ public class AICallbackService {
             log.error("Analysis failed for job {}: {}", callback.getJobId(), callback.getError());
             job.markAsFailed(callback.getError());
             analysisJobRepository.save(job);
+
+            // Document 상태 업데이트 (FAILED)
+            updateDocumentStatus(job.getDocumentId(), Document.AnalysisStatus.FAILED);
             return;
         }
 
@@ -92,6 +124,9 @@ public class AICallbackService {
             log.warn("No result in callback for job: {}", callback.getJobId());
             job.markAsFailed("No result in callback");
             analysisJobRepository.save(job);
+
+            // Document 상태 업데이트 (FAILED)
+            updateDocumentStatus(job.getDocumentId(), Document.AnalysisStatus.FAILED);
             return;
         }
 
@@ -140,7 +175,30 @@ public class AICallbackService {
         job.markAsCompleted(processingTimeMs);
         analysisJobRepository.save(job);
 
+        // Document 상태 업데이트 (COMPLETED)
+        updateDocumentStatus(job.getDocumentId(), Document.AnalysisStatus.COMPLETED);
+
+        // 콜백 처리 로그 저장 (idempotent 처리용)
+        callbackLogRepository.save(CallbackLog.builder()
+                .jobId(callback.getJobId())
+                .messageType("DOCUMENT_ANALYSIS")
+                .status(callback.getStatus())
+                .processedAt(java.time.LocalDateTime.now())
+                .projectId(project.getId())
+                .build());
+
         log.info("Analysis callback processed successfully for job: {}", callback.getJobId());
+    }
+
+    // Document Status Update Helper
+    private void updateDocumentStatus(UUID documentId, Document.AnalysisStatus status) {
+        if (documentId == null)
+            return;
+        documentRepository.findById(documentId).ifPresent(doc -> {
+            doc.updateAnalysisStatus(status);
+            documentRepository.save(doc);
+            log.info("Updated Document {} status to {}", documentId, status);
+        });
     }
 
     /**
@@ -483,6 +541,9 @@ public class AICallbackService {
                     ? ((Number) eventData.get("importance")).intValue()
                     : 5;
             Boolean isForeshadowing = (Boolean) eventData.get("is_foreshadowing");
+            Integer chapterRef = eventData.get("chapter_ref") != null
+                    ? ((Number) eventData.get("chapter_ref")).intValue()
+                    : null;
 
             // participants를 JSON 문자열로
             String participantsJson = null;
@@ -517,6 +578,7 @@ public class AICallbackService {
             event.setPrevEventId(prevEventId);
             event.setImportance(importance);
             event.setIsForeshadowing(isForeshadowing != null ? isForeshadowing : false);
+            event.setChapterRef(chapterRef);
             event.setParticipantsJson(participantsJson);
 
             // New AI schema fields
@@ -536,6 +598,46 @@ public class AICallbackService {
 
             eventNeo4jRepository.save(event);
             log.info("Saved event to Neo4j: {} ({})", eventId, narrativeSummary);
+
+            // PostgreSQL에도 저장 (AI 서버 호환성, id=project_id, name=narrative_summary)
+            // AI에서 events 테이블에 직접 쓰기 위해 필요
+            List<String> participantsList = (List<String>) eventData.get("participants");
+            String participantsJsonStr = null;
+            if (participantsList != null) {
+                try {
+                    participantsJsonStr = objectMapper.writeValueAsString(participantsList);
+                } catch (JsonProcessingException e) {
+                    log.warn("Failed to serialize participants for Postgres: {}", e.getMessage());
+                }
+            }
+
+            Optional<EventEntity> existingEntity = eventJpaRepository.findByProjectAndName(project,
+                    narrativeSummary != null ? narrativeSummary : "Untitled Event");
+            EventEntity eventEntity;
+            if (existingEntity.isPresent()) {
+                eventEntity = existingEntity.get();
+            } else {
+                eventEntity = EventEntity.builder()
+                        .project(project)
+                        .eventId(eventId)
+                        .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
+                        .build();
+            }
+
+            eventEntity.updateDetails(
+                    description,
+                    eventType,
+                    participantsJsonStr,
+                    (String) eventData.get("start_time"),
+                    (String) eventData.get("end_time"),
+                    locationRef,
+                    importance != null ? importance.doubleValue() : 5.0,
+                    (String) eventData.get("plot_relevance"),
+                    (String) eventData.get("cause"),
+                    (String) eventData.get("effect"));
+
+            eventJpaRepository.save(eventEntity);
+            log.info("Saved event to PostgreSQL: {} ({})", eventId, narrativeSummary);
         }
     }
 
@@ -626,6 +728,35 @@ public class AICallbackService {
 
             settingNeo4jRepository.save(setting);
             log.info("Saved setting to Neo4j: {} ({})", name, locationType);
+
+            // PostgreSQL에도 저장 (AI 서버 호환성, id=project_id, name=name)
+            Optional<SettingEntity> existingEntity = settingRepository.findByProjectAndName(project, name);
+            SettingEntity settingEntity;
+            if (existingEntity.isPresent()) {
+                settingEntity = existingEntity.get();
+            } else {
+                settingEntity = SettingEntity.builder()
+                        .project(project)
+                        .settingId(settingId)
+                        .name(name)
+                        .build();
+            }
+
+            settingEntity.updateDetails(
+                    (String) settingData.get("description"),
+                    visualPrompt,
+                    (String) settingData.get("visual_background"),
+                    timeOfDay,
+                    lightingDescription,
+                    atmosphereKeywords,
+                    weatherCondition,
+                    (String) settingData.get("art_style"),
+                    isPrimary != null ? isPrimary : false,
+                    storySignificance,
+                    staticObjectsJson);
+
+            settingRepository.save(settingEntity);
+            log.info("Saved setting to PostgreSQL: {} ({})", name, locationType);
         }
     }
 
@@ -935,9 +1066,7 @@ public class AICallbackService {
     // 대용량 문서 분석 아키텍처 (Document Analysis Architecture)
     // ============================================================
 
-    private final com.stolink.backend.domain.document.repository.DocumentRepository documentRepository;
-    private final com.stolink.backend.domain.document.repository.SectionRepository sectionRepository;
-    private final DocumentAnalysisPublisher documentAnalysisPublisher;
+    // Fields moved to class level @RequiredArgsConstructor
 
     /**
      * 문서 분석 결과 콜백 처리 (1차 Pass)
@@ -987,6 +1116,21 @@ public class AICallbackService {
             java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
             tempResult.put("settings", callback.getSettings());
             saveSettings(tempResult, project);
+        }
+
+        // 2-1. 심화 분석 결과 저장 (복선, 플롯, 일관성) - RequiresDeepAnalysis=true일 때
+        if (callback.getPlotIntegration() != null) {
+            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
+            tempResult.put("plot_integration", callback.getPlotIntegration());
+            savePlotIntegration(tempResult, project, documentId);
+            saveForeshadowing(tempResult, project);
+        }
+
+        if (callback.getConsistencyReport() != null) {
+            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
+            tempResult.put("consistency_report", callback.getConsistencyReport());
+            logConsistencyReport(tempResult);
+            saveConsistencyReport(tempResult, project, callback.getTraceId()); // jobId 대신 traceId 사용 (1차 패스엔 jobId 없음)
         }
 
         // 3. 문서 상태 업데이트

@@ -7,6 +7,15 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:stolink123}
     driver-class-name: org.postgresql.Driver
 
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
   # Neo4j Configuration
   neo4j:
     uri: ${SPRING_NEO4J_URI:bolt://localhost:7687}
@@ -68,8 +77,16 @@ app:
       password: ${SPRING_RABBITMQ_PASSWORD:guest}
       virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:stolink}
   ai:
-    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://stolink-backend:8080/api}
+    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://stolink-backend:8080/api/internal/ai/analysis/callback}
   callback:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:
     max-retry-count: ${APP_ANALYSIS_MAX_RETRY_COUNT:3}
+
+logging:
+  level:
+    root: INFO
+    com.stolink.backend: DEBUG
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: INFO
+    org.springframework.transaction: INFO

@@ -1,20 +1,22 @@
 package com.stolink.backend.domain.ai.service;
 
-import com.stolink.backend.domain.ai.dto.DocumentAnalysisMessage;
-import com.stolink.backend.domain.ai.dto.GlobalMergeMessage;
-import com.stolink.backend.domain.document.entity.Document;
-import com.stolink.backend.domain.document.entity.Document.AnalysisStatus;
-import com.stolink.backend.domain.document.repository.DocumentRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+import java.util.UUID;
+
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.UUID;
+import com.stolink.backend.domain.ai.dto.DocumentAnalysisMessage;
+import com.stolink.backend.domain.ai.dto.GlobalMergeMessage;
+import com.stolink.backend.domain.document.entity.Document;
+import com.stolink.backend.domain.document.entity.Document.AnalysisStatus;
+import com.stolink.backend.domain.document.repository.DocumentRepository;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 문서 분석 메시지 발행 서비스
@@ -37,7 +39,7 @@ public class DocumentAnalysisPublisher {
     @Value("${app.rabbitmq.queues.global-merge:global_merge_queue}")
     private String globalMergeQueue;
 
-    @Value("${app.callback.base-url:http://localhost:8080}")
+    @Value("${app.ai.callback-base-url:http://stolink-backend:8080/api/internal/ai/analysis/callback}")
     private String callbackBaseUrl;
 
     /**
@@ -65,9 +67,12 @@ public class DocumentAnalysisPublisher {
             doc.updateAnalysisStatus(AnalysisStatus.PENDING);
             documentRepository.save(doc);
 
-            // 메시지 생성 및 발행
+            // 메시지 생성 및 발행 (우선순위: 1 - 낮음)
             DocumentAnalysisMessage message = buildMessage(doc, projectId, totalDocuments);
-            agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message);
+            agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message, m -> {
+                m.getMessageProperties().setPriority(1);
+                return m;
+            });
 
             // 상태를 QUEUED로 업데이트
             doc.updateAnalysisStatus(AnalysisStatus.QUEUED);
@@ -93,7 +98,14 @@ public class DocumentAnalysisPublisher {
                 document.getProject().getId(),
                 1);
 
-        agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message);
+        // 작가가 직접 요청한 경우 심화 분석(복선 등) 수행
+        message.setRequiresDeepAnalysis(true);
+
+        // 우선순위: 10 (높음 - 작가 요청)
+        agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message, m -> {
+            m.getMessageProperties().setPriority(10);
+            return m;
+        });
 
         document.updateAnalysisStatus(AnalysisStatus.QUEUED);
         documentRepository.save(document);
@@ -107,7 +119,7 @@ public class DocumentAnalysisPublisher {
     public void publishGlobalMerge(UUID projectId, String traceId) {
         GlobalMergeMessage message = GlobalMergeMessage.builder()
                 .projectId(projectId.toString())
-                .callbackUrl(callbackBaseUrl + "/api/ai-callback")
+                .callbackUrl(callbackBaseUrl)
                 .traceId(traceId)
                 .build();
 
@@ -131,7 +143,8 @@ public class DocumentAnalysisPublisher {
                 .documentOrder(document.getOrder())
                 .totalDocumentsInChapter(totalDocuments)
                 .analysisPass(1)
-                .callbackUrl(callbackBaseUrl + "/api/ai-callback")
+                .requiresDeepAnalysis(true) // 무조건 심화 분석 수행
+                .callbackUrl(callbackBaseUrl)
                 .context(DocumentAnalysisMessage.AnalysisContext.builder()
                         .existingCharacters(List.of()) // 1차 Pass는 빈 배열
                         .existingEvents(List.of())

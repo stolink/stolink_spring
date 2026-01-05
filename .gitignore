@@ -35,8 +35,9 @@ application.yml
 JOB*.md
 PROJECT*.md
 *.json
-# SPRING*.md
-remi.txt
+SPRING*.md
+*.txt
+e2e*.py
 
 smart-commit-md.md
 

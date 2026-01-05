@@ -1,10 +1,16 @@
 package com.stolink.backend.domain.ai.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.*;
-
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 문서 분석 결과 콜백 DTO (Python → Spring)
@@ -16,6 +22,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DocumentAnalysisCallbackDTO {
 
     @JsonProperty("message_type")
@@ -37,13 +44,28 @@ public class DocumentAnalysisCallbackDTO {
 
     private List<Map<String, Object>> settings;
 
+    private List<Map<String, Object>> relationships;
+
+    // 추가된 필드들 (심화 분석 요청 시 포함됨)
+    @JsonProperty("plot_integration")
+    private Map<String, Object> plotIntegration;
+
+    @JsonProperty("consistency_report")
+    private Map<String, Object> consistencyReport;
+
     @JsonProperty("trace_id")
     private String traceId;
 
-    private String error;
+    private Object error;
 
     @JsonProperty("processing_time_ms")
     private Long processingTimeMs;
+
+    /**
+     * Validation result from AI analysis
+     */
+    @JsonProperty("validation")
+    private Map<String, Object> validation;
 
     /**
      * 성공 여부 확인
@@ -67,6 +89,7 @@ public class DocumentAnalysisCallbackDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class SectionDTO {
 
         @JsonProperty("sequence_order")

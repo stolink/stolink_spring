@@ -1,9 +1,13 @@
 package com.stolink.backend.domain.ai.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.*;
-
 import java.util.UUID;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Getter
 @NoArgsConstructor
@@ -31,6 +35,10 @@ public class AnalysisTaskDTO {
 
     @JsonProperty("trace_id")
     private String traceId;
+
+    @JsonProperty("requires_deep_analysis")
+    @Builder.Default
+    private boolean requiresDeepAnalysis = true;
 
     private AnalysisContext context;
 }

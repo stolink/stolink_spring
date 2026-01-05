@@ -1,9 +1,8 @@
 package com.stolink.backend.global.security;
 
-import com.stolink.backend.global.security.jwt.JwtAuthenticationFilter;
-import com.stolink.backend.global.security.oauth2.CustomOAuth2UserService;
-import com.stolink.backend.global.security.oauth2.OAuth2SuccessHandler;
-import lombok.RequiredArgsConstructor;
+import java.util.Arrays;
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,8 +18,11 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
-import java.util.List;
+import com.stolink.backend.global.security.jwt.JwtAuthenticationFilter;
+import com.stolink.backend.global.security.oauth2.CustomOAuth2UserService;
+import com.stolink.backend.global.security.oauth2.OAuth2SuccessHandler;
+
+import lombok.RequiredArgsConstructor;
 
 /**
  * Spring Security 설정
@@ -69,6 +71,9 @@ public class SecurityConfig {
                                                                 "/actuator/health",
                                                                 "/actuator/info",
                                                                 "/api/internal/**",
+                                                                "/api/test/**",
+                                                                "/api/ai-callback/**",
+                                                                "/api/documents/*/analysis-status",
                                                                 "/error")
                                                 .permitAll()
                                                 // 그 외 모든 요청은 인증 필요

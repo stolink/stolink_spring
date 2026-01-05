@@ -273,3 +273,67 @@ AI 코드 리뷰에서 Controller의 Entity 직접 반환, 비동기 작업의 �
 - **FK Violation 방지**: 부모(Folder)는 즉시 저장하고 자식(Text)은 Batch Insert하는 하이브리드 방식으로 정합성을 확보했습니다.
 
 **결과**: API 안정성 확보, 대용량 처리 속도 개선, N+1 쿼리 완전 제거 ✅
+
+---
+
+## 🔴 AI 콜백 시스템 안정화 (3건)
+
+### 11. AI 서버 401 Unauthorized
+
+**상황**
+AI 서버가 Spring Backend로 분석 결과를 보낼 때 (`/api/ai-callback/**`), Spring Security에 의해 401 에러가 발생하며 차단되었습니다.
+
+**해결**
+`SecurityConfig.java`에 해당 엔드포인트를 `permitAll()` 목록에 추가하여 인증 없이 접근 가능하도록 수정했습니다.
+
+```java
+.requestMatchers(
+    "/api/documents/*/analysis-status",
+    "/api/ai-callback/**")
+.permitAll()
+```
+
+### 12. 500 Internal Server Error (JSON 파싱)
+
+**상황**
+AI 서버의 에러 응답 필드(`error`) 타입이 가변적(String, Object, null)이고, 정의되지 않은 필드가 포함되어 있어 `UnrecognizedPropertyException` 및 타입 불일치 에러가 발생했습니다.
+
+**해결**
+- DTO에 `@JsonIgnoreProperties(ignoreUnknown = true)` 추가
+- `error` 필드 타입을 `String` → `Object`로 변경하여 유연성 확보
+
+```java
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class DocumentAnalysisCallbackDTO {
+    private Object error; // 유연한 타입 처리
+}
+```
+
+### 13. Neo4j Unknown Property Warning
+
+**상황**
+`Event` 노드 저장 시 `chapterRef` 등 일부 속성이 `AICallbackService` 매핑 로직에서 누락되어, Neo4j 저장 시 경고 로그가 다수 발생했습니다.
+
+**해결**
+- `AICallbackService`에 누락된 필드(`chapterRef`) 매핑 로직 추가
+- `Event` 엔티티에 해당 필드 Setter 정상 동작 확인
+
+---
+
+## 💡 아키텍처 개선 (1건)
+
+### 14. RabbitMQ 우선순위 큐 (Priority Queue) 도입
+
+**상황**
+대량의 원문 업로드(10,000+ 파일) 분석 중 작가가 "저장/분석"을 요청할 경우, 큐 뒤에 쌓여 처리가 지연되는 UX 문제가 확인되었습니다.
+
+**해결**
+별도의 큐를 만드는 대신 RabbitMQ의 **Priority Queue** 기능을 도입하여 아키텍처 복잡도를 낮추고 반응성을 높였습니다.
+
+1.  **설정**: `document_analysis_queue`에 `x-max-priority: 10` 속성 추가
+2.  **Publisher**:
+    -   **작가 요청**: Priority **10** (최우선)
+    -   **대량 업로드**: Priority **1** (일반)
+3.  **Legacy 제거**: 사용하지 않는 `stolink.analysis.queue` 제거
+
+**결과**: 대량 작업 중에도 사용자 요청이 즉시 처리되는 "새치기" 메커니즘 구현 성공 🚀

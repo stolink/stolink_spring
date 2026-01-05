@@ -1,11 +1,25 @@
 package com.stolink.backend.domain.document.entity;
 
+import java.util.UUID;
+
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.global.common.entity.BaseEntity;
-import jakarta.persistence.*;
-import lombok.*;
 
-import java.util.UUID;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "documents")
@@ -52,6 +66,10 @@ public class Document extends BaseEntity {
 
     @Column
     private Integer analysisRetryCount = 0;
+
+    // AI 분석 중 편집 잠금 (동시성 충돌 방지)
+    @Column(name = "analysis_locked")
+    private Boolean analysisLocked = false;
 
     @Column(length = 50)
     private String label;
@@ -165,7 +183,10 @@ public class Document extends BaseEntity {
         QUEUED, // RabbitMQ 발행됨
         PROCESSING, // Python 처리 중
         COMPLETED, // 분석 완료
-        FAILED // 분석 실패
+        FAILED, // 분석 실패
+        PARTIAL_FAILURE, // 부분 실패 (일부 데이터 저장됨)
+        PENDING_REVIEW, // 관리자 검토 필요
+        RETRYING // 재분석 중
     }
 
     // === 분석 상태 관리 메서드 ===
@@ -181,5 +202,19 @@ public class Document extends BaseEntity {
     public void resetAnalysisForRetry() {
         this.analysisStatus = AnalysisStatus.QUEUED;
         this.analysisRetryCount++;
+    }
+
+    // === 분석 잠금 메서드 ===
+
+    public void lockForAnalysis() {
+        this.analysisLocked = true;
+    }
+
+    public void unlockAfterAnalysis() {
+        this.analysisLocked = false;
+    }
+
+    public boolean isAnalysisLocked() {
+        return Boolean.TRUE.equals(this.analysisLocked);
     }
 }

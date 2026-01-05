@@ -1,10 +1,14 @@
 package com.stolink.backend.domain.ai.dto;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.*;
 
-import java.util.Map;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /**
  * AI 분석 결과 콜백 DTO (Multi-Agent 파이프라인 결과)
@@ -20,14 +24,26 @@ public class AnalysisCallbackDTO {
 
     private String status; // "completed", "warning", "failed" (case-insensitive)
 
-    // JSON에서는 "results" (복수형)으로 옴
+    // JSON에서는 "results" (복수형)으로 옴, but handling "result" alias too
     @JsonProperty("results")
+    @JsonAlias("result")
     private Map<String, Object> results;
 
     private String error;
 
+    // ✅ 메타데이터 필드 추가
+    @JsonAlias("processing_time_ms")
+    private Integer processingTimeMs;
+
+    @JsonAlias("trace_id")
+    private String traceId;
+
     public Map<String, Object> getResult() {
         return results;
+    }
+
+    public void setResult(Map<String, Object> result) {
+        this.results = result;
     }
 
     /**
