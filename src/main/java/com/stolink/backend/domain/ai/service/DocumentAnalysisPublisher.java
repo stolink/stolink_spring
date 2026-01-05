@@ -107,7 +107,7 @@ public class DocumentAnalysisPublisher {
     public void publishGlobalMerge(UUID projectId, String traceId) {
         GlobalMergeMessage message = GlobalMergeMessage.builder()
                 .projectId(projectId.toString())
-                .callbackUrl(callbackBaseUrl + "/api/ai-callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
                 .build();
 
@@ -131,7 +131,7 @@ public class DocumentAnalysisPublisher {
                 .documentOrder(document.getOrder())
                 .totalDocumentsInChapter(totalDocuments)
                 .analysisPass(1)
-                .callbackUrl(callbackBaseUrl + "/api/ai-callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .context(DocumentAnalysisMessage.AnalysisContext.builder()
                         .existingCharacters(List.of()) // 1차 Pass는 빈 배열
                         .existingEvents(List.of())

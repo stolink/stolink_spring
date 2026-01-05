@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.project.controller;
 
+import com.stolink.backend.domain.ai.service.AIAnalysisService;
 import com.stolink.backend.global.sse.SseEmitterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class ProjectStatusController {
 
     private final SseEmitterService sseEmitterService;
+    private final AIAnalysisService aiAnalysisService;
 
     /**
      * 프로젝트 분석 상태 스트림
@@ -30,6 +32,27 @@ public class ProjectStatusController {
     @GetMapping(value = "/{projectId}/status/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamStatus(@PathVariable UUID projectId) {
         log.info("SSE stream requested for project: {}", projectId);
-        return sseEmitterService.createEmitter(projectId);
+        SseEmitter emitter = sseEmitterService.createEmitter(projectId);
+
+        // 연결 즉시 현재 상태 전송 (클라이언트 상태 동기화용)
+        try {
+            SseEmitterService.AnalysisStatusEvent currentStatus = aiAnalysisService.getAnalysisStatus(projectId);
+            sseEmitterService.sendStatus(projectId, currentStatus);
+        } catch (Exception e) {
+            log.warn("Failed to send initial status for project: {}", projectId, e);
+        }
+
+        return emitter;
+    }
+
+    /**
+     * 프로젝트 분석 상태 강제 초기화 (Reset)
+     *
+     * 분석이 멈추거나 오류가 발생했을 때 상태를 강제로 초기화합니다.
+     */
+    @PostMapping("/{projectId}/analysis/reset")
+    public void resetAnalysis(@PathVariable UUID projectId) {
+        log.info("Analysis reset requested for project: {}", projectId);
+        aiAnalysisService.resetProjectAnalysis(projectId);
     }
 }

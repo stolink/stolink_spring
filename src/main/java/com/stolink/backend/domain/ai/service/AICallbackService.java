@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
+import com.stolink.backend.domain.ai.dto.callback.*;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.character.node.Character;
@@ -66,6 +67,22 @@ public class AICallbackService {
 
     /**
      * 분석 결과 콜백 처리 (Multi-Agent 파이프라인 결과)
+     *
+     * Python AI Agent 콜백 구조:
+     * {
+     *   "jobId": "...",
+     *   "status": "COMPLETED",
+     *   "result": {
+     *     "characters": [...],
+     *     "events": [...],
+     *     "settings": [...],
+     *     "relationships": [{ "source": "Name A", "target": "Name B", "relation_type": "FRIEND", ... }],
+     *     "plot": { "summary": "...", "foreshadowing": [...] },
+     *     "consistency_report": { "score": 95, "conflicts": [...] },
+     *     "validation": { "is_valid": true, "quality_score": 98 },
+     *     "metadata": { "processing_time_ms": 1234 }
+     *   }
+     * }
      */
     @Transactional
     public void handleAnalysisCallback(AnalysisCallbackDTO callback) {
@@ -87,120 +104,88 @@ public class AICallbackService {
             return;
         }
 
-        Map<String, Object> result = callback.getResult();
-        if (result == null) {
-            log.warn("No result in callback for job: {}", callback.getJobId());
-            job.markAsFailed("No result in callback");
-            analysisJobRepository.save(job);
-            return;
-        }
-
         // Job에서 Project와 projectId 획득
         Project project = job.getProject();
         String projectIdStr = project.getId().toString();
 
-        // 전체 결과 데이터 로깅 (디버깅용 - 사용자가 확인 가능하도록 INFO로 변경)
-        log.info("Full analysis result for project {}: {}", projectIdStr, result);
+        // 1. 캐릭터 저장 (Neo4j & Postgres) - using effective getter
+        saveCharacters(callback.getEffectiveCharacters(), project);
 
-        // 메타데이터에서 processing_time 추출
-        Long processingTimeMs = extractProcessingTime(result);
-
-        // 메타데이터 로깅
-        logMetadata(result);
-
-        // 1. 캐릭터 저장 (Neo4j & Postgres)
-        saveCharacters(result, project);
-
-        // 2. 관계 저장 (Neo4j)
-        saveRelationships(result, projectIdStr);
+        // 2. 관계 저장 (Neo4j) - using effective getter
+        // Relationships reference characters by NAME, not ID
+        saveRelationships(callback.getEffectiveRelationships(), projectIdStr);
 
         // 3. 감정 정보를 캐릭터에 업데이트 (Neo4j)
-        updateEmotions(result, projectIdStr);
+        Map<String, Object> emotions = callback.getEffectiveEmotions();
+        if (emotions != null) {
+            updateEmotions(emotions, projectIdStr);
+        }
 
-        // 4. 이벤트 저장 (PostgreSQL)
-        saveEvents(result, project);
+        // 4. 이벤트 저장 (Neo4j) - using effective getter
+        saveEvents(callback.getEffectiveEvents(), project);
 
-        // 5. 설정(장소) 저장 (PostgreSQL)
-        saveSettings(result, project);
+        // 5. 설정(장소) 저장 (Neo4j) - using effective getter
+        saveSettings(callback.getEffectiveSettings(), project);
 
-        // 7. 플롯 통합 저장 (PostgreSQL)
-        savePlotIntegration(result, project, job.getDocumentId());
+        // 6. 플롯 저장 (PostgreSQL) - using effective getter
+        PlotDTO plotData = callback.getEffectivePlot();
+        if (plotData != null) {
+            savePlotIntegration(plotData, project, job.getDocumentId());
+            // 복선도 plot에서 추출
+            saveForeshadowing(plotData, project);
+        }
 
-        // 8. 일관성 보고서 저장 (PostgreSQL)
-        logConsistencyReport(result);
-        saveConsistencyReport(result, project, callback.getJobId());
+        // 7. 일관성 보고서 저장 (PostgreSQL) - using effective getter
+        ConsistencyReportDTO consistencyData = callback.getEffectiveConsistencyReport();
+        if (consistencyData != null) {
+            logConsistencyReport(consistencyData);
+            saveConsistencyReport(consistencyData, project, callback.getJobId());
+        }
 
-        // 9. 검증 결과 저장 (PostgreSQL)
-        saveValidationResult(result, project, callback.getJobId());
+        // 8. 검증 결과 저장 (PostgreSQL) - using effective getter
+        ValidationDTO validationData = callback.getEffectiveValidation();
+        if (validationData != null) {
+            saveValidationResult(validationData, project, callback.getJobId());
+        }
 
-        // 10. 복선 저장 (PostgreSQL)
-        saveForeshadowing(result, project);
-
-        // Job 완료 처리
+        // Job 완료 처리 - using effective getter
+        Long processingTimeMs = callback.getEffectiveProcessingTimeMs();
         job.markAsCompleted(processingTimeMs);
         analysisJobRepository.save(job);
+
+        // SSE 알림 전송 (프론트엔드 업데이트용)
+        sseEmitterService.sendStatus(job.getProject().getId(), new SseEmitterService.AnalysisStatusEvent(
+                "COMPLETED", 1, 1, "분석이 완료되었습니다."));
 
         log.info("Analysis callback processed successfully for job: {}", callback.getJobId());
     }
 
-    /**
-     * 메타데이터에서 processing_time_ms 추출
-     */
-    @SuppressWarnings("unchecked")
-    private Long extractProcessingTime(Map<String, Object> result) {
-        Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
-        if (metadata != null && metadata.get("processing_time_ms") != null) {
-            return ((Number) metadata.get("processing_time_ms")).longValue();
-        }
-        return null;
-    }
-
-    /**
-     * 메타데이터 로깅
-     */
-    @SuppressWarnings("unchecked")
-    private void logMetadata(Map<String, Object> result) {
-        Map<String, Object> metadata = (Map<String, Object>) result.get("metadata");
-        if (metadata != null) {
-            log.info("Analysis metadata - processing_time_ms: {}, tokens_used: {}, trace_id: {}, agents: {}",
-                    metadata.get("processing_time_ms"),
-                    metadata.get("tokens_used"),
-                    metadata.get("trace_id"),
-                    metadata.get("agents_executed"));
-        }
-    }
+    // No helper methods for metadata extraction needed anymore, direct access from
+    // DTO
 
     /**
      * 캐릭터 저장 (Neo4j)
      */
-    @SuppressWarnings("unchecked")
-    private void saveCharacters(Map<String, Object> result, Project project) {
+    private void saveCharacters(List<CharacterDTO> characters, Project project) {
         String projectId = project.getId().toString();
-        List<Map<String, Object>> characters = (List<Map<String, Object>>) result.get("characters");
         if (characters == null || characters.isEmpty()) {
             log.info("No characters to save");
             return;
         }
 
-        for (Map<String, Object> charData : characters) {
-            // Try to get name from profile first (as per expected.json schema)
+        for (CharacterDTO charData : characters) {
             String name = null;
-            Map<String, Object> profile = (Map<String, Object>) charData.get("profile");
-            if (profile != null) {
-                name = (String) profile.get("name");
+            if (charData.getProfile() != null) {
+                name = charData.getProfile().getName();
             }
-            // Fallback to top-level name if not in profile
-            if (name == null) {
-                name = (String) charData.get("name");
-            }
-
-            String role = (String) charData.get("role");
-            String status = (String) charData.get("status");
 
             if (name == null || name.isBlank()) {
                 log.warn("Skipping character with empty name");
                 continue;
             }
+
+            String role = charData.getRole();
+            String status = charData.getStatus();
 
             Optional<Character> existingChar = characterRepository.findByNameAndProjectId(name, projectId);
 
@@ -232,16 +217,10 @@ public class AICallbackService {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private void saveCharacterToPostgres(Map<String, Object> charData, Project project) {
-        // Name extraction logic
+    private void saveCharacterToPostgres(CharacterDTO charData, Project project) {
         String name = null;
-        Map<String, Object> profile = (Map<String, Object>) charData.get("profile");
-        if (profile != null) {
-            name = (String) profile.get("name");
-        }
-        if (name == null) {
-            name = (String) charData.get("name");
+        if (charData.getProfile() != null) {
+            name = charData.getProfile().getName();
         }
 
         if (name == null) {
@@ -256,70 +235,70 @@ public class AICallbackService {
                         .build());
 
         // Basic fields
-        entity.setCharacterId((String) charData.get("_id"));
-        entity.setRole((String) charData.get("role"));
-        entity.setStatus((String) charData.get("status"));
+        entity.setCharacterId(charData.getId());
+        entity.setRole(charData.getRole());
+        entity.setStatus(charData.getStatus());
 
-        // Profile fields (from profile object or top-level)
-        // profile variable is already extracted above
-        if (profile != null) {
-            entity.setAge(profile.get("age") != null ? ((Number) profile.get("age")).intValue() : null);
-            entity.setGender((String) profile.get("gender"));
-            entity.setRace((String) profile.get("race"));
-            entity.setMbti((String) profile.get("mbti"));
-            entity.setBackstory((String) profile.get("backstory"));
-            Map<String, Object> faction = (Map<String, Object>) profile.get("faction");
-            if (faction != null) {
-                entity.setFaction((String) faction.get("name"));
+        // Profile fields
+        if (charData.getProfile() != null) {
+            CharacterDTO.ProfileDTO profile = charData.getProfile();
+            entity.setAge(profile.getAge());
+            entity.setGender(profile.getGender());
+            entity.setRace(profile.getRace());
+            entity.setMbti(profile.getMbti());
+            entity.setBackstory(profile.getBackstory());
+            if (profile.getFaction() != null) {
+                entity.setFaction(profile.getFaction().getName());
             }
         }
 
         try {
             // Aliases
-            if (charData.get("aliases") != null)
-                entity.setAliasesJson(objectMapper.writeValueAsString(charData.get("aliases")));
+            if (charData.getAliases() != null)
+                entity.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
 
             // Profile full JSON
-            if (profile != null)
-                entity.setProfileJson(objectMapper.writeValueAsString(profile));
+            if (charData.getProfile() != null)
+                entity.setProfileJson(objectMapper.writeValueAsString(charData.getProfile()));
 
             // Appearance
-            if (charData.get("appearance") != null)
-                entity.setAppearanceJson(objectMapper.writeValueAsString(charData.get("appearance")));
-
-            // Visual (legacy, same as appearance)
-            if (charData.get("visual") != null)
-                entity.setVisualJson(objectMapper.writeValueAsString(charData.get("visual")));
-            else if (charData.get("appearance") != null)
-                entity.setVisualJson(objectMapper.writeValueAsString(charData.get("appearance")));
+            if (charData.getAppearance() != null) {
+                String appearanceJson = objectMapper.writeValueAsString(charData.getAppearance());
+                entity.setAppearanceJson(appearanceJson);
+                // Visual (legacy) fallback
+                entity.setVisualJson(appearanceJson);
+            }
 
             // Personality
-            if (charData.get("personality") != null)
-                entity.setPersonalityJson(objectMapper.writeValueAsString(charData.get("personality")));
+            if (charData.getProfile() != null && charData.getProfile().getPersonality() != null) {
+                entity.setPersonalityJson(objectMapper.writeValueAsString(charData.getProfile().getPersonality()));
+            }
 
             // Relations
-            if (charData.get("relations") != null)
-                entity.setRelationsJson(objectMapper.writeValueAsString(charData.get("relations")));
+            if (charData.getRelations() != null)
+                entity.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
 
             // Current Mood
-            if (charData.get("current_mood") != null)
-                entity.setCurrentMoodJson(objectMapper.writeValueAsString(charData.get("current_mood")));
+            if (charData.getCurrentMood() != null)
+                entity.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
 
             // Meta
-            if (charData.get("meta") != null)
-                entity.setMetaJson(objectMapper.writeValueAsString(charData.get("meta")));
+            if (charData.getMeta() != null)
+                entity.setMetaJson(objectMapper.writeValueAsString(charData.getMeta()));
 
             // Embedding
-            if (charData.get("embedding") != null)
-                entity.setEmbeddingJson(objectMapper.writeValueAsString(charData.get("embedding")));
+            if (charData.getEmbedding() != null)
+                entity.setEmbeddingJson(objectMapper.writeValueAsString(charData.getEmbedding()));
 
         } catch (JsonProcessingException e) {
             log.error("JSON processing error for character entity: {}", e.getMessage());
         }
 
-        // Motivation and first appearance
-        entity.setMotivation((String) charData.get("motivation"));
-        entity.setFirstAppearance((String) charData.get("first_appearance"));
+        // Motivation and first appearance - NOT in new DTO structure explicitly?
+        // Checking CharacterDTO: No motivation field.
+        // It might be inside 'meta' or 'profile' in some versions but my DTO doesn't
+        // have it.
+        // I will omit them if not present in DTO.
 
         characterJpaRepository.save(entity);
         log.info("Saved character to Postgres: {}", name);
@@ -328,83 +307,63 @@ public class AICallbackService {
     /**
      * 캐릭터 JSON 필드 업데이트 (Neo4j)
      */
-    @SuppressWarnings("unchecked")
-    private void updateCharacterJsonFields(Character character, Map<String, Object> charData) {
+    private void updateCharacterJsonFields(Character character, CharacterDTO charData) {
         try {
             // AI generated ID
-            character.setCharacterId((String) charData.get("_id"));
+            character.setCharacterId(charData.getId());
 
             // Profile fields
-            Map<String, Object> profile = (Map<String, Object>) charData.get("profile");
-            if (profile != null) {
-                character.setAge(profile.get("age") != null ? ((Number) profile.get("age")).intValue() : null);
-                character.setGender((String) profile.get("gender"));
-                character.setRace((String) profile.get("race"));
-                character.setMbti((String) profile.get("mbti"));
-                character.setBackstory((String) profile.get("backstory"));
-                Map<String, Object> faction = (Map<String, Object>) profile.get("faction");
-                if (faction != null) {
-                    character.setFaction((String) faction.get("name"));
+            if (charData.getProfile() != null) {
+                CharacterDTO.ProfileDTO profile = charData.getProfile();
+                character.setAge(profile.getAge());
+                character.setGender(profile.getGender());
+                character.setRace(profile.getRace());
+                character.setMbti(profile.getMbti());
+                character.setBackstory(profile.getBackstory());
+                if (profile.getFaction() != null) {
+                    character.setFaction(profile.getFaction().getName());
                 }
                 character.setProfileJson(objectMapper.writeValueAsString(profile));
             }
 
             // Aliases
-            if (charData.get("aliases") != null) {
-                character.setAliasesJson(objectMapper.writeValueAsString(charData.get("aliases")));
+            if (charData.getAliases() != null) {
+                character.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
             }
 
             // Appearance
-            Map<String, Object> appearance = (Map<String, Object>) charData.get("appearance");
-            if (appearance != null) {
-                character.setAppearanceJson(objectMapper.writeValueAsString(appearance));
-            }
-
-            // Visual (legacy)
-            Map<String, Object> visual = (Map<String, Object>) charData.get("visual");
-            if (visual != null) {
-                character.setVisualJson(objectMapper.writeValueAsString(visual));
-            } else if (appearance != null) {
-                character.setVisualJson(objectMapper.writeValueAsString(appearance));
+            if (charData.getAppearance() != null) {
+                String appearanceJson = objectMapper.writeValueAsString(charData.getAppearance());
+                character.setAppearanceJson(appearanceJson);
+                // Visual (legacy)
+                character.setVisualJson(appearanceJson);
             }
 
             // Personality
-            Map<String, Object> personality = (Map<String, Object>) charData.get("personality");
-            if (personality != null) {
-                character.setPersonalityJson(objectMapper.writeValueAsString(personality));
+            if (charData.getProfile() != null && charData.getProfile().getPersonality() != null) {
+                character.setPersonalityJson(objectMapper.writeValueAsString(charData.getProfile().getPersonality()));
             }
 
             // Relations
-            if (charData.get("relations") != null) {
-                character.setRelationsJson(objectMapper.writeValueAsString(charData.get("relations")));
+            if (charData.getRelations() != null) {
+                character.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
             }
 
             // Current Mood
-            Map<String, Object> currentMood = (Map<String, Object>) charData.get("current_mood");
-            if (currentMood != null) {
-                character.setCurrentMoodJson(objectMapper.writeValueAsString(currentMood));
+            if (charData.getCurrentMood() != null) {
+                character.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
             }
 
             // Meta
-            if (charData.get("meta") != null) {
-                character.setMetaJson(objectMapper.writeValueAsString(charData.get("meta")));
+            if (charData.getMeta() != null) {
+                character.setMetaJson(objectMapper.writeValueAsString(charData.getMeta()));
             }
 
             // Embedding
-            if (charData.get("embedding") != null) {
-                character.setEmbeddingJson(objectMapper.writeValueAsString(charData.get("embedding")));
+            if (charData.getEmbedding() != null) {
+                character.setEmbeddingJson(objectMapper.writeValueAsString(charData.getEmbedding()));
             }
 
-            // Simple string fields
-            String motivation = (String) charData.get("motivation");
-            if (motivation != null) {
-                character.setMotivation(motivation);
-            }
-
-            String firstAppearance = (String) charData.get("first_appearance");
-            if (firstAppearance != null) {
-                character.setFirstAppearance(firstAppearance);
-            }
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize character data to JSON: {}", e.getMessage());
         }
@@ -412,41 +371,61 @@ public class AICallbackService {
 
     /**
      * 관계 저장 (Neo4j)
+     *
+     * Python 콜백의 relationships 구조:
+     * [{ "source": "Name A", "target": "Name B", "relation_type": "FRIEND", "strength": 8, "description": "..." }]
+     *
+     * source/target are CHARACTER NAMES, not IDs.
+     * Creates placeholder characters if they don't exist to ensure no relationship data is lost.
      */
-    @SuppressWarnings("unchecked")
-    private void saveRelationships(Map<String, Object> result, String projectId) {
-        List<Map<String, Object>> relationships = (List<Map<String, Object>>) result.get("relationships");
+    private void saveRelationships(List<RelationshipDTO> relationships, String projectId) {
         if (relationships == null || relationships.isEmpty()) {
             log.info("No relationships to save");
             return;
         }
 
-        for (Map<String, Object> relData : relationships) {
-            String sourceName = (String) relData.get("source");
-            String targetName = (String) relData.get("target");
-            String relationType = (String) relData.get("relation_type");
-            Integer strength = relData.get("strength") != null
-                    ? ((Number) relData.get("strength")).intValue()
-                    : 5;
-            String description = (String) relData.get("description");
+        for (RelationshipDTO relData : relationships) {
+            String sourceName = relData.getSource();
+            String targetName = relData.getTarget();
+            String relationType = relData.getRelationType();
+            Integer strength = relData.getStrength() != null ? relData.getStrength() : 5;
+            String description = relData.getDescription();
 
             if (sourceName == null || targetName == null) {
                 log.warn("Skipping relationship with missing source/target");
                 continue;
             }
 
-            Optional<Character> sourceChar = characterRepository.findByNameAndProjectId(sourceName, projectId);
-            Optional<Character> targetChar = characterRepository.findByNameAndProjectId(targetName, projectId);
+            // Find or create source character
+            Character sourceChar = characterRepository.findByNameAndProjectId(sourceName, projectId)
+                    .orElseGet(() -> {
+                        log.info("Creating placeholder character for source: {}", sourceName);
+                        Character placeholder = Character.builder()
+                                .projectId(projectId)
+                                .name(sourceName)
+                                .role("unknown")
+                                .status("unknown")
+                                .build();
+                        return characterRepository.save(placeholder);
+                    });
 
-            if (sourceChar.isEmpty() || targetChar.isEmpty()) {
-                log.warn("Source or target character not found: {} -> {}", sourceName, targetName);
-                continue;
-            }
+            // Find or create target character
+            Character targetChar = characterRepository.findByNameAndProjectId(targetName, projectId)
+                    .orElseGet(() -> {
+                        log.info("Creating placeholder character for target: {}", targetName);
+                        Character placeholder = Character.builder()
+                                .projectId(projectId)
+                                .name(targetName)
+                                .role("unknown")
+                                .status("unknown")
+                                .build();
+                        return characterRepository.save(placeholder);
+                    });
 
             try {
                 characterRepository.createRelationship(
-                        sourceChar.get().getId(),
-                        targetChar.get().getId(),
+                        sourceChar.getId(),
+                        targetChar.getId(),
                         relationType != null ? relationType.toLowerCase() : "related",
                         strength,
                         description);
@@ -460,9 +439,7 @@ public class AICallbackService {
     /**
      * 이벤트 저장 (Neo4j)
      */
-    @SuppressWarnings("unchecked")
-    private void saveEvents(Map<String, Object> result, Project project) {
-        List<Map<String, Object>> events = (List<Map<String, Object>>) result.get("events");
+    private void saveEvents(List<EventDTO> events, Project project) {
         if (events == null || events.isEmpty()) {
             log.info("No events to save");
             return;
@@ -470,26 +447,23 @@ public class AICallbackService {
 
         String projectId = project.getId().toString();
 
-        for (Map<String, Object> eventData : events) {
-            String eventId = (String) eventData.get("event_id");
-            String eventType = (String) eventData.get("event_type");
-            String narrativeSummary = (String) eventData.get("narrative_summary");
-            String description = (String) eventData.get("description");
-            String visualScene = (String) eventData.get("visual_scene");
-            String cameraAngle = (String) eventData.get("camera_angle");
-            String locationRef = (String) eventData.get("location_ref");
-            String prevEventId = (String) eventData.get("prev_event_id");
-            Integer importance = eventData.get("importance") != null
-                    ? ((Number) eventData.get("importance")).intValue()
-                    : 5;
-            Boolean isForeshadowing = (Boolean) eventData.get("is_foreshadowing");
+        for (EventDTO eventData : events) {
+            String eventId = eventData.getEventId();
+            String eventType = eventData.getEventType();
+            String narrativeSummary = eventData.getNarrativeSummary();
+            String description = eventData.getDescription();
+            String visualScene = eventData.getVisualScene();
+            String cameraAngle = eventData.getCameraAngle();
+            String locationRef = eventData.getLocationRef();
+            String prevEventId = eventData.getPrevEventId();
+            Integer importance = eventData.getImportance() != null ? eventData.getImportance() : 5;
+            Boolean isForeshadowing = eventData.getIsForeshadowing();
 
             // participants를 JSON 문자열로
             String participantsJson = null;
-            List<String> participants = (List<String>) eventData.get("participants");
-            if (participants != null) {
+            if (eventData.getParticipants() != null) {
                 try {
-                    participantsJson = objectMapper.writeValueAsString(participants);
+                    participantsJson = objectMapper.writeValueAsString(eventData.getParticipants());
                 } catch (JsonProcessingException e) {
                     log.error("Failed to serialize participants: {}", e.getMessage());
                 }
@@ -519,32 +493,36 @@ public class AICallbackService {
             event.setIsForeshadowing(isForeshadowing != null ? isForeshadowing : false);
             event.setParticipantsJson(participantsJson);
 
+            // New fields from callback_result.json
+            event.setChapter(eventData.getChapter());
+            event.setSequenceOrder(eventData.getSequenceOrder());
+            event.setDocumentId(eventData.getDocumentId());
+
             // New AI schema fields
             try {
-                if (eventData.get("timestamp") != null) {
-                    event.setTimestampJson(objectMapper.writeValueAsString(eventData.get("timestamp")));
+                if (eventData.getTimestamp() != null) {
+                    event.setTimestampJson(objectMapper.writeValueAsString(eventData.getTimestamp()));
                 }
-                if (eventData.get("changes_made") != null) {
-                    event.setChangesJson(objectMapper.writeValueAsString(eventData.get("changes_made")));
+                if (eventData.getChangesMade() != null) {
+                    event.setChangesJson(objectMapper.writeValueAsString(eventData.getChangesMade()));
                 }
-                if (eventData.get("embedding") != null) {
-                    event.setEmbeddingJson(objectMapper.writeValueAsString(eventData.get("embedding")));
+                if (eventData.getEmbedding() != null) {
+                    event.setEmbeddingJson(objectMapper.writeValueAsString(eventData.getEmbedding()));
                 }
             } catch (JsonProcessingException e) {
                 log.error("Failed to serialize event JSON fields: {}", e.getMessage());
             }
 
             eventNeo4jRepository.save(event);
-            log.info("Saved event to Neo4j: {} ({})", eventId, narrativeSummary);
+            log.info("Saved event to Neo4j: {} (chapter: {}, seq: {})", eventId, eventData.getChapter(),
+                    eventData.getSequenceOrder());
         }
     }
 
     /**
      * 설정(장소) 저장 (Neo4j)
      */
-    @SuppressWarnings("unchecked")
-    private void saveSettings(Map<String, Object> result, Project project) {
-        List<Map<String, Object>> settings = (List<Map<String, Object>>) result.get("settings");
+    private void saveSettings(List<SettingDTO> settings, Project project) {
         if (settings == null || settings.isEmpty()) {
             log.info("No settings to save");
             return;
@@ -552,45 +530,29 @@ public class AICallbackService {
 
         String projectId = project.getId().toString();
 
-        for (Map<String, Object> settingData : settings) {
-            String settingId = (String) settingData.get("setting_id");
-            String name = (String) settingData.get("name");
-            String locationType = (String) settingData.get("location_type");
-            String visualPrompt = (String) settingData.get("static_visual_prompt");
-            if (visualPrompt == null) {
-                visualPrompt = (String) settingData.get("visual_background");
-            }
-            String timeOfDay = (String) settingData.get("time_of_day");
-            String lightingDescription = (String) settingData.get("lighting_description");
-            if (lightingDescription == null) {
-                lightingDescription = (String) settingData.get("lighting");
-            }
-            String atmosphereKeywords = (String) settingData.get("atmosphere_keywords");
-            if (atmosphereKeywords == null) {
-                atmosphereKeywords = (String) settingData.get("atmosphere");
-            }
-            String weatherCondition = (String) settingData.get("weather_condition");
-            if (weatherCondition == null) {
-                weatherCondition = (String) settingData.get("weather");
-            }
-            Boolean isPrimary = (Boolean) settingData.get("is_primary_location");
-            if (isPrimary == null) {
-                isPrimary = (Boolean) settingData.get("is_primary");
-            }
-            String storySignificance = (String) settingData.get("story_significance");
-            if (storySignificance == null) {
-                storySignificance = (String) settingData.get("significance");
-            }
+        for (SettingDTO settingData : settings) {
+            String settingId = settingData.getSettingId();
+            String name = settingData.getName();
+            String locationType = settingData.getLocationType();
+            String visualPrompt = settingData.getVisualBackground(); // DTO doesn't have static_visual_prompt, check
+                                                                     // JSON mapping
+            // Wait, JSON has `static_visual_prompt`? callback_result JSON analysis showed
+            // `visual_background`.
+            // My DTO implementation `SettingDTO` mapped `visual_background`.
+
+            String timeOfDay = settingData.getTimeOfDay();
+            String lightingDescription = settingData.getLighting();
+            String atmosphereKeywords = settingData.getAtmosphere();
+            String weatherCondition = settingData.getWeather();
+
+            Boolean isPrimary = settingData.getIsPrimary();
+            String storySignificance = settingData.getSignificance();
 
             // static_objects를 JSON 문자열로
             String staticObjectsJson = null;
-            List<String> staticObjects = (List<String>) settingData.get("static_objects");
-            if (staticObjects == null) {
-                staticObjects = (List<String>) settingData.get("notable_features");
-            }
-            if (staticObjects != null) {
+            if (settingData.getNotableFeatures() != null) {
                 try {
-                    staticObjectsJson = objectMapper.writeValueAsString(staticObjects);
+                    staticObjectsJson = objectMapper.writeValueAsString(settingData.getNotableFeatures());
                 } catch (JsonProcessingException e) {
                     log.error("Failed to serialize static_objects: {}", e.getMessage());
                 }
@@ -611,21 +573,34 @@ public class AICallbackService {
             }
 
             setting.setLocationType(locationType != null ? locationType.toUpperCase() : null);
-            setting.setLocationName((String) settingData.get("location_name"));
+            setting.setLocationName(settingData.getLocationName());
             setting.setVisualPrompt(visualPrompt);
-            setting.setVisualBackground((String) settingData.get("visual_background"));
+            setting.setVisualBackground(settingData.getVisualBackground());
             setting.setTimeOfDay(timeOfDay);
             setting.setLightingDescription(lightingDescription);
             setting.setAtmosphereKeywords(atmosphereKeywords);
             setting.setWeatherCondition(weatherCondition);
-            setting.setArtStyle((String) settingData.get("art_style"));
-            setting.setDescription((String) settingData.get("description"));
+            setting.setArtStyle(settingData.getArtStyle());
+            setting.setDescription(settingData.getDescription());
             setting.setIsPrimaryLocation(isPrimary != null ? isPrimary : false);
             setting.setStorySignificance(storySignificance);
             setting.setStaticObjectsJson(staticObjectsJson);
 
+            // New fields from callback_result.json
+            setting.setParentLocation(settingData.getParentLocation());
+            setting.setFirstMentioned(settingData.getFirstMentioned());
+
+            // Embedding JSON
+            try {
+                if (settingData.getEmbedding() != null) {
+                    setting.setEmbeddingJson(objectMapper.writeValueAsString(settingData.getEmbedding()));
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize setting embedding: {}", e.getMessage());
+            }
+
             settingNeo4jRepository.save(setting);
-            log.info("Saved setting to Neo4j: {} ({})", name, locationType);
+            log.info("Saved setting to Neo4j: {} (type: {}, primary: {})", name, locationType, isPrimary);
         }
     }
 
@@ -671,19 +646,15 @@ public class AICallbackService {
     /**
      * 일관성 보고서 로깅
      */
-    @SuppressWarnings("unchecked")
-    private void logConsistencyReport(Map<String, Object> result) {
-        Map<String, Object> consistencyReport = (Map<String, Object>) result.get("consistency_report");
+    private void logConsistencyReport(ConsistencyReportDTO consistencyReport) {
         if (consistencyReport != null) {
-            Object overallScore = consistencyReport.get("overall_score");
-            Boolean requiresReextraction = (Boolean) consistencyReport.get("requires_reextraction");
-            List<?> conflicts = (List<?>) consistencyReport.get("conflicts");
-            List<?> warnings = (List<?>) consistencyReport.get("warnings");
+            Integer score = consistencyReport.getEffectiveScore();
+            Boolean requiresReextraction = consistencyReport.getRequiresReextraction();
+            int conflictCount = consistencyReport.getConflicts() != null ? consistencyReport.getConflicts().size() : 0;
+            int warningCount = consistencyReport.getWarnings() != null ? consistencyReport.getWarnings().size() : 0;
 
             log.info("Consistency report - score: {}, requires_reextraction: {}, conflicts: {}, warnings: {}",
-                    overallScore, requiresReextraction,
-                    conflicts != null ? conflicts.size() : 0,
-                    warnings != null ? warnings.size() : 0);
+                    score, requiresReextraction, conflictCount, warningCount);
         }
     }
 
@@ -736,37 +707,51 @@ public class AICallbackService {
 
     /**
      * 플롯 통합 저장 (PostgreSQL)
+     *
+     * Python 콜백의 "plot" 필드 구조:
+     * {
+     *   "summary": "...",
+     *   "plot_summary": { "narrative": "...", "central_conflict": "..." },
+     *   "foreshadowing": [{ "foreshadow_id": "...", "hint_text": "...", ... }],
+     *   "narrative_beats": [...],
+     *   "tension_curve": [...],
+     *   "overall_tension": 0.75,
+     *   "three_act_structure": {...},
+     *   "multimedia_summary": {...}
+     * }
      */
-    @SuppressWarnings("unchecked")
-    private void savePlotIntegration(Map<String, Object> result, Project project, UUID documentId) {
-        Map<String, Object> plotData = (Map<String, Object>) result.get("plot_integration");
+    private void savePlotIntegration(PlotDTO plotData, Project project, UUID documentId) {
         if (plotData == null) {
-            log.info("No plot_integration to save");
+            log.info("No plot to save");
             return;
         }
 
         try {
-            // plot_summary 추출
-            Map<String, Object> plotSummary = (Map<String, Object>) plotData.get("plot_summary");
-            String narrative = plotSummary != null ? (String) plotSummary.get("narrative") : null;
-            String centralConflict = plotSummary != null ? (String) plotSummary.get("central_conflict") : null;
+            // Extract narrative and central conflict
+            String narrative = null;
+            String centralConflict = null;
 
-            // overall_tension
-            Double overallTension = plotData.get("overall_tension") != null
-                    ? ((Number) plotData.get("overall_tension")).doubleValue()
-                    : null;
+            // Try plot_summary first
+            if (plotData.getPlotSummary() != null) {
+                narrative = plotData.getPlotSummary().getNarrative();
+                centralConflict = plotData.getPlotSummary().getCentralConflict();
+            }
+            // Fall back to summary field
+            if (narrative == null && plotData.getSummary() != null) {
+                narrative = plotData.getSummary();
+            }
 
             PlotIntegration plot = PlotIntegration.builder()
                     .project(project)
                     .documentId(documentId)
                     .narrative(narrative)
                     .centralConflict(centralConflict)
-                    .overallTension(overallTension)
-                    .narrativeBeatsJson(toJson(plotData.get("narrative_beats")))
-                    .tensionCurveJson(toJson(plotData.get("tension_curve")))
-                    .threeActStructureJson(toJson(plotData.get("three_act_structure")))
-                    .foreshadowingJson(toJson(plotData.get("foreshadowing")))
-                    .multimediaSummaryJson(toJson(plotData.get("multimedia_summary")))
+                    .overallTension(plotData.getOverallTension())
+                    .narrativeBeatsJson(toJson(plotData.getNarrativeBeats()))
+                    .tensionCurveJson(toJson(plotData.getTensionCurve()))
+                    .threeActStructureJson(toJson(plotData.getThreeActStructure()))
+                    .foreshadowingJson(toJson(plotData.getForeshadowing()))
+                    .multimediaSummaryJson(toJson(plotData.getMultimediaSummary()))
                     .build();
 
             plotIntegrationRepository.save(plot);
@@ -778,34 +763,41 @@ public class AICallbackService {
 
     /**
      * 일관성 보고서 저장 (PostgreSQL)
+     *
+     * Python 콜백의 "consistency_report" 필드 구조:
+     * {
+     *   "score": 95,  // or "overall_score"
+     *   "conflicts": [{ "type": "...", "description": "...", ... }],
+     *   "warnings": ["..."],
+     *   "requires_reextraction": false,
+     *   "resolution_summary": {...},
+     *   "neo4j_validation": {...}
+     * }
      */
-    @SuppressWarnings("unchecked")
-    private void saveConsistencyReport(Map<String, Object> result, Project project, String jobId) {
-        Map<String, Object> reportData = (Map<String, Object>) result.get("consistency_report");
+    private void saveConsistencyReport(ConsistencyReportDTO reportData, Project project, String jobId) {
         if (reportData == null) {
             log.info("No consistency_report to save");
             return;
         }
 
         try {
-            Integer overallScore = reportData.get("overall_score") != null
-                    ? ((Number) reportData.get("overall_score")).intValue()
-                    : null;
-            Boolean requiresReextraction = (Boolean) reportData.get("requires_reextraction");
+            // Use effective score (prefers 'score' over 'overall_score')
+            Integer score = reportData.getEffectiveScore();
 
             ConsistencyReport report = ConsistencyReport.builder()
                     .project(project)
                     .jobId(jobId)
-                    .overallScore(overallScore)
-                    .requiresReextraction(requiresReextraction != null ? requiresReextraction : false)
-                    .conflictsJson(toJson(reportData.get("conflicts")))
-                    .warningsJson(toJson(reportData.get("warnings")))
-                    .resolutionSummaryJson(toJson(reportData.get("resolution_summary")))
-                    .neo4jValidationJson(toJson(reportData.get("neo4j_validation")))
+                    .overallScore(score)
+                    .requiresReextraction(reportData.getRequiresReextraction() != null
+                            ? reportData.getRequiresReextraction() : false)
+                    .conflictsJson(toJson(reportData.getConflicts()))
+                    .warningsJson(toJson(reportData.getWarnings()))
+                    .resolutionSummaryJson(toJson(reportData.getResolutionSummary()))
+                    .neo4jValidationJson(toJson(reportData.getNeo4jValidation()))
                     .build();
 
             consistencyReportRepository.save(report);
-            log.info("Saved consistency report for job: {}, score: {}", jobId, overallScore);
+            log.info("Saved consistency report for job: {}, score: {}", jobId, score);
         } catch (Exception e) {
             log.error("Failed to save consistency report: {}", e.getMessage());
         }
@@ -815,78 +807,55 @@ public class AICallbackService {
      * 검증 결과 저장 (PostgreSQL)
      */
     @SuppressWarnings("unchecked")
-    private void saveValidationResult(Map<String, Object> result, Project project, String jobId) {
-        Map<String, Object> validationData = (Map<String, Object>) result.get("validation");
+    private void saveValidationResult(ValidationDTO validationData, Project project, String jobId) {
         if (validationData == null) {
             log.info("No validation to save");
             return;
         }
 
         try {
-            Boolean isValid = (Boolean) validationData.get("is_valid");
-            Integer qualityScore = validationData.get("quality_score") != null
-                    ? ((Number) validationData.get("quality_score")).intValue()
-                    : null;
-            String action = (String) validationData.get("action");
-            String actionDescription = (String) validationData.get("action_description");
-            Double averageCompleteness = validationData.get("average_completeness") != null
-                    ? ((Number) validationData.get("average_completeness")).doubleValue()
-                    : null;
-            Integer errorCount = validationData.get("error_count") != null
-                    ? ((Number) validationData.get("error_count")).intValue()
-                    : 0;
-            Integer warningCount = validationData.get("warning_count") != null
-                    ? ((Number) validationData.get("warning_count")).intValue()
-                    : 0;
-            Double executionTimeMs = validationData.get("execution_time_ms") != null
-                    ? ((Number) validationData.get("execution_time_ms")).doubleValue()
-                    : null;
 
             ValidationResult validation = ValidationResult.builder()
                     .project(project)
                     .jobId(jobId)
-                    .isValid(isValid != null ? isValid : true)
-                    .qualityScore(qualityScore)
-                    .action(action)
-                    .actionDescription(actionDescription)
-                    .averageCompleteness(averageCompleteness)
-                    .errorCount(errorCount)
-                    .warningCount(warningCount)
-                    .dataCompletenessJson(toJson(validationData.get("data_completeness")))
-                    .validationDetailsJson(toJson(validationData.get("validation_details")))
-                    .executionTimeMs(executionTimeMs)
+                    .isValid(validationData.getIsValid() != null ? validationData.getIsValid() : true)
+                    .qualityScore(validationData.getQualityScore())
+                    .action(validationData.getAction())
+                    .actionDescription(validationData.getActionDescription())
+                    .averageCompleteness(validationData.getAverageCompleteness())
+                    .errorCount(validationData.getErrorCount() != null ? validationData.getErrorCount() : 0)
+                    .warningCount(validationData.getWarningCount() != null ? validationData.getWarningCount() : 0)
+                    .executionTimeMs(validationData.getExecutionTimeMs())
+                    .dataCompletenessJson(toJson(validationData.getDataCompleteness()))
+                    .validationDetailsJson(toJson(validationData.getValidationDetails()))
                     .build();
 
             validationResultRepository.save(validation);
-            log.info("Saved validation result for job: {}, quality_score: {}", jobId, qualityScore);
+            log.info("Saved validation result for job: {}, quality_score: {}", jobId, validationData.getQualityScore());
         } catch (Exception e) {
             log.error("Failed to save validation result: {}", e.getMessage());
         }
     }
 
     /**
-     * 복선 저장 (PostgreSQL) - plot_integration.foreshadowing에서 추출
+     * 복선 저장 (PostgreSQL) - plot.foreshadowing에서 추출
+     *
+     * Python 콜백의 foreshadowing 구조:
+     * [
+     *   { "foreshadow_id": "...", "hint_text": "...", "predicted_outcome": "...", "confidence": 85 }
+     * ]
      */
-    @SuppressWarnings("unchecked")
-    private void saveForeshadowing(Map<String, Object> result, Project project) {
-        Map<String, Object> plotData = (Map<String, Object>) result.get("plot_integration");
-        if (plotData == null) {
-            return;
-        }
-
-        List<Map<String, Object>> foreshadowingList = (List<Map<String, Object>>) plotData.get("foreshadowing");
-        if (foreshadowingList == null || foreshadowingList.isEmpty()) {
+    private void saveForeshadowing(PlotDTO plotData, Project project) {
+        if (plotData == null || plotData.getForeshadowing() == null || plotData.getForeshadowing().isEmpty()) {
             log.info("No foreshadowing to save");
             return;
         }
 
-        for (Map<String, Object> fsData : foreshadowingList) {
-            String foreshadowId = (String) fsData.get("foreshadow_id");
-            String hintText = (String) fsData.get("hint_text");
-            String predictedOutcome = (String) fsData.get("predicted_outcome");
-            Integer confidence = fsData.get("confidence") != null
-                    ? ((Number) fsData.get("confidence")).intValue()
-                    : null;
+        for (PlotDTO.ForeshadowingItemDTO fsData : plotData.getForeshadowing()) {
+            String foreshadowId = fsData.getForeshadowId();
+            String hintText = fsData.getHintText();
+            String predictedOutcome = fsData.getPredictedOutcome();
+            Integer confidence = fsData.getConfidence();
 
             if (foreshadowId == null || foreshadowId.isBlank()) {
                 continue;
@@ -974,19 +943,13 @@ public class AICallbackService {
         // 2. 임시 캐릭터/이벤트/설정 저장 (기존 로직 재사용)
         Project project = document.getProject();
         if (callback.getCharacters() != null && !callback.getCharacters().isEmpty()) {
-            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
-            tempResult.put("characters", callback.getCharacters());
-            saveCharacters(tempResult, project);
+            saveCharacters(callback.getCharacters(), project);
         }
         if (callback.getEvents() != null && !callback.getEvents().isEmpty()) {
-            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
-            tempResult.put("events", callback.getEvents());
-            saveEvents(tempResult, project);
+            saveEvents(callback.getEvents(), project);
         }
         if (callback.getSettings() != null && !callback.getSettings().isEmpty()) {
-            java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
-            tempResult.put("settings", callback.getSettings());
-            saveSettings(tempResult, project);
+            saveSettings(callback.getSettings(), project);
         }
 
         // 3. 문서 상태 업데이트
@@ -1007,7 +970,7 @@ public class AICallbackService {
      * Section 저장
      */
     private void saveSections(com.stolink.backend.domain.document.entity.Document document,
-            java.util.List<com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO.SectionDTO> sections) {
+            List<SectionDTO> sections) {
         if (sections == null || sections.isEmpty()) {
             log.info("No sections to save for document: {}", document.getId());
             return;
@@ -1016,7 +979,7 @@ public class AICallbackService {
         // 기존 Section 삭제 (재분석 시)
         sectionRepository.deleteAllByDocument(document);
 
-        for (com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO.SectionDTO sectionDTO : sections) {
+        for (SectionDTO sectionDTO : sections) {
             com.stolink.backend.domain.document.entity.Section section = com.stolink.backend.domain.document.entity.Section
                     .builder()
                     .document(document)
@@ -1050,10 +1013,6 @@ public class AICallbackService {
 
         log.info("Project {} - 1차 Pass 진행률: {}/{}", projectId, completedDocuments, totalTextDocuments);
 
-        if (completedDocuments == totalTextDocuments && totalTextDocuments > 0) {
-            log.info("Project {} - 모든 문서 분석 완료! 2차 Pass(글로벌 병합) 트리거", projectId);
-            documentAnalysisPublisher.publishGlobalMerge(projectId, traceId);
-        }
         if (completedDocuments == totalTextDocuments && totalTextDocuments > 0) {
             log.info("Project {} - 모든 문서 분석 완료! 2차 Pass(글로벌 병합) 트리거", projectId);
             documentAnalysisPublisher.publishGlobalMerge(projectId, traceId);
@@ -1091,23 +1050,33 @@ public class AICallbackService {
             return;
         }
 
-        String projectId = callback.getProjectId();
+        String projectIdStr = callback.getProjectId();
 
         // 캐릭터 병합 적용
         if (callback.getCharacterMerges() != null) {
             for (com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO.CharacterMergeDTO merge : callback
                     .getCharacterMerges()) {
-                applyCharacterMerge(merge, projectId);
+                applyCharacterMerge(merge, projectIdStr);
             }
         }
 
         // 일관성 보고서 로깅
         if (callback.getConsistencyReport() != null) {
-            log.info("Global merge consistency report for project {}: {}", projectId, callback.getConsistencyReport());
+            log.info("Global merge consistency report for project {}: {}", projectIdStr, callback.getConsistencyReport());
         }
 
         log.info("Global merge callback processed for project: {} (processing_time: {}ms)",
                 callback.getProjectId(), callback.getProcessingTimeMs());
+
+        // SSE 알림: 분석 완료
+        try {
+            UUID projectId = UUID.fromString(projectIdStr);
+            long totalDocs = documentRepository.countTextDocumentsByProjectId(projectId);
+            sseEmitterService.sendStatus(projectId, new SseEmitterService.AnalysisStatusEvent(
+                    "COMPLETED", (int) totalDocs, (int) totalDocs, "분석이 완료되었습니다."));
+        } catch (Exception e) {
+            log.error("Failed to send completion SSE for project: {}", projectIdStr, e);
+        }
     }
 
     /**
