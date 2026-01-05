@@ -55,8 +55,8 @@ public class ValidationDTO {
     @AllArgsConstructor
     @Builder
     public static class ValidationDetailsDTO {
-        private List<String> errors;
-        private List<String> warnings;
+        private List<Object> errors;
+        private List<Object> warnings;
 
         @JsonProperty("per_field")
         private Map<String, Object> perField;
