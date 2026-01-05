@@ -31,6 +31,8 @@ public class ProjectController {
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "updatedAt") String sort,
             @RequestParam(defaultValue = "desc") String order) {
+        // [DEBUG] 사용자 ID 로깅
+        org.slf4j.LoggerFactory.getLogger(ProjectController.class).info("GET /api/projects called by user: {}", userId);
         Sort.Direction direction = order.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page - 1, limit, Sort.by(direction, sort));
 
