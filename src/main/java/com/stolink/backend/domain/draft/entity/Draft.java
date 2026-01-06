@@ -1,10 +1,10 @@
 package com.stolink.backend.domain.draft.entity;
 
 import com.stolink.backend.domain.user.entity.User;
-import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Type;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -32,7 +32,7 @@ public class Draft {
     private String documentId;
 
     // 다중 Document ID 배열 (신규 Bulk 배포용)
-    @Type(JsonType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "document_ids", columnDefinition = "jsonb")
     private List<String> documentIds;
 
@@ -51,7 +51,7 @@ public class Draft {
     private String content;
 
     // 인물관계도 데이터 (JSONB)
-    @Type(JsonType.class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> graphSnapshot;
 
