@@ -208,7 +208,7 @@ public class AIAnalysisService {
                 .projectId(doc.getProject().getId())
                 .documentId(doc.getId())
                 .content(doc.getContent())
-                .callbackUrl(callbackBaseUrl + "/internal/ai/analysis/callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
                 .context(context)
                 .build();
@@ -280,7 +280,7 @@ public class AIAnalysisService {
 
         GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
                 .projectId(projectId)
-                .callbackUrl(callbackBaseUrl + "/internal/ai/analysis/callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
                 .build();
 
