@@ -6,5 +6,7 @@ import lombok.NoArgsConstructor;
 @Data
 @NoArgsConstructor
 public class CreateShareRequest {
-    // Empty DTO - no password needed
+    private String password;
+    private String operations; // Unused
+    private String expiresIn; // "7d", "30d", or null
 }

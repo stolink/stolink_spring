@@ -32,8 +32,12 @@ public class ShareController {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<ShareResponse> createShareLink(
             @AuthenticationPrincipal UUID userId,
-            @PathVariable UUID projectId) {
-        ShareResponse response = shareService.createShareLink(userId, projectId);
+            @PathVariable UUID projectId,
+            @RequestBody(required = false) com.stolink.backend.domain.share.dto.CreateShareRequest request) {
+        if (request == null) {
+            request = new com.stolink.backend.domain.share.dto.CreateShareRequest();
+        }
+        ShareResponse response = shareService.createShareLink(userId, projectId, request);
         return ApiResponse.created(response);
     }
 
@@ -49,8 +53,9 @@ public class ShareController {
 
     @GetMapping("/share/{shareId}")
     public ApiResponse<SharedProjectResponse> getSharedProject(
-            @PathVariable UUID shareId) {
-        SharedProjectResponse response = shareService.getSharedProject(shareId);
+            @PathVariable UUID shareId,
+            @RequestParam(required = false) String password) {
+        SharedProjectResponse response = shareService.getSharedProject(shareId, password);
         return ApiResponse.ok(response);
     }
 }

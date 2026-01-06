@@ -379,6 +379,9 @@ public class AICallbackService {
      * Creates placeholder characters if they don't exist to ensure no relationship data is lost.
      */
     private void saveRelationships(List<RelationshipDTO> relationships, String projectId) {
+        log.info("Saving {} relationships for project: {}",
+            relationships != null ? relationships.size() : 0, projectId);
+
         if (relationships == null || relationships.isEmpty()) {
             log.info("No relationships to save");
             return;
@@ -392,14 +395,14 @@ public class AICallbackService {
             String description = relData.getDescription();
 
             if (sourceName == null || targetName == null) {
-                log.warn("Skipping relationship with missing source/target");
+                log.warn("Skipping relationship with missing source/target: {} -> {}", sourceName, targetName);
                 continue;
             }
 
             // Find or create source character
             Character sourceChar = characterRepository.findByNameAndProjectId(sourceName, projectId)
                     .orElseGet(() -> {
-                        log.info("Creating placeholder character for source: {}", sourceName);
+                        log.info("Creating placeholder character for source: {} in project: {}", sourceName, projectId);
                         Character placeholder = Character.builder()
                                 .projectId(projectId)
                                 .name(sourceName)
@@ -412,7 +415,7 @@ public class AICallbackService {
             // Find or create target character
             Character targetChar = characterRepository.findByNameAndProjectId(targetName, projectId)
                     .orElseGet(() -> {
-                        log.info("Creating placeholder character for target: {}", targetName);
+                        log.info("Creating placeholder character for target: {} in project: {}", targetName, projectId);
                         Character placeholder = Character.builder()
                                 .projectId(projectId)
                                 .name(targetName)
@@ -429,9 +432,9 @@ public class AICallbackService {
                         relationType != null ? relationType.toLowerCase() : "related",
                         strength,
                         description);
-                log.info("Created relationship: {} -[{}]-> {}", sourceName, relationType, targetName);
+                log.info("Created relationship in Neo4j: {} -[{}]-> {}", sourceName, relationType, targetName);
             } catch (Exception e) {
-                log.error("Failed to create relationship: {} -> {}: {}", sourceName, targetName, e.getMessage());
+                log.error("Failed to create relationship in Neo4j: {} -> {}: {}", sourceName, targetName, e.getMessage());
             }
         }
     }
