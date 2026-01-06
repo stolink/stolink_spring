@@ -1,10 +1,5 @@
-# Build stage
-FROM gradle:8.11-jdk21 AS builder
-WORKDIR /app
-COPY . .
-RUN gradle build -x test --no-daemon
-
-# Runtime stage
+# Runtime stage - GitHub Actions에서 빌드된 JAR만 복사
+# Multi-stage 빌드 제거: Maven Central rate limiting 회피 및 빌드 캐시 활용
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
@@ -12,8 +7,8 @@ WORKDIR /app
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
-# Copy jar file
-COPY --from=builder /app/build/libs/*.jar app.jar
+# Copy pre-built jar file from context (built by GitHub Actions)
+COPY --chown=spring:spring build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080
