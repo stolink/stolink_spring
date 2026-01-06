@@ -22,14 +22,18 @@ import java.util.UUID;
  * 대용량 문서 분석을 위한 RabbitMQ 메시지 발행을 담당합니다.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DocumentAnalysisPublisher {
 
     private final DocumentRepository documentRepository;
-
-    @Qualifier("agentRabbitTemplate")
     private final RabbitTemplate agentRabbitTemplate;
+
+    public DocumentAnalysisPublisher(
+            DocumentRepository documentRepository,
+            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
+        this.documentRepository = documentRepository;
+        this.agentRabbitTemplate = agentRabbitTemplate;
+    }
 
     @Value("${app.rabbitmq.queues.document-analysis:document_analysis_queue}")
     private String documentAnalysisQueue;

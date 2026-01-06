@@ -381,7 +381,7 @@ public class CharacterService {
 
     // AI 콜백 URL 생성
     private String buildCallbackUrl() {
-        return callbackBaseUrl + "/internal/ai/image/callback";
+        return callbackBaseUrl + "/api/internal/ai/image/callback";
     }
 
     /**

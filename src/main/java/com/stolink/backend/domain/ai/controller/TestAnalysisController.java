@@ -27,15 +27,21 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("/api/test/analysis")
-@RequiredArgsConstructor
 @Profile({ "dev", "local", "test" })
 public class TestAnalysisController {
 
     private final DocumentAnalysisPublisher documentAnalysisPublisher;
     private final DocumentRepository documentRepository;
-
-    @Qualifier("agentRabbitTemplate")
     private final RabbitTemplate agentRabbitTemplate;
+
+    public TestAnalysisController(
+            DocumentAnalysisPublisher documentAnalysisPublisher,
+            DocumentRepository documentRepository,
+            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
+        this.documentAnalysisPublisher = documentAnalysisPublisher;
+        this.documentRepository = documentRepository;
+        this.agentRabbitTemplate = agentRabbitTemplate;
+    }
 
     @Value("${app.rabbitmq.queues.document-analysis:document_analysis_queue}")
     private String documentAnalysisQueue;
