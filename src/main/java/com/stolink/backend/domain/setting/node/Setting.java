@@ -1,11 +1,16 @@
 package com.stolink.backend.domain.setting.node;
 
-import lombok.*;
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.Property;
 import org.springframework.data.neo4j.core.support.UUIDStringGenerator;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * AI 분석으로 추출된 장소/배경 설정 노드 (Neo4j)
@@ -49,4 +54,8 @@ public class Setting {
 
     // JSON field for complex data
     private String staticObjectsJson; // notable_features as JSON array
+
+    // 추가 필드 (AI 콜백 완전 매핑용)
+    private String parentLocation;
+    private String firstMentioned;
 }

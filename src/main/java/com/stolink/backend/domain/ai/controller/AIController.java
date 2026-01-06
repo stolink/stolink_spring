@@ -159,22 +159,38 @@ public class AIController {
 
         /**
          * Internal callback endpoint for Analysis Worker
+         * message_type으로 분기: DOCUMENT_ANALYSIS_RESULT, GLOBAL_MERGE_RESULT
          */
         @PostMapping("/internal/ai/analysis/callback")
         public ApiResponse<Void> handleAnalysisCallback(@RequestBody String rawPayload) {
-                // 디버깅용: 원본 콜백 데이터 저장
+                // 콜백 데이터 파일 저장 (로그 출력 없음)
                 try {
                         java.nio.file.Files.writeString(java.nio.file.Path.of("/tmp/callback_result.json"), rawPayload);
-                        log.info("Saved raw callback payload to /tmp/callback_result.json");
                 } catch (java.io.IOException e) {
-                        log.error("Failed to save result.json", e);
+                        // 파일 저장 실패는 무시
                 }
 
                 try {
-                        AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload, AnalysisCallbackDTO.class);
-                        log.info("Received analysis callback for job: {}, status: {}",
-                                        callback.getJobId(), callback.getStatus());
-                        callbackService.handleAnalysisCallback(callback);
+                        // message_type 먼저 확인하여 분기
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, Object> rawMap = objectMapper.readValue(rawPayload, java.util.Map.class);
+                        String messageType = (String) rawMap.get("message_type");
+
+                        if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
+                                // 글로벌 병합 결과 처리
+                                GlobalMergeCallbackDTO mergeCallback = objectMapper.readValue(rawPayload,
+                                                GlobalMergeCallbackDTO.class);
+                                log.info("Received GLOBAL_MERGE callback for project: {}, status: {}",
+                                                mergeCallback.getProjectId(), mergeCallback.getStatus());
+                                callbackService.handleGlobalMergeCallback(mergeCallback);
+                        } else {
+                                // 기본: 문서 분석 결과 처리 (DOCUMENT_ANALYSIS_RESULT 또는 기존 포맷)
+                                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                AnalysisCallbackDTO.class);
+                                log.info("Received DOCUMENT_ANALYSIS callback for job: {}, status: {}",
+                                                callback.getJobId(), callback.getStatus());
+                                callbackService.handleAnalysisCallback(callback);
+                        }
                         return ApiResponse.ok();
                 } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
                         log.error("Failed to parse callback payload: {}", e.getMessage());

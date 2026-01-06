@@ -1,11 +1,16 @@
 package com.stolink.backend.domain.event.node;
 
-import lombok.*;
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.Property;
 import org.springframework.data.neo4j.core.support.UUIDStringGenerator;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * AI 분석으로 추출된 이벤트/장면 노드 (Neo4j)
@@ -48,4 +53,8 @@ public class Event {
     private String timestampJson; // { relative, absolute, chapter, sequence_order }
     private String changesJson; // changes_made field
     private String embeddingJson; // 1024-dim vector
+
+    // 추가 필드 (콜백 완전 매핑용)
+    private Integer sequenceOrder;
+    private String documentId;
 }

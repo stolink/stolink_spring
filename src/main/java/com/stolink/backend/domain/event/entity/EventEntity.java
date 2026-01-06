@@ -22,6 +22,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * AI 서버 호환용 이벤트 엔티티 (PostgreSQL)
@@ -30,6 +31,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "events")
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -98,6 +100,19 @@ public class EventEntity extends BaseEntity {
     // Document reference (required by DB constraint)
     @Column(name = "document_id", nullable = false)
     private UUID documentId;
+
+    // 추가 필드 (AI 콜백 완전 매핑용)
+    @Column(name = "timestamp_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String timestampJson;
+
+    @Column(name = "changes_made_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String changesMadeJson;
+
+    @Column(name = "embedding_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    private String embeddingJson;
 
     // --- 편의 메서드 ---
     public void updateDetails(String description, String eventType, String participants,

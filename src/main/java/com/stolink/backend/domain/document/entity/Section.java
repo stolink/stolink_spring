@@ -53,7 +53,7 @@ public class Section extends BaseEntity {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
-    @Column(columnDefinition = "vector(768)")
+    @Column(columnDefinition = "vector(3072)")
     @JdbcTypeCode(SqlTypes.VECTOR)
     private float[] embedding;
 

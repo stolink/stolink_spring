@@ -143,14 +143,10 @@ public class AICallbackService {
                 .orElseThrow(() -> new RuntimeException("Project not found: " + projectProxy.getId()));
         String projectIdStr = project.getId().toString();
 
-        log.info("DEBUG: Handling callback for job {}, Project ID: {}, ID Class: {}",
-                callback.getJobId(), projectIdStr, project.getId().getClass().getName());
+        log.debug("Handling callback for job {}, Project ID: {}", callback.getJobId(), projectIdStr);
         if (result.containsKey("analysis_type")) {
-            log.info("DEBUG: Analysis Type: {}", result.get("analysis_type"));
+            log.debug("Analysis Type: {}", result.get("analysis_type"));
         }
-
-        // 전체 결과 데이터 로깅 (디버깅용 - 사용자가 확인 가능하도록 INFO로 변경)
-        log.info("Full analysis result for project {}: {}", projectIdStr, result);
 
         // 메타데이터에서 processing_time 추출
         Long processingTimeMs = extractProcessingTime(result);
@@ -168,7 +164,7 @@ public class AICallbackService {
         updateEmotions(result, projectIdStr);
 
         // 4. 이벤트 저장 (PostgreSQL)
-        saveEvents(result, project);
+        saveEvents(result, project, job.getDocumentId());
 
         // 5. 설정(장소) 저장 (PostgreSQL)
         saveSettings(result, project);
@@ -251,7 +247,7 @@ public class AICallbackService {
         String projectId = project.getId().toString();
         List<Map<String, Object>> characters = (List<Map<String, Object>>) result.get("characters");
         if (characters == null || characters.isEmpty()) {
-            log.info("No characters to save");
+            log.debug("No characters to save");
             return;
         }
 
@@ -275,7 +271,8 @@ public class AICallbackService {
                 continue;
             }
 
-            Optional<Character> existingChar = characterRepository.findByNameAndProjectId(name, projectId);
+            Optional<Character> existingChar = characterRepository.findAllByNameAndProjectId(name, projectId).stream()
+                    .findFirst();
 
             if (existingChar.isPresent()) {
                 Character character = existingChar.get();
@@ -283,7 +280,7 @@ public class AICallbackService {
                 character.setStatus(status);
                 updateCharacterJsonFields(character, charData);
                 characterRepository.save(character);
-                log.info("Updated character: {} (id: {})", name, character.getId());
+                log.debug("Updated character: {} (id: {})", name, character.getId());
             } else {
                 Character character = Character.builder()
                         .projectId(projectId)
@@ -293,7 +290,7 @@ public class AICallbackService {
                         .build();
                 updateCharacterJsonFields(character, charData);
                 character = characterRepository.save(character);
-                log.info("Created character: {} (id: {})", name, character.getId());
+                log.debug("Created character: {} (id: {})", name, character.getId());
             }
 
             // PostgreSQL 저장 (AI 서버 호환용)
@@ -321,12 +318,15 @@ public class AICallbackService {
             log.error("Cannot save character to Postgres: Name is missing");
             return;
         }
-        com.stolink.backend.domain.character.entity.CharacterEntity entity = characterJpaRepository
-                .findByProjectAndName(project, name)
-                .orElse(com.stolink.backend.domain.character.entity.CharacterEntity.builder()
+        // 중복 캐릭터가 있어도 첫 번째 결과만 사용 (안전한 조회)
+        java.util.List<com.stolink.backend.domain.character.entity.CharacterEntity> existingEntities = characterJpaRepository
+                .findAllByProjectAndName(project, name);
+        com.stolink.backend.domain.character.entity.CharacterEntity entity = existingEntities.isEmpty()
+                ? com.stolink.backend.domain.character.entity.CharacterEntity.builder()
                         .project(project)
                         .name(name)
-                        .build());
+                        .build()
+                : existingEntities.get(0);
 
         // Basic fields
         entity.setCharacterId((String) charData.get("_id"));
@@ -395,7 +395,7 @@ public class AICallbackService {
         entity.setFirstAppearance((String) charData.get("first_appearance"));
 
         characterJpaRepository.save(entity);
-        log.info("Saved character to Postgres: {}", name);
+        log.debug("Saved character to Postgres: {}", name);
     }
 
     /**
@@ -491,7 +491,7 @@ public class AICallbackService {
         String projectId = project.getId().toString();
         List<Map<String, Object>> relationships = (List<Map<String, Object>>) result.get("relationships");
         if (relationships == null || relationships.isEmpty()) {
-            log.info("No relationships to save");
+            log.debug("No relationships to save");
             return;
         }
 
@@ -520,8 +520,10 @@ public class AICallbackService {
             }
 
             // Neo4j Processing
-            Optional<Character> sourceChar = characterRepository.findByNameAndProjectId(sourceName, projectId);
-            Optional<Character> targetChar = characterRepository.findByNameAndProjectId(targetName, projectId);
+            Optional<Character> sourceChar = characterRepository.findAllByNameAndProjectId(sourceName, projectId)
+                    .stream().findFirst();
+            Optional<Character> targetChar = characterRepository.findAllByNameAndProjectId(targetName, projectId)
+                    .stream().findFirst();
 
             if (sourceChar.isPresent() && targetChar.isPresent()) {
                 try {
@@ -530,8 +532,9 @@ public class AICallbackService {
                             targetChar.get().getId(),
                             relationType != null ? relationType.toLowerCase() : "related",
                             strength,
-                            description);
-                    log.info("Created Neo4j relationship: {} -[{}]-> {}", sourceName, relationType, targetName);
+                            description,
+                            bidirectional != null ? bidirectional : false);
+                    log.debug("Created Neo4j relationship: {} -[{}]-> {}", sourceName, relationType, targetName);
                 } catch (Exception e) {
                     log.error("Failed to create Neo4j relationship: {} -> {}: {}", sourceName, targetName,
                             e.getMessage());
@@ -541,10 +544,15 @@ public class AICallbackService {
             }
 
             // PostgreSQL Processing
-            com.stolink.backend.domain.character.entity.CharacterEntity sourceEntity = characterJpaRepository
-                    .findByProjectAndName(project, sourceName).orElse(null);
-            com.stolink.backend.domain.character.entity.CharacterEntity targetEntity = characterJpaRepository
-                    .findByProjectAndName(project, targetName).orElse(null);
+            // 중복 캐릭터가 있어도 첫 번째 결과만 사용 (안전한 조회)
+            java.util.List<com.stolink.backend.domain.character.entity.CharacterEntity> sourceList = characterJpaRepository
+                    .findAllByProjectAndName(project, sourceName);
+            java.util.List<com.stolink.backend.domain.character.entity.CharacterEntity> targetList = characterJpaRepository
+                    .findAllByProjectAndName(project, targetName);
+            com.stolink.backend.domain.character.entity.CharacterEntity sourceEntity = sourceList.isEmpty() ? null
+                    : sourceList.get(0);
+            com.stolink.backend.domain.character.entity.CharacterEntity targetEntity = targetList.isEmpty() ? null
+                    : targetList.get(0);
 
             if (sourceEntity != null && targetEntity != null) {
                 RelationshipEntity relEntity = RelationshipEntity.builder()
@@ -559,7 +567,7 @@ public class AICallbackService {
                         .bidirectional(bidirectional != null ? bidirectional : false)
                         .build();
                 relationshipRepository.save(relEntity);
-                log.info("Saved Postgres relationship: {} -> {}", sourceName, targetName);
+                log.debug("Saved Postgres relationship: {} -> {}", sourceName, targetName);
             } else {
                 log.warn("Source or target character entity not found in Postgres: {} -> {}", sourceName, targetName);
                 // Still save with names if entities not found? The entity enforces fields.
@@ -574,12 +582,12 @@ public class AICallbackService {
      * 이벤트 저장 (Neo4j)
      */
     @SuppressWarnings("unchecked")
-    private void saveEvents(Map<String, Object> result, Project project) {
+    private void saveEvents(Map<String, Object> result, Project project, UUID jobDocumentId) {
         List<Map<String, Object>> events = (List<Map<String, Object>>) result.get("events");
-        log.info("DEBUG: saveEvents called. Project ID: {}, Events count: {}", project.getId(),
+        log.debug("saveEvents called. Project ID: {}, Events count: {}", project.getId(),
                 events != null ? events.size() : "null");
         if (events == null || events.isEmpty()) {
-            log.info("No events to save");
+            log.debug("No events to save");
 
             return;
         }
@@ -609,6 +617,9 @@ public class AICallbackService {
                     log.warn("Invalid document_id format: {}", docIdStr);
                 }
             }
+            if (documentId == null) {
+                documentId = jobDocumentId;
+            }
             Boolean isForeshadowing = (Boolean) eventData.get("is_foreshadowing");
             Integer chapterRef = eventData.get("chapter_ref") != null
                     ? ((Number) eventData.get("chapter_ref")).intValue()
@@ -626,12 +637,12 @@ public class AICallbackService {
                 }
             }
 
-            // 기존 이벤트 조회 또는 새로 생성
-            Optional<Event> existingEvent = eventNeo4jRepository.findByProjectIdAndEventId(projectId, eventId);
+            // 기존 이벤트 조회 또는 새로 생성 (중복 안전 조회)
+            List<Event> existingEvents = eventNeo4jRepository.findAllByProjectIdAndEventId(projectId, eventId);
 
             Event event;
-            if (existingEvent.isPresent()) {
-                event = existingEvent.get();
+            if (!existingEvents.isEmpty()) {
+                event = existingEvents.get(0);
             } else {
                 event = Event.builder()
                         .projectId(projectId)
@@ -650,6 +661,11 @@ public class AICallbackService {
             event.setIsForeshadowing(isForeshadowing != null ? isForeshadowing : false);
             event.setChapterRef(chapterRef);
             event.setParticipantsJson(participantsJson);
+            // 추가 필드 (Neo4j 완전 매핑)
+            event.setSequenceOrder(eventData.get("sequence_order") != null
+                    ? ((Number) eventData.get("sequence_order")).intValue()
+                    : null);
+            event.setDocumentId(documentId != null ? documentId.toString() : null);
 
             // New AI schema fields
             try {
@@ -667,7 +683,17 @@ public class AICallbackService {
             }
 
             eventNeo4jRepository.save(event);
-            log.info("Saved event to Neo4j: {} ({})", eventId, narrativeSummary);
+            log.debug("Saved event to Neo4j: {} ({})", eventId, narrativeSummary);
+
+            // Neo4j Edge 생성: Event -> Setting (HAPPENED_AT)
+            if (locationRef != null && !locationRef.isBlank()) {
+                try {
+                    eventNeo4jRepository.createHappenedAtEdge(projectId, eventId, locationRef);
+                    log.debug("Created HAPPENED_AT edge: {} -> {}", eventId, locationRef);
+                } catch (Exception e) {
+                    log.warn("Failed to create HAPPENED_AT edge: {} -> {}: {}", eventId, locationRef, e.getMessage());
+                }
+            }
 
             // PostgreSQL에도 저장 (AI 서버 호환성, id=project_id, name=narrative_summary)
             // AI에서 events 테이블에 직접 쓰기 위해 필요
@@ -682,11 +708,12 @@ public class AICallbackService {
                 }
             }
 
-            Optional<EventEntity> existingEntity = eventJpaRepository.findByProjectAndName(project,
+            // 중복 안전 조회
+            List<EventEntity> existingEntities = eventJpaRepository.findAllByProjectAndName(project,
                     narrativeSummary != null ? narrativeSummary : "Untitled Event");
             EventEntity eventEntity;
-            if (existingEntity.isPresent()) {
-                eventEntity = existingEntity.get();
+            if (!existingEntities.isEmpty()) {
+                eventEntity = existingEntities.get(0);
             } else {
                 eventEntity = EventEntity.builder()
                         .project(project)
@@ -712,21 +739,32 @@ public class AICallbackService {
                     narrativeSummary,
                     prevEventId);
 
-            log.info("Saving EventEntity with Project ID: {}, Name: {}", eventEntity.getProject().getId(),
-                    eventEntity.getName());
-            log.info("DEBUG: Saving EventEntity. EventID: {}, Project ID in Entity: {}, Name: {}",
-                    eventEntity.getEventId(),
-                    eventEntity.getProject() != null ? eventEntity.getProject().getId() : "PROJECT NULL",
-                    eventEntity.getName());
+            // 추가 필드 저장 (AI 콜백 완전 매핑)
+            try {
+                if (eventData.get("timestamp") != null) {
+                    eventEntity.setTimestampJson(objectMapper.writeValueAsString(eventData.get("timestamp")));
+                }
+                if (eventData.get("changes_made") != null) {
+                    eventEntity.setChangesMadeJson(objectMapper.writeValueAsString(eventData.get("changes_made")));
+                }
+                if (eventData.get("embedding") != null) {
+                    eventEntity.setEmbeddingJson(objectMapper.writeValueAsString(eventData.get("embedding")));
+                }
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialize event extra JSON fields: {}", e.getMessage());
+            }
+
+            log.debug("Saving EventEntity: eventId={}, projectId={}", eventEntity.getEventId(),
+                    eventEntity.getProject().getId());
 
             try {
                 eventJpaRepository.save(eventEntity);
             } catch (Exception e) {
-                log.error("DEBUG: Failed to save EventEntity. EventID: {}, Error: {}", eventId, e.getMessage());
+                log.error("Failed to save EventEntity. EventID: {}, Error: {}", eventId, e.getMessage());
                 throw e;
             }
 
-            log.info("Saved event to PostgreSQL: {} ({})", eventId, narrativeSummary);
+            log.debug("Saved event to PostgreSQL: {} ({})", eventId, narrativeSummary);
         }
     }
 
@@ -737,7 +775,7 @@ public class AICallbackService {
     private void saveSettings(Map<String, Object> result, Project project) {
         List<Map<String, Object>> settings = (List<Map<String, Object>>) result.get("settings");
         if (settings == null || settings.isEmpty()) {
-            log.info("No settings to save");
+            log.debug("No settings to save");
             return;
         }
 
@@ -788,12 +826,12 @@ public class AICallbackService {
             }
 
             try {
-                // 기존 설정 조회 또는 새로 생성
-                Optional<Setting> existingSetting = settingNeo4jRepository.findByProjectIdAndName(projectId, name);
+                // 기존 설정 조회 또는 새로 생성 (중복 안전 조회)
+                List<Setting> existingSettings = settingNeo4jRepository.findAllByProjectIdAndName(projectId, name);
 
                 Setting setting;
-                if (existingSetting.isPresent()) {
-                    setting = existingSetting.get();
+                if (!existingSettings.isEmpty()) {
+                    setting = existingSettings.get(0);
                 } else {
                     setting = Setting.builder()
                             .projectId(projectId)
@@ -815,9 +853,12 @@ public class AICallbackService {
                 setting.setIsPrimaryLocation(isPrimary != null ? isPrimary : false);
                 setting.setStorySignificance(storySignificance);
                 setting.setStaticObjectsJson(staticObjectsJson);
+                // 추가 필드 (AI 콜백 완전 매핑)
+                setting.setParentLocation((String) settingData.get("parent_location"));
+                setting.setFirstMentioned((String) settingData.get("first_mentioned"));
 
                 settingNeo4jRepository.save(setting);
-                log.info("Saved setting to Neo4j: {} ({})", name, locationType);
+                log.debug("Saved setting to Neo4j: {} ({})", name, locationType);
 
                 // PostgreSQL에도 저장 (AI 서버 호환성, id=project_id, name=name)
                 Optional<SettingEntity> existingEntity = settingRepository.findByProjectAndName(project, name);
@@ -844,9 +885,13 @@ public class AICallbackService {
                         isPrimary != null ? isPrimary : false,
                         storySignificance,
                         staticObjectsJson);
+                // 추가 필드 (AI 콜백 완전 매핑)
+                settingEntity.setParentLocation((String) settingData.get("parent_location"));
+                settingEntity.setFirstMentioned((String) settingData.get("first_mentioned"));
+                settingEntity.setLocationName((String) settingData.get("location_name"));
 
                 settingRepository.save(settingEntity);
-                log.info("Saved setting to PostgreSQL: {} ({})", name, locationType);
+                log.debug("Saved setting to PostgreSQL: {} ({})", name, locationType);
             } catch (Exception e) {
                 log.error("Failed to save setting {}: {}", name, e.getMessage());
             }
@@ -861,13 +906,13 @@ public class AICallbackService {
     private void updateEmotions(Map<String, Object> result, String projectId) {
         Map<String, Object> emotionsData = (Map<String, Object>) result.get("emotions");
         if (emotionsData == null) {
-            log.info("No emotions to update");
+            log.debug("No emotions to update");
             return;
         }
 
         List<Map<String, Object>> neo4jUpdates = (List<Map<String, Object>>) emotionsData.get("neo4j_updates");
         if (neo4jUpdates == null || neo4jUpdates.isEmpty()) {
-            log.info("No neo4j emotion updates");
+            log.debug("No neo4j emotion updates");
             return;
         }
 
@@ -879,7 +924,8 @@ public class AICallbackService {
                 continue;
             }
 
-            Optional<Character> charOpt = characterRepository.findByNameAndProjectId(characterName, projectId);
+            Optional<Character> charOpt = characterRepository.findAllByNameAndProjectId(characterName, projectId)
+                    .stream().findFirst();
             if (charOpt.isPresent()) {
                 Character character = charOpt.get();
                 try {
@@ -966,7 +1012,7 @@ public class AICallbackService {
     private void savePlotIntegration(Map<String, Object> result, Project project, UUID documentId) {
         Map<String, Object> plotData = (Map<String, Object>) result.get("plot_integration");
         if (plotData == null) {
-            log.info("No plot_integration to save");
+            log.debug("No plot_integration to save");
             return;
         }
 
@@ -1018,7 +1064,7 @@ public class AICallbackService {
     private void saveConsistencyReport(Map<String, Object> result, Project project, String jobId) {
         Map<String, Object> reportData = (Map<String, Object>) result.get("consistency_report");
         if (reportData == null) {
-            log.info("No consistency_report to save");
+            log.debug("No consistency_report to save");
             return;
         }
 
@@ -1070,7 +1116,7 @@ public class AICallbackService {
     private void saveValidationResult(Map<String, Object> result, Project project, String jobId) {
         Map<String, Object> validationData = (Map<String, Object>) result.get("validation");
         if (validationData == null) {
-            log.info("No validation to save");
+            log.debug("No validation to save");
             return;
         }
 
@@ -1140,7 +1186,7 @@ public class AICallbackService {
 
         List<Map<String, Object>> foreshadowingList = (List<Map<String, Object>>) plotData.get("foreshadowing");
         if (foreshadowingList == null || foreshadowingList.isEmpty()) {
-            log.info("No foreshadowing to save");
+            log.debug("No foreshadowing to save");
             return;
         }
 
@@ -1177,7 +1223,7 @@ public class AICallbackService {
                 }
 
                 foreshadowingRepository.save(foreshadowing);
-                log.info("Saved foreshadowing: {} (confidence: {})", foreshadowId, confidence);
+                log.debug("Saved foreshadowing: {} (confidence: {})", foreshadowId, confidence);
             } catch (Exception e) {
                 log.error("Failed to save foreshadowing {}: {}", foreshadowId, e.getMessage());
             }
@@ -1248,7 +1294,7 @@ public class AICallbackService {
         if (callback.getEvents() != null && !callback.getEvents().isEmpty()) {
             java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
             tempResult.put("events", callback.getEvents());
-            saveEvents(tempResult, project);
+            saveEvents(tempResult, project, documentId);
         }
         if (callback.getSettings() != null && !callback.getSettings().isEmpty()) {
             java.util.Map<String, Object> tempResult = new java.util.HashMap<>();
@@ -1291,7 +1337,7 @@ public class AICallbackService {
     private void saveSections(com.stolink.backend.domain.document.entity.Document document,
             java.util.List<com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO.SectionDTO> sections) {
         if (sections == null || sections.isEmpty()) {
-            log.info("No sections to save for document: {}", document.getId());
+            log.debug("No sections to save for document: {}", document.getId());
             return;
         }
 

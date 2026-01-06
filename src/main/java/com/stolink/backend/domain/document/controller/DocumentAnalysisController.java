@@ -47,8 +47,15 @@ public class DocumentAnalysisController {
                 Document document = documentService.getDocument(userId, id);
 
                 // 2. AnalysisJob 생성 (AI 콜백에서 document_id로 조회할 수 있도록)
+                // 동일 jobId로 기존 Job이 있으면 삭제 후 새로 생성 (중복 방지)
+                String jobId = document.getId().toString();
+                analysisJobRepository.findByJobId(jobId).ifPresent(existingJob -> {
+                        log.info("기존 AnalysisJob 삭제: jobId={}", jobId);
+                        analysisJobRepository.delete(existingJob);
+                });
+
                 AnalysisJob job = AnalysisJob.builder()
-                                .jobId(document.getId().toString())
+                                .jobId(jobId)
                                 .project(document.getProject())
                                 .documentId(document.getId())
                                 .status(AnalysisJob.JobStatus.PENDING)

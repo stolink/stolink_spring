@@ -34,7 +34,7 @@ application.yml
 # FASTAPI*.md
 JOB*.md
 PROJECT*.md
-# *.json
+*.json
 SPRING*.md
 *.txt
 e2e*.py

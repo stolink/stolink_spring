@@ -19,6 +19,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 설정(장소/배경) 엔티티 (PostgreSQL)
@@ -27,6 +28,7 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "settings")
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -86,6 +88,13 @@ public class SettingEntity extends BaseEntity {
     // JSON field for complex data
     @Column(name = "static_objects_json", columnDefinition = "TEXT")
     private String staticObjectsJson;
+
+    // 추가 필드 (AI 콜백 완전 매핑용)
+    @Column(name = "parent_location", length = 100)
+    private String parentLocation;
+
+    @Column(name = "first_mentioned", length = 100)
+    private String firstMentioned;
 
     // --- 편의 메서드 ---
     public void updateDetails(String description, String visualPrompt, String visualBackground,

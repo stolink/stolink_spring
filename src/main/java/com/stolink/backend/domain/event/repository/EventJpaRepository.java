@@ -12,5 +12,8 @@ import com.stolink.backend.domain.project.entity.Project;
 public interface EventJpaRepository extends JpaRepository<EventEntity, UUID> {
     Optional<EventEntity> findByProjectAndName(Project project, String name);
 
+    // 중복 안전 조회
+    List<EventEntity> findAllByProjectAndName(Project project, String name);
+
     List<EventEntity> findByProject(Project project);
 }
