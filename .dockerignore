@@ -9,9 +9,10 @@
 *.ipr
 *.iws
 
-# Gradle build outputs (keep wrapper)
+# Gradle build outputs (keep wrapper and libs)
 .gradle
 build
+!build/libs
 
 # Documentation
 *.md
