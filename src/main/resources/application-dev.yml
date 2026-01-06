@@ -19,8 +19,10 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
-  # Production JPA settings
+  # Development JPA settings
   jpa:
+    hibernate:
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
