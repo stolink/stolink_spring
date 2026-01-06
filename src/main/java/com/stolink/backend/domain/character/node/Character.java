@@ -47,6 +47,10 @@ public class Character {
     // Image
     private String imageUrl;
 
+    // Graph position (for frontend layout persistence)
+    private Double positionX;
+    private Double positionY;
+
     // JSON fields for complex objects
     private String aliasesJson; // ["한채린", ...]
     private String profileJson; // Full profile object with faction.social

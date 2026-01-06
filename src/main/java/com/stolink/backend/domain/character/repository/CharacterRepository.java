@@ -59,4 +59,12 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         "CALL apoc.refactor.mergeNodes([p, m], {properties: 'discard', mergeRels: true}) YIELD node " +
                         "RETURN node")
         Character mergeNodes(@Param("primaryId") String primaryId, @Param("mergedId") String mergedId);
+
+        @Query("MATCH (c:Character {id: $characterId}) " +
+                        "SET c.positionX = $positionX, c.positionY = $positionY " +
+                        "RETURN c")
+        Character updatePosition(
+                        @Param("characterId") String characterId,
+                        @Param("positionX") Double positionX,
+                        @Param("positionY") Double positionY);
 }

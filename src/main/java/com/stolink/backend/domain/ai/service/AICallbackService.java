@@ -701,7 +701,7 @@ public class AICallbackService {
         // URL 수정 (minio -> localhost) - 로컬 환경 호환성
         String imageUrl = callback.getImageUrl();
         if (imageUrl != null && imageUrl.contains("minio:9000")) {
-            imageUrl = imageUrl.replace("minio:9000", "localhost:8080/media");
+            imageUrl = imageUrl.replace("minio:9000", "localhost:9000");
         }
 
         if ("FAILED".equals(callback.getStatus())) {
