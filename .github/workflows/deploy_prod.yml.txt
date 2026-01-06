@@ -1,0 +1,179 @@
+# =========================================================================
+# Deploy Production Workflow
+# =========================================================================
+# 🚨 프로덕션 서버 배포 시 아래 항목들을 변경해야 합니다:
+#
+# [GitHub Secrets 추가 필요]
+# - AWS_ROLE_SSMFULL_ARN_PROD: 프로덕션 계정의 SSM 권한 Role ARN
+# - POSTGRESQL_URL_PROD: 프로덕션 PostgreSQL 호스트
+# - POSTGRESQL_USERNAME_PROD: 프로덕션 PostgreSQL 사용자명
+# - POSTGRESQL_PASSWORD_PROD: 프로덕션 PostgreSQL 비밀번호
+# - NEO4J_URI_PROD: 프로덕션 Neo4j 호스트
+# - NEO4J_USERNAME_PROD: 프로덕션 Neo4j 사용자명
+# - NEO4J_PASSWORD_PROD: 프로덕션 Neo4j 비밀번호
+# - RABBITMQ_IMAGE_HOST_PROD: 프로덕션 RabbitMQ 호스트
+# - RABBITMQ_IMAGE_USER_PROD: 프로덕션 RabbitMQ 사용자명
+# - RABBITMQ_IMAGE_PASSWORD_PROD: 프로덕션 RabbitMQ 비밀번호
+# - ALB_DNS_NAME_PROD: 프로덕션 ALB DNS 이름
+# - GH_PAT_PROD: 프로덕션용 GitHub PAT (필요시)
+#
+# [GitHub Variables 추가 필요]
+# - AWS_REGION_PROD: 프로덕션 AWS 리전
+# - POSTGRESQL_PORT_PROD: 프로덕션 PostgreSQL 포트
+# - NEO4J_PORT_PROD: 프로덕션 Neo4j 포트
+# - RABBITMQ_IMAGE_PORT_PROD: 프로덕션 RabbitMQ 포트
+# - RABBITMQ_IMAGE_VHOST_PROD: 프로덕션 RabbitMQ vHost
+# - CLOUDFRONT_URL_PROD: 프로덕션 CloudFront 도메인
+#
+# [코드 내 변경 필요]
+# - Line 107: EC2 태그 값 (stolink-spring-prod -> 실제 프로덕션 서버 태그)
+# - Line 109: Git 브랜치 (main -> 프로덕션 배포 브랜치)
+# =========================================================================
+
+name: Deploy Production
+
+on:
+  push:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  packages: write
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run tests
+        run: ./gradlew test
+
+  build-and-push:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build -x test
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/stolink/stolink-spring
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: [test, build-and-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_SSMFULL_ARN_PROD }}
+          aws-region: ${{ vars.AWS_REGION_PROD }}
+
+      - name: Deploy to EC2 via SSM
+        run: |
+          aws ssm send-command \
+            --document-name "AWS-RunShellScript" \
+            --targets "Key=tag:tag,Values=stolink-spring-prod" \
+            --parameters 'commands=[
+              "sudo -i -u ubuntu bash -c '\''mkdir -p /home/ubuntu/stolink-project && cd /home/ubuntu/stolink-project'\''",
+              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout main && git pull origin main; else git clone -b main https://github.com/stolink/stolink_spring.git .; fi'\''",
+              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && printf \"POSTGRESQL_URL=${{ secrets.POSTGRESQL_URL }}\\nPOSTGRESQL_USERNAME=${{ secrets.POSTGRESQL_USERNAME }}\\nPOSTGRESQL_PASSWORD=${{ secrets.POSTGRESQL_PASSWORD }}\\nPOSTGRESQL_PORT=${{ vars.POSTGRESQL_PORT }}\\nNEO4J_URI=${{ secrets.NEO4J_URI }}\\nNEO4J_USERNAME=${{ secrets.NEO4J_USERNAME }}\\nNEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}\\nNEO4J_PORT=${{ vars.NEO4J_PORT }}\\nRABBITMQ_IMAGE_HOST=${{ secrets.RABBITMQ_IMAGE_HOST }}\\nRABBITMQ_IMAGE_PORT=${{ vars.RABBITMQ_IMAGE_PORT }}\\nRABBITMQ_IMAGE_VHOST=${{ vars.RABBITMQ_IMAGE_VHOST }}\\nRABBITMQ_IMAGE_USER=${{ secrets.RABBITMQ_IMAGE_USER }}\\nRABBITMQ_IMAGE_PASSWORD=${{ secrets.RABBITMQ_IMAGE_PASSWORD }}\\nAPP_AI_CALLBACK_BASE_URL=http://${{ secrets.ALB_DNS_NAME }}/api/internal/ai\\nIMAGE_NAME=ghcr.io/stolink/stolink-spring:latest\\nJWT_SECRET=${{ secrets.JWT_SECRET_PROD }}\\nCORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5174,https://${{ vars.CLOUDFRONT_URL }},https://${{ vars.CLOUDFRONT_URL }}\\nOAUTH2_REDIRECT_URI=${{ vars.OAUTH2_REDIRECT_URI_PROD }}\\nGOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID_PROD }}\\nGOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET_PROD }}\\nJWT_COOKIE_DOMAIN=${{ vars.JWT_COOKIE_DOMAIN_PROD }}\\nJWT_COOKIE_SECURE=true\\n\" > .env'\''",
+              "sudo -i -u ubuntu bash -c '\''cd /home/ubuntu/stolink-project && echo ${{ secrets.GH_PAT }} | sudo docker login ghcr.io -u stolink --password-stdin && sudo docker compose down --remove-orphans && sudo docker compose up -d --pull always && sudo docker image prune -f'\''"
+            ]' \
+            --timeout-seconds 300 \
+            --max-concurrency "50%" \
+            --max-errors "0" \
+            --output text
+
+      - name: Health Check
+        run: |
+          echo "Waiting for application to start..."
+          sleep 30
+
+          HEALTH_URL="https://${{ vars.CLOUDFRONT_URL_PROD }}/actuator/health"
+          echo "Health check URL: $HEALTH_URL"
+
+          for i in {1..5}; do
+            echo "Health check attempt $i/5..."
+            HTTP_CODE=$(curl -s -o /tmp/health_response.txt -w "%{http_code}" --max-time 10 "$HEALTH_URL" 2>&1)
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Health check passed!"
+              cat /tmp/health_response.txt
+              exit 0
+            fi
+            
+            echo "❌ Attempt $i failed with HTTP code: $HTTP_CODE"
+            echo "Response body:"
+            cat /tmp/health_response.txt 2>/dev/null || echo "(no response body)"
+            echo ""
+            echo "Retrying in 10 seconds..."
+            sleep 10
+          done
+
+          echo "❌ Health check failed after 5 attempts"
+          echo "Last HTTP code: $HTTP_CODE"
+          exit 1
