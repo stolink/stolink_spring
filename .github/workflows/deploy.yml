@@ -78,6 +78,13 @@ jobs:
     # 브랜치에 따라 환경 자동 선택
     environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
     steps:
+      - name: Checkout (for docker-compose.yml only)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            docker-compose.yml
+          sparse-checkout-cone-mode: false
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -115,7 +122,6 @@ jobs:
           # 브랜치에 따라 프로파일 및 이미지 태그 결정
           SPRING_PROFILE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
           IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev-latest' }}
-          GIT_BRANCH: ${{ github.ref == 'refs/heads/main' && 'main' || 'dev' }}
           # 운영 환경에서는 localhost 제외 (보안 강화)
           CORS_ORIGINS: ${{ github.ref == 'refs/heads/main' && format('https://{0}', vars.CLOUDFRONT_URL) || format('http://localhost:3000,http://localhost:5173,http://localhost:5174,https://{0}', vars.CLOUDFRONT_URL) }}
           # JWT 쿠키 도메인 및 OAuth2 리다이렉트 URI
@@ -153,8 +159,12 @@ jobs:
           STOREAD_SPRING_SERVICE_KEY=${STOREAD_SPRING_SERVICE_KEY}
           SPRING_PROFILES_ACTIVE=${SPRING_PROFILE}"
 
+          # docker-compose.yml 내용 읽기
+          COMPOSE_CONTENT=$(cat docker-compose.yml)
+
           # Base64로 인코딩하여 SSM으로 전달 (특수문자 이스케이프 문제 해결)
           ENV_BASE64=$(echo "$ENV_CONTENT" | base64 -w 0)
+          COMPOSE_BASE64=$(echo "$COMPOSE_CONTENT" | base64 -w 0)
 
           # SSM 명령 실행 및 Command ID 캡처
           # dev 브랜치: dev-stolink-spring 태그, main 브랜치: stolink-spring 태그
@@ -165,8 +175,8 @@ jobs:
             --targets "Key=tag:tag,Values=${EC2_TAG}" \
             --parameters "commands=[
               \"sudo -i -u ubuntu bash -c 'mkdir -p /home/ubuntu/stolink-project'\",
-              \"sudo -i -u ubuntu bash -c 'cd /home/ubuntu/stolink-project && if [ -d .git ]; then git fetch origin && git checkout ${GIT_BRANCH} && git pull origin ${GIT_BRANCH}; else git clone -b ${GIT_BRANCH} https://github.com/stolink/stolink_spring.git .; fi'\",
               \"sudo rm -f /home/ubuntu/stolink-project/.env && echo '${ENV_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-project/.env > /dev/null\",
+              \"sudo rm -f /home/ubuntu/stolink-project/docker-compose.yml && echo '${COMPOSE_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-project/docker-compose.yml > /dev/null\",
               \"sudo -i -u ubuntu bash -c 'cd /home/ubuntu/stolink-project && echo ${GH_PAT} | sudo docker login ghcr.io -u stolink --password-stdin && sudo docker compose down --remove-orphans && sudo docker compose up -d --pull always && sudo docker image prune -f'\"
             ]" \
             --timeout-seconds 300 \
