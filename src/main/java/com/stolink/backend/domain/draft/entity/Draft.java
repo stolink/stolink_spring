@@ -7,6 +7,7 @@ import lombok.*;
 import org.hibernate.annotations.Type;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -26,10 +27,21 @@ public class Draft {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column
+    // 기존 단일 Document ID (하위 호환성 유지, deprecated)
+    @Column(name = "document_id")
     private String documentId;
 
-    @Column
+    // 다중 Document ID 배열 (신규 Bulk 배포용)
+    @Type(JsonType.class)
+    @Column(name = "document_ids", columnDefinition = "jsonb")
+    private List<String> documentIds;
+
+    // 병합 배포 여부 (true: 여러 섹션을 하나의 에피소드로 병합)
+    @Column(name = "is_merged")
+    @Builder.Default
+    private Boolean isMerged = false;
+
+    @Column(name = "project_id")
     private String projectId;
 
     @Column(length = 255)
@@ -77,6 +89,19 @@ public class Draft {
         this.publishStatus = PublishStatus.PUBLISHED;
     }
 
+    /**
+     * 호환성 레이어: documentIds 조회 시 기존 documentId도 포함하여 반환
+     * - documentIds가 있으면 그대로 반환
+     * - documentIds가 없으면 기존 documentId를 배열로 변환하여 반환
+     */
+    public List<String> getAllDocumentIds() {
+        if (documentIds != null && !documentIds.isEmpty()) {
+            return documentIds;
+        }
+        // 하위 호환성: 기존 documentId를 배열로 변환
+        return documentId != null ? List.of(documentId) : List.of();
+    }
+
     @Column(nullable = false, updatable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -92,4 +117,3 @@ public class Draft {
         FAILED
     }
 }
-
