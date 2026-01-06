@@ -35,6 +35,11 @@ import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import com.stolink.backend.domain.ai.dto.AnalysisRequestDTO;
+import jakarta.validation.Valid;
+
+// ... (existing imports)
+
 @Slf4j
 @RestController
 @RequestMapping("/api")
@@ -58,13 +63,13 @@ public class AIController {
         @ResponseStatus(HttpStatus.ACCEPTED)
         public ApiResponse<Map<String, String>> analyze(
                         @AuthenticationPrincipal UUID userId,
-                        @RequestBody Map<String, Object> request) {
+                        @Valid @RequestBody AnalysisRequestDTO request) {
 
                 String jobId = UUID.randomUUID().toString();
                 String traceId = generateTraceId();
 
-                UUID projectId = UUID.fromString((String) request.get("projectId"));
-                UUID documentId = UUID.fromString((String) request.get("documentId"));
+                UUID projectId = request.getProjectId();
+                UUID documentId = request.getDocumentId();
 
                 // Project 조회
                 Project project = projectRepository.findById(projectId)
@@ -82,19 +87,26 @@ public class AIController {
                 log.info("Created analysis job: {}", jobId);
 
                 // Context 빌드 (선택적)
-                AnalysisContext context = buildContext(request);
+                AnalysisContext context = buildContext(request.getContext());
 
                 AnalysisTaskDTO task = AnalysisTaskDTO.builder()
                                 .jobId(jobId)
                                 .projectId(projectId)
                                 .documentId(documentId)
-                                .content((String) request.get("content"))
+                                .content(request.getContent())
                                 .callbackUrl(callbackBaseUrl)
                                 .traceId(traceId)
                                 .context(context)
                                 .build();
 
-                producerService.sendAnalysisTask(task);
+                try {
+                    producerService.sendAnalysisTask(task);
+                } catch (Exception e) {
+                    log.error("Failed to send analysis task: {}", e.getMessage(), e);
+                    job.markAsFailed(e.getMessage());
+                    analysisJobRepository.save(job);
+                    throw e; // GlobalExceptionHandler will handle it, or return specific error response
+                }
 
                 // Job 상태를 PROCESSING으로 업데이트
                 job.markAsProcessing();
@@ -288,9 +300,7 @@ public class AIController {
         /**
          * Context 빌드 (요청에서 추출)
          */
-        @SuppressWarnings("unchecked")
-        private AnalysisContext buildContext(Map<String, Object> request) {
-                Map<String, Object> contextMap = (Map<String, Object>) request.get("context");
+        private AnalysisContext buildContext(Map<String, Object> contextMap) {
                 if (contextMap == null) {
                         return null;
                 }

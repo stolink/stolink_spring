@@ -82,9 +82,14 @@ public class AuthService {
         String refreshTokenStr = request.getRefreshToken();
 
         // 1. RDB에서 Refresh Token 조회
-        log.debug("Attempting to refresh token: {}", refreshTokenStr);
+        log.debug("Attempting to refresh token. Received token length: {}",
+                refreshTokenStr != null ? refreshTokenStr.length() : 0);
+
         RefreshToken storedToken = refreshTokenRepository.findByToken(refreshTokenStr)
-                .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 refresh token입니다."));
+                .orElseThrow(() -> {
+                    log.error("Refresh token NOT found in database: {}", refreshTokenStr);
+                    return new IllegalArgumentException("유효하지 않은 refresh token입니다.");
+                });
 
         // 2. 만료 여부 확인
         if (storedToken.isExpired()) {
@@ -159,6 +164,8 @@ public class AuthService {
                 .expiresAt(expiresAt)
                 .build();
 
+        log.debug("Saving new refresh token for user {}. Token summary: {}...",
+                user.getEmail(), refreshTokenStr.substring(0, Math.min(refreshTokenStr.length(), 10)));
         refreshTokenRepository.save(refreshToken);
     }
 

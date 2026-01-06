@@ -36,6 +36,7 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
+            redirect-uri: "{baseUrl}/api/login/oauth2/code/{registrationId}"
             scope: email, profile
 
 # JWT Configuration
@@ -66,18 +67,18 @@ app:
     image:
       host: ${RABBITMQ_IMAGE_HOST:localhost}
       port: ${RABBITMQ_IMAGE_PORT:5672}
-      username: ${RABBITMQ_IMAGE_USERNAME:guest}
-      password: ${RABBITMQ_IMAGE_PASSWORD:guest}
+      username: ${RABBITMQ_IMAGE_USERNAME:stolink}
+      password: ${RABBITMQ_IMAGE_PASSWORD:stolink123}
       virtual-host: ${RABBITMQ_IMAGE_VHOST:stolink}
     # Agent RabbitMQ (분석용)
     agent:
       host: ${SPRING_RABBITMQ_HOST:localhost}
       port: ${SPRING_RABBITMQ_PORT:5672}
-      username: ${SPRING_RABBITMQ_USERNAME:guest}
-      password: ${SPRING_RABBITMQ_PASSWORD:guest}
+      username: ${SPRING_RABBITMQ_USERNAME:stolink}
+      password: ${SPRING_RABBITMQ_PASSWORD:stolink123}
       virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:stolink}
   ai:
-    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://stolink-backend:8080/api/internal/ai/analysis/callback}
+    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://host.docker.internal:8080/api/internal/ai/analysis/callback}
   callback:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:

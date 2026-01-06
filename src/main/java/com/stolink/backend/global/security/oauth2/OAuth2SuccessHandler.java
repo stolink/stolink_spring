@@ -53,28 +53,49 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 String accessToken = jwtTokenProvider.createAccessToken(userId);
                 String refreshToken = jwtTokenProvider.createRefreshToken(userId);
 
-                log.info("OAuth2 login success. Issuing JWT for user: {}", userId);
+                log.info("OAuth2 login success. Issuing tokens for user: {}", userId);
 
-                // Refresh Token을 RDB에 저장 (중요: 이 단계가 없으면 /refresh 시 400 에러 발생)
+                // Refresh Token을 RDB에 저장
                 authService.saveRefreshToken(userId, refreshToken);
+                log.debug("Refresh token saved for user: {}", userId);
 
-                // Refresh Token을 HttpOnly 쿠키로 설정
-                ResponseCookie cookie = ResponseCookie.from("refresh_token", refreshToken)
+                ResponseCookie.ResponseCookieBuilder cookieBuilder = ResponseCookie.from("refresh_token", refreshToken)
                                 .httpOnly(true)
                                 .secure(cookieSecure)
                                 .path("/")
-                                .domain(cookieDomain)
                                 .maxAge(7 * 24 * 60 * 60)
-                                .sameSite("Lax")
-                                .build();
+                                .sameSite("Lax");
 
-                response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, cookie.toString());
+                // localhost 환경에서는 domain 설정을 생략하는 것이 호환성에 좋음
+                if (cookieDomain != null && !cookieDomain.isEmpty() && !cookieDomain.contains("localhost")) {
+                        cookieBuilder.domain(cookieDomain);
+                }
 
-                // 프론트엔드로 리다이렉트 (임시 원복: 프론트엔드 호환성을 위해 Query Param 사용)
-                // TODO: 프론트엔드 수정 후 보안 강화를 위해 Fragment 방식으로 전환 필요
+                ResponseCookie refreshCookie = cookieBuilder.build();
+                log.debug("Refresh-Cookie created: {}", refreshCookie.toString());
+
+                // Access Token을 쿠키로 설정
+                ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("access_token", accessToken)
+                                .httpOnly(true)
+                                .secure(cookieSecure)
+                                .path("/")
+                                .maxAge(jwtTokenProvider.getAccessTokenExpirySeconds())
+                                .sameSite("Lax");
+
+                if (cookieDomain != null && !cookieDomain.isEmpty() && !cookieDomain.contains("localhost")) {
+                        accessCookieBuilder.domain(cookieDomain);
+                }
+                ResponseCookie accessCookie = accessCookieBuilder.build();
+                log.debug("Access-Cookie created: {}", accessCookie.toString());
+
+                response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, refreshCookie.toString());
+                response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, accessCookie.toString());
+
+                // 프론트엔드로 리다이렉트 (success=true만 전달)
+                // refresh_token은 쿠키로 설정됨
+                // 프론트엔드는 /api/auth/refresh 호출하여 accessToken 발급받아야 함
                 String targetUrl = UriComponentsBuilder.fromUriString(redirectUri)
-                                .queryParam("accessToken", accessToken)
-                                .queryParam("expiresIn", jwtTokenProvider.getAccessTokenExpirySeconds())
+                                .queryParam("success", "true")
                                 .build().toUriString();
 
                 getRedirectStrategy().sendRedirect(request, response, targetUrl);

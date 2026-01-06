@@ -66,8 +66,8 @@ public class SecurityConfig {
                                                                 "/api/auth/login",
                                                                 "/api/auth/refresh",
                                                                 "/api/auth/logout",
-                                                                "/oauth2/**",
-                                                                "/login/oauth2/**",
+                                                                "/api/oauth2/**",
+                                                                "/api/login/oauth2/**",
                                                                 "/actuator/health",
                                                                 "/actuator/info",
                                                                 "/api/internal/**",
@@ -82,9 +82,12 @@ public class SecurityConfig {
                                 // OAuth2 로그인 설정
                                 .oauth2Login(oauth2 -> oauth2
                                                 .authorizationEndpoint(endpoint -> endpoint
+                                                                .baseUri("/api/oauth2/authorization")
                                                                 .authorizationRequestResolver(
                                                                                 customAuthorizationRequestResolver(
                                                                                                 clientRegistrationRepository)))
+                                                .redirectionEndpoint(endpoint -> endpoint
+                                                                .baseUri("/api/login/oauth2/code/*"))
                                                 .userInfoEndpoint(userInfo -> userInfo
                                                                 .userService(customOAuth2UserService))
                                                 .successHandler(oAuth2SuccessHandler))
@@ -104,7 +107,7 @@ public class SecurityConfig {
                         org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository) {
 
                 org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver = new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
-                                clientRegistrationRepository, "/oauth2/authorization");
+                                clientRegistrationRepository, "/api/oauth2/authorization");
 
                 resolver.setAuthorizationRequestCustomizer(builder -> builder
                                 .additionalParameters(params -> params.remove("prompt")));

@@ -20,9 +20,13 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthService authService;
+    private final com.stolink.backend.global.security.jwt.JwtTokenProvider jwtTokenProvider;
 
     @Value("${jwt.cookie-domain}")
     private String cookieDomain;
+
+    @Value("${jwt.cookie-secure:false}")
+    private boolean cookieSecure;
 
     /**
      * 일반 회원가입
@@ -30,10 +34,12 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<TokenResponse>> register(@RequestBody RegisterRequest request) {
         TokenResponse token = authService.register(request);
-        ResponseCookie cookie = createRefreshTokenCookie(token.getRefreshToken());
+        ResponseCookie refreshCookie = createRefreshTokenCookie(token.getRefreshToken());
+        ResponseCookie accessCookie = createAccessTokenCookie(token.getAccessToken());
 
         return ResponseEntity.status(HttpStatus.CREATED)
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .body(ApiResponse.created(token));
     }
 
@@ -43,10 +49,12 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<TokenResponse>> login(@RequestBody LoginRequest request) {
         TokenResponse token = authService.login(request);
-        ResponseCookie cookie = createRefreshTokenCookie(token.getRefreshToken());
+        ResponseCookie refreshCookie = createRefreshTokenCookie(token.getRefreshToken());
+        ResponseCookie accessCookie = createAccessTokenCookie(token.getAccessToken());
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .body(ApiResponse.ok(token));
     }
 
@@ -65,10 +73,12 @@ public class AuthController {
         request.setRefreshToken(refreshToken);
 
         TokenResponse token = authService.refreshToken(request);
-        ResponseCookie cookie = createRefreshTokenCookie(token.getRefreshToken());
+        ResponseCookie refreshCookie = createRefreshTokenCookie(token.getRefreshToken());
+        ResponseCookie accessCookie = createAccessTokenCookie(token.getAccessToken());
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookie.toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookie.toString())
                 .body(ApiResponse.ok(token));
     }
 
@@ -82,17 +92,28 @@ public class AuthController {
             authService.logout(refreshToken);
         }
 
-        ResponseCookie cookie = ResponseCookie.from("refresh_token", "")
+        ResponseCookie.ResponseCookieBuilder refreshCookieBuilder = ResponseCookie.from("refresh_token", "")
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure)
                 .path("/")
-                .domain(cookieDomain) // SSO Domain
                 .maxAge(0) // 즉시 만료
-                .sameSite("Lax")
-                .build();
+                .sameSite("Lax");
+
+        ResponseCookie.ResponseCookieBuilder accessCookieBuilder = ResponseCookie.from("access_token", "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .path("/")
+                .maxAge(0) // 즉시 만료
+                .sameSite("Lax");
+
+        if (cookieDomain != null && !cookieDomain.isEmpty() && !cookieDomain.contains("localhost")) {
+            refreshCookieBuilder.domain(cookieDomain);
+            accessCookieBuilder.domain(cookieDomain);
+        }
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
+                .header(HttpHeaders.SET_COOKIE, refreshCookieBuilder.build().toString())
+                .header(HttpHeaders.SET_COOKIE, accessCookieBuilder.build().toString())
                 .body(ApiResponse.ok(null));
     }
 
@@ -127,13 +148,32 @@ public class AuthController {
     }
 
     private ResponseCookie createRefreshTokenCookie(String refreshToken) {
-        return ResponseCookie.from("refresh_token", refreshToken)
+        ResponseCookie.ResponseCookieBuilder cookieBuilder = ResponseCookie.from("refresh_token", refreshToken)
                 .httpOnly(true)
-                .secure(true) // HTTPS or Localhost
+                .secure(cookieSecure)
                 .path("/")
-                .domain(cookieDomain) // SSO Domain
-                .maxAge(7 * 24 * 60 * 60) // 7 days (match with property)
-                .sameSite("Lax")
-                .build();
+                .maxAge(7 * 24 * 60 * 60) // 7 days
+                .sameSite("Lax");
+
+        if (cookieDomain != null && !cookieDomain.isEmpty() && !cookieDomain.contains("localhost")) {
+            cookieBuilder.domain(cookieDomain);
+        }
+
+        return cookieBuilder.build();
+    }
+
+    private ResponseCookie createAccessTokenCookie(String accessToken) {
+        ResponseCookie.ResponseCookieBuilder cookieBuilder = ResponseCookie.from("access_token", accessToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .path("/")
+                .maxAge(jwtTokenProvider.getAccessTokenExpirySeconds())
+                .sameSite("Lax");
+
+        if (cookieDomain != null && !cookieDomain.isEmpty() && !cookieDomain.contains("localhost")) {
+            cookieBuilder.domain(cookieDomain);
+        }
+
+        return cookieBuilder.build();
     }
 }
