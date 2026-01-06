@@ -30,6 +30,8 @@ public class DocumentResponse {
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    // 커뮤니티(Storead) 게시 완료 여부 - 프론트엔드에서 배포 상태 표시 및 선택 비활성화에 사용
+    private Boolean isPublished;
 
     public static DocumentResponse from(Document document) {
         return DocumentResponse.builder()
@@ -53,6 +55,7 @@ public class DocumentResponse {
                 .notes(document.getNotes())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
+                .isPublished(document.getIsPublished())
                 .build();
     }
 }

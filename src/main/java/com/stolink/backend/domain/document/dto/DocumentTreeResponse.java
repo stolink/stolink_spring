@@ -36,6 +36,8 @@ public class DocumentTreeResponse {
     private String notes;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    // 커뮤니티(Storead) 게시 완료 여부
+    private Boolean isPublished;
     @Builder.Default
     private List<DocumentTreeResponse> children = new ArrayList<>();
 
@@ -68,6 +70,7 @@ public class DocumentTreeResponse {
                 .notes(document.getNotes())
                 .createdAt(document.getCreatedAt())
                 .updatedAt(document.getUpdatedAt())
+                .isPublished(document.getIsPublished())
                 .build();
     }
 }
