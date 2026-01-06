@@ -22,4 +22,23 @@ public class Share extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "project_id", nullable = false, unique = true)
     private Project project;
+
+    @Column
+    private String passwordHash;
+
+    @Column
+    private java.time.LocalDateTime expiresAt;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer viewCount = 0;
+
+    public void updateSettings(String passwordHash, java.time.LocalDateTime expiresAt) {
+        this.passwordHash = passwordHash;
+        this.expiresAt = expiresAt;
+    }
+
+    public void incrementViewCount() {
+        this.viewCount = (this.viewCount == null ? 0 : this.viewCount) + 1;
+    }
 }

@@ -28,6 +28,7 @@ public class ShareService {
     private final ShareRepository shareRepository;
     private final ProjectRepository projectRepository;
     private final DocumentRepository documentRepository;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     public ShareResponse getShareSettings(UUID userId, UUID projectId) {
         Share share = shareRepository.findByProjectIdWithUser(projectId)
@@ -37,16 +38,23 @@ public class ShareService {
             throw new ResourceNotFoundException("Project not found");
         }
 
-        return ShareResponse.builder()
-                .shareId(share.getId())
-                .projectId(projectId)
-                .build();
+        return ShareResponse.from(share);
     }
 
     @Transactional
-    public ShareResponse createShareLink(UUID userId, UUID projectId) {
+    public ShareResponse createShareLink(UUID userId, UUID projectId, com.stolink.backend.domain.share.dto.CreateShareRequest request) {
         // Try to find existing share with project and user in one query
         Share share = shareRepository.findByProjectIdWithUser(projectId).orElse(null);
+
+        String passwordHash = null;
+        if (request.getPassword() != null && !request.getPassword().isBlank()) {
+            passwordHash = passwordEncoder.encode(request.getPassword());
+        }
+
+        java.time.LocalDateTime expiresAt = null;
+        if (request.getExpiresIn() != null) {
+            expiresAt = calculateExpiry(request.getExpiresIn());
+        }
 
         if (share == null) {
             // Only fetch project if share doesn't exist
@@ -59,6 +67,8 @@ public class ShareService {
 
             share = Share.builder()
                     .project(project)
+                    .passwordHash(passwordHash)
+                    .expiresAt(expiresAt)
                     .build();
             shareRepository.save(share);
         } else {
@@ -66,13 +76,21 @@ public class ShareService {
             if (!share.getProject().getUser().getId().equals(userId)) {
                 throw new ResourceNotFoundException("Project not found");
             }
-            // Share already exists, just return it
+            // Update existing share settings
+            share.updateSettings(passwordHash, expiresAt);
         }
 
-        return ShareResponse.builder()
-                .shareId(share.getId())
-                .projectId(projectId)
-                .build();
+        return ShareResponse.from(share);
+    }
+
+    private java.time.LocalDateTime calculateExpiry(String expiresIn) {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        if ("7d".equals(expiresIn)) {
+            return now.plusDays(7);
+        } else if ("30d".equals(expiresIn)) {
+            return now.plusDays(30);
+        }
+        return null;
     }
 
     @Transactional
@@ -87,9 +105,25 @@ public class ShareService {
         shareRepository.delete(share);
     }
 
-    public SharedProjectResponse getSharedProject(UUID shareId) {
+    @Transactional
+    public SharedProjectResponse getSharedProject(UUID shareId, String password) {
         Share share = shareRepository.findById(shareId)
-                .orElseThrow(() -> new ResourceNotFoundException("Share link not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Share link not found", "id", shareId));
+
+        // 1. 만료 확인
+        if (share.getExpiresAt() != null && share.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.GONE, "Share link has expired");
+        }
+
+        // 2. 비밀번호 확인
+        if (share.getPasswordHash() != null) {
+            if (password == null || !passwordEncoder.matches(password, share.getPasswordHash())) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid password");
+            }
+        }
+
+        // 3. 조회수 증가
+        share.incrementViewCount();
 
         Project project = share.getProject();
         List<Document> allDocuments = documentRepository.findByProjectWithParent(project);

@@ -28,6 +28,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import com.stolink.backend.global.sse.SseEmitterService;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.http.MediaType;
 import java.util.UUID;
 
 @Slf4j
@@ -42,6 +45,7 @@ public class AIController {
         private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
         private final ProjectRepository projectRepository;
         private final ObjectMapper objectMapper;
+        private final SseEmitterService sseEmitterService;
 
         @Value("${app.ai.callback-base-url}")
         private String callbackBaseUrl;
@@ -49,59 +53,100 @@ public class AIController {
         /**
          * AI 분석 요청
          */
+        /**
+         * 작업별 전용 스트림 (프론트엔드 호환용)
+         */
+        @GetMapping(value = "/ai/jobs/{jobId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+        public SseEmitter streamJobStatus(@PathVariable String jobId) {
+                log.info("SSE stream requested for job: {}", jobId);
+                AnalysisJob job = analysisJobRepository.findByJobId(jobId)
+                                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+                return sseEmitterService.createEmitter(job.getProject().getId());
+        }
+
         @PostMapping("/ai/analyze")
         @ResponseStatus(HttpStatus.ACCEPTED)
-        public ApiResponse<Map<String, String>> analyze(
+        @SuppressWarnings("unchecked")
+        public ApiResponse<Map<String, Object>> analyze(
                         @AuthenticationPrincipal UUID userId,
                         @RequestBody Map<String, Object> request) {
 
-                String jobId = UUID.randomUUID().toString();
-                String traceId = generateTraceId();
+                log.info("Analyze request body: {}", request);
 
-                UUID projectId = UUID.fromString((String) request.get("projectId"));
-                UUID documentId = UUID.fromString((String) request.get("documentId"));
+                Object projectIdObj = request.get("projectId");
+                if (projectIdObj == null) {
+                        throw new IllegalArgumentException("projectId is required");
+                }
 
-                // Project 조회
+                UUID projectId = UUID.fromString(projectIdObj.toString());
                 Project project = projectRepository.findById(projectId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
 
-                // Job 생성 및 저장
-                AnalysisJob job = AnalysisJob.builder()
-                                .jobId(jobId)
-                                .project(project)
-                                .documentId(documentId)
-                                .traceId(traceId)
-                                .status(AnalysisJob.JobStatus.PENDING)
-                                .build();
-                analysisJobRepository.save(job);
-                log.info("Created analysis job: {}", jobId);
+                // documentId (단일) 또는 documentIds (리스트) 처리
+                java.util.List<UUID> documentIds = new java.util.ArrayList<>();
+                if (request.containsKey("documentId") && request.get("documentId") != null) {
+                        documentIds.add(UUID.fromString(request.get("documentId").toString()));
+                } else if (request.containsKey("documentIds") && request.get("documentIds") instanceof java.util.List) {
+                        java.util.List<String> ids = (java.util.List<String>) request.get("documentIds");
+                        for (String id : ids) {
+                                documentIds.add(UUID.fromString(id));
+                        }
+                }
 
-                // Context 빌드 (선택적)
+                if (documentIds.isEmpty()) {
+                        throw new IllegalArgumentException("documentId or documentIds is required");
+                }
+
+                log.info("Processing analysis for {} documents", documentIds.size());
+
+                String firstJobId = null;
+                String traceId = generateTraceId();
                 AnalysisContext context = buildContext(request);
+                String content = (String) request.get("content");
 
-                AnalysisTaskDTO task = AnalysisTaskDTO.builder()
-                                .jobId(jobId)
-                                .projectId(projectId)
-                                .documentId(documentId)
-                                .content((String) request.get("content"))
-                                .callbackUrl(callbackBaseUrl + "/ai-callback")
-                                .traceId(traceId)
-                                .context(context)
-                                .build();
+                for (UUID documentId : documentIds) {
+                        String jobId = UUID.randomUUID().toString();
+                        if (firstJobId == null)
+                                firstJobId = jobId;
 
-                producerService.sendAnalysisTask(task);
+                        // Job 생성 및 저장
+                        AnalysisJob job = AnalysisJob.builder()
+                                        .jobId(jobId)
+                                        .project(project)
+                                        .documentId(documentId)
+                                        .traceId(traceId)
+                                        .status(AnalysisJob.JobStatus.PENDING)
+                                        .build();
+                        analysisJobRepository.save(job);
 
-                // Job 상태를 PROCESSING으로 업데이트
-                job.markAsProcessing();
-                analysisJobRepository.save(job);
+                        AnalysisTaskDTO task = AnalysisTaskDTO.builder()
+                                        .jobId(jobId)
+                                        .projectId(projectId)
+                                        .documentId(documentId)
+                                        .content(content)
+                                        .callbackUrl(callbackBaseUrl + "/internal/ai/analysis/callback")
+                                        .traceId(traceId)
+                                        .context(context)
+                                        .build();
 
-                log.info("Analysis request sent: jobId={}, traceId={}", jobId, traceId);
+                        producerService.sendAnalysisTask(task);
 
-                return ApiResponse.<Map<String, String>>builder()
+                        // Job 상태를 PROCESSING으로 업데이트
+                        job.markAsProcessing();
+                        analysisJobRepository.save(job);
+                        log.info("Analysis request sent: jobId={}, documentId={}", jobId, documentId);
+                }
+
+                return ApiResponse.<Map<String, Object>>builder()
                                 .status(HttpStatus.ACCEPTED)
-                                .message("Analysis started")
+                                .message("Analysis started for " + documentIds.size() + " documents")
                                 .data(Map.of(
-                                                "jobId", jobId,
+                                                "jobId", firstJobId,
+                                                "jobIds", documentIds.stream().map(Object::toString).toList(), // This
+                                                                                                               // is
+                                                                                                               // just
+                                                                                                               // for
+                                                                                                               // info
                                                 "traceId", traceId,
                                                 "status", "processing"))
                                 .build();
@@ -120,55 +165,8 @@ public class AIController {
                                 "projectId", job.getProject().getId().toString(),
                                 "status", job.getStatus().name(),
                                 "traceId", job.getTraceId() != null ? job.getTraceId() : "",
+                                "documentId", job.getDocumentId() != null ? job.getDocumentId().toString() : "",
                                 "processingTimeMs", job.getProcessingTimeMs() != null ? job.getProcessingTimeMs() : 0));
-        }
-
-        /**
-         * /**
-         * AI Callback 엔드포인트 (Python → Spring)
-         *
-         * message_type 필드로 분기하여 처리합니다:
-         * - DOCUMENT_ANALYSIS_RESULT: 1차 Pass 문서별 분석 결과
-         * - GLOBAL_MERGE_RESULT: 2차 Pass 캐릭터 병합 결과
-         * - 그 외: 기존 FULL_DOCUMENT 분석 결과
-         */
-        @PostMapping("/ai-callback")
-        public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
-                try {
-                        JsonNode root = objectMapper.readTree(rawPayload);
-                        String messageType = root.path("message_type").asText(null);
-
-                        log.info("Received AI callback, message_type: {}", messageType);
-
-                        if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
-                                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                DocumentAnalysisCallbackDTO.class);
-                                callbackService.handleDocumentAnalysisCallback(callback);
-                                log.info("Document analysis callback processed for document: {}",
-                                                callback.getDocumentId());
-
-                        } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
-                                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                GlobalMergeCallbackDTO.class);
-                                callbackService.handleGlobalMergeCallback(callback);
-                                log.info("Global merge callback processed for project: {}", callback.getProjectId());
-
-                        } else {
-                                // 기존 FULL_DOCUMENT 분석 결과 또는 message_type 없는 경우
-                                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                AnalysisCallbackDTO.class);
-                                callbackService.handleAnalysisCallback(callback);
-                                log.info("Legacy analysis callback processed for job: {}", callback.getJobId());
-                        }
-
-                        return ApiResponse.ok();
-                } catch (JsonProcessingException e) {
-                        log.error("Failed to parse AI callback payload: {}", e.getMessage());
-                        return ApiResponse.<Void>builder()
-                                        .status(HttpStatus.BAD_REQUEST)
-                                        .message("Invalid JSON payload: " + e.getMessage())
-                                        .build();
-                }
         }
 
         /**
@@ -197,14 +195,51 @@ public class AIController {
         }
 
         /**
-         * Internal callback endpoint for Analysis Worker
+         * Internal callback endpoint for Analysis Worker (Documented path)
          */
         @PostMapping("/internal/ai/analysis/callback")
-        public ApiResponse<Void> handleAnalysisCallback(@RequestBody AnalysisCallbackDTO callback) {
-                log.info("Received analysis callback for job: {}, status: {}",
-                                callback.getJobId(), callback.getStatus());
-                callbackService.handleAnalysisCallback(callback);
-                return ApiResponse.ok();
+        public ApiResponse<Void> handleInternalAICallback(@RequestBody String rawPayload) {
+                return processPayload(rawPayload);
+        }
+
+        /**
+         * Legacy callback endpoint
+         */
+        @PostMapping("/ai-callback")
+        public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
+                return processPayload(rawPayload);
+        }
+
+        private ApiResponse<Void> processPayload(String rawPayload) {
+                try {
+                        JsonNode root = objectMapper.readTree(rawPayload);
+                        String messageType = root.path("message_type").asText(null);
+
+                        log.info("Processing AI callback, message_type: {}", messageType);
+
+                        if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
+                                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                DocumentAnalysisCallbackDTO.class);
+                                callbackService.handleDocumentAnalysisCallback(callback);
+                        } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
+                                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                GlobalMergeCallbackDTO.class);
+                                callbackService.handleGlobalMergeCallback(callback);
+                        } else {
+                                // Default or Legacy
+                                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                                                AnalysisCallbackDTO.class);
+                                callbackService.handleAnalysisCallback(callback);
+                        }
+
+                        return ApiResponse.ok();
+                } catch (Exception e) {
+                        log.error("Failed to process AI callback: {}", e.getMessage(), e);
+                        return ApiResponse.<Void>builder()
+                                        .status(HttpStatus.BAD_REQUEST)
+                                        .message("Error: " + e.getMessage())
+                                        .build();
+                }
         }
 
         /**
@@ -323,7 +358,7 @@ public class AIController {
 
                 GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
                                 .projectId(projectId)
-                                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                                .callbackUrl(callbackBaseUrl + "/internal/ai/analysis/callback")
                                 .traceId(traceId)
                                 .build();
 

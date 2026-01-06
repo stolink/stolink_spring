@@ -9,4 +9,6 @@ import java.util.UUID;
 
 public interface ForeshadowingRepository extends JpaRepository<Foreshadowing, UUID> {
     Optional<Foreshadowing> findByProjectAndTag(Project project, String tag);
+
+    void deleteAllByProject(Project project);
 }

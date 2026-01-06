@@ -9,4 +9,6 @@ import java.util.UUID;
 
 public interface CharacterJpaRepository extends JpaRepository<CharacterEntity, UUID> {
     Optional<CharacterEntity> findByProjectAndName(Project project, String name);
+
+    void deleteAllByProject(Project project);
 }

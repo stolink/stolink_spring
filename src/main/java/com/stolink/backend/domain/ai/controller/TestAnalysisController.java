@@ -109,7 +109,7 @@ public class TestAnalysisController {
                 .documentOrder(1)
                 .totalDocumentsInChapter(1)
                 .analysisPass(1)
-                .callbackUrl(callbackBaseUrl + "/api/ai-callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .context(DocumentAnalysisMessage.AnalysisContext.builder()
                         .existingCharacters(List.of())
                         .existingEvents(List.of())
@@ -155,7 +155,7 @@ public class TestAnalysisController {
         return ApiResponse.ok(Map.of(
                 "rabbitmq", connected ? "connected" : "disconnected",
                 "queue", documentAnalysisQueue,
-                "callbackUrl", callbackBaseUrl + "/api/ai-callback",
+                "callbackUrl", callbackBaseUrl + "/api/internal/ai/analysis/callback",
                 "error", errorMessage != null ? errorMessage : "none"));
     }
 }
