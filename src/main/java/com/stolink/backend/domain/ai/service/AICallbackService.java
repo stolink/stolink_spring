@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,8 +30,6 @@ import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.ai.repository.CallbackLogRepository;
 import com.stolink.backend.domain.character.entity.ImageGenerationTask;
 import com.stolink.backend.domain.character.entity.RelationshipEntity;
-import com.stolink.backend.domain.character.node.Character;
-import com.stolink.backend.domain.character.repository.CharacterRepository;
 import com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository;
 import com.stolink.backend.domain.character.repository.RelationshipRepository;
 import com.stolink.backend.domain.consistency.entity.ConsistencyReport;
@@ -39,9 +38,9 @@ import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.document.repository.SectionRepository;
 import com.stolink.backend.domain.event.entity.EventEntity;
-import com.stolink.backend.domain.event.node.Event;
+// Neo4j Event node removed - using PostgreSQL only
 import com.stolink.backend.domain.event.repository.EventJpaRepository;
-import com.stolink.backend.domain.event.repository.EventNeo4jRepository;
+// EventNeo4jRepository removed - using PostgreSQL only
 import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
 import com.stolink.backend.domain.plot.entity.PlotIntegration;
@@ -49,8 +48,7 @@ import com.stolink.backend.domain.plot.repository.PlotIntegrationRepository;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.setting.entity.SettingEntity;
-import com.stolink.backend.domain.setting.node.Setting;
-import com.stolink.backend.domain.setting.repository.SettingNeo4jRepository;
+// Neo4j Setting node and SettingNeo4jRepository removed - using PostgreSQL only
 import com.stolink.backend.domain.setting.repository.SettingRepository;
 import com.stolink.backend.domain.validation.entity.ValidationResult;
 import com.stolink.backend.domain.validation.repository.ValidationResultRepository;
@@ -71,14 +69,14 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AICallbackService {
 
-    private final CharacterRepository characterRepository;
+    // CharacterRepository (Neo4j) removed - using PostgreSQL only
     private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
     private final DocumentRepository documentRepository;
-    private final EventNeo4jRepository eventNeo4jRepository;
+    // EventNeo4jRepository removed - using PostgreSQL only
     private final EventJpaRepository eventJpaRepository;
     private final RelationshipRepository relationshipRepository;
 
-    private final SettingNeo4jRepository settingNeo4jRepository;
+    // SettingNeo4jRepository removed - using PostgreSQL only
     private final SettingRepository settingRepository;
     private final ImageGenerationTaskRepository imageGenerationTaskRepository;
 
@@ -93,6 +91,7 @@ public class AICallbackService {
     private final CallbackLogRepository callbackLogRepository;
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
+    private final TransactionTemplate transactionTemplate;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -103,7 +102,7 @@ public class AICallbackService {
     /**
      * 분석 결과 콜백 처리 (Multi-Agent 파이프라인 결과)
      */
-    @Transactional
+
     public void handleAnalysisCallback(AnalysisCallbackDTO callback) {
         // Clear JPA L1 cache to ensure fresh reads of AI-written data
         entityManager.clear();
@@ -183,8 +182,14 @@ public class AICallbackService {
 
         // Job 완료 처리 - using effective getter
         Long processingTimeMs = callback.getEffectiveProcessingTimeMs();
-        job.markAsCompleted(processingTimeMs);
-        analysisJobRepository.save(job);
+        transactionTemplate.execute(status -> {
+            // Re-fetch job to ensure freshness and attachment
+            analysisJobRepository.findById(callback.getJobId()).ifPresent(j -> {
+                j.markAsCompleted(processingTimeMs);
+                analysisJobRepository.save(j);
+            });
+            return null;
+        });
 
         // Document 상태 업데이트 (COMPLETED)
         updateDocumentStatus(job.getDocumentId(), Document.AnalysisStatus.COMPLETED);
@@ -209,59 +214,31 @@ public class AICallbackService {
     private void updateDocumentStatus(UUID documentId, Document.AnalysisStatus status) {
         if (documentId == null)
             return;
-        documentRepository.findById(documentId).ifPresent(doc -> {
-            doc.updateAnalysisStatus(status);
-            documentRepository.save(doc);
-            log.info("Updated Document {} status to {}", documentId, status);
-        });
+
+        try {
+            transactionTemplate.execute(txStatus -> {
+                documentRepository.findById(documentId).ifPresent(doc -> {
+                    doc.updateAnalysisStatus(status);
+                    documentRepository.save(doc);
+                    log.info("Updated Document {} status to {}", documentId, status);
+                });
+                return null;
+            });
+        } catch (Exception e) {
+            log.error("Failed to update document status: {}", e.getMessage());
+        }
     }
 
     /**
-     * 캐릭터 저장 (Neo4j & Postgres)
+     * 캐릭터 저장 (PostgreSQL only - Neo4j는 AI Backend에서 처리)
      */
     private void saveCharacters(List<CharacterDTO> characters, Project project) {
-        String projectId = project.getId().toString();
         if (characters == null || characters.isEmpty()) {
             log.debug("No characters to save");
             return;
         }
 
         for (CharacterDTO charData : characters) {
-            String name = null;
-            if (charData.getProfile() != null) {
-                name = charData.getProfile().getName();
-            }
-
-            if (name == null || name.isBlank()) {
-                log.warn("Skipping character with empty name");
-                continue;
-            }
-
-            String role = charData.getRole();
-            String status = charData.getStatus();
-
-            Optional<Character> existingChar = characterRepository.findByNameAndProjectId(name, projectId);
-
-            if (existingChar.isPresent()) {
-                Character character = existingChar.get();
-                character.setRole(role);
-                character.setStatus(status);
-                updateCharacterJsonFields(character, charData);
-                characterRepository.save(character);
-                log.debug("Updated character: {} (id: {})", name, character.getId());
-            } else {
-                Character character = Character.builder()
-                        .projectId(projectId)
-                        .name(name)
-                        .role(role)
-                        .status(status)
-                        .build();
-                updateCharacterJsonFields(character, charData);
-                character = characterRepository.save(character);
-                log.debug("Created character: {} (id: {})", name, character.getId());
-            }
-
-            // PostgreSQL 저장 (AI 서버 호환용)
             try {
                 saveCharacterToPostgres(charData, project);
             } catch (Exception e) {
@@ -354,82 +331,15 @@ public class AICallbackService {
         log.debug("Saved character to Postgres: {}", name);
     }
 
-    /**
-     * 캐릭터 JSON 필드 업데이트 (Neo4j)
-     */
-    private void updateCharacterJsonFields(Character character, CharacterDTO charData) {
-        try {
-            // AI generated ID
-            character.setCharacterId(charData.getId());
-
-            // Profile fields
-            if (charData.getProfile() != null) {
-                CharacterDTO.ProfileDTO profile = charData.getProfile();
-                character.setAge(profile.getAge());
-                character.setGender(profile.getGender());
-                character.setRace(profile.getRace());
-                character.setMbti(profile.getMbti());
-                character.setBackstory(profile.getBackstory());
-                if (profile.getFaction() != null) {
-                    character.setFaction(profile.getFaction().getName());
-                }
-                character.setProfileJson(objectMapper.writeValueAsString(profile));
-            }
-
-            // Aliases
-            if (charData.getAliases() != null) {
-                character.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
-            }
-
-            // Appearance
-            if (charData.getAppearance() != null) {
-                String appearanceJson = objectMapper.writeValueAsString(charData.getAppearance());
-                character.setAppearanceJson(appearanceJson);
-                // Visual (legacy)
-                character.setVisualJson(appearanceJson);
-            }
-
-            // Personality
-            if (charData.getProfile() != null && charData.getProfile().getPersonality() != null) {
-                character.setPersonalityJson(objectMapper.writeValueAsString(charData.getProfile().getPersonality()));
-            }
-
-            // Relations
-            if (charData.getRelations() != null) {
-                character.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
-            }
-
-            // Current Mood
-            if (charData.getCurrentMood() != null) {
-                character.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
-            }
-
-            // Meta
-            if (charData.getMeta() != null) {
-                character.setMetaJson(objectMapper.writeValueAsString(charData.getMeta()));
-            }
-
-            // Embedding
-            if (charData.getEmbedding() != null) {
-                character.setEmbeddingJson(objectMapper.writeValueAsString(charData.getEmbedding()));
-            }
-
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize character data to JSON: {}", e.getMessage());
-        }
-    }
+    // updateCharacterJsonFields method removed - was Neo4j-specific
+    // Character JSON field updates now handled by AI Backend
 
     /**
-     * 관계 저장 (Neo4j & Postgres)
-     *
-     * source/target are CHARACTER NAMES, not IDs.
-     * Creates placeholder characters if they don't exist to ensure no relationship
-     * data is lost.
+     * 관계 저장 (PostgreSQL only - Neo4j는 AI Backend에서 처리)
      */
     private void saveRelationships(List<RelationshipDTO> relationships, Project project) {
-        String projectId = project.getId().toString();
         log.info("Saving {} relationships for project: {}",
-                relationships != null ? relationships.size() : 0, projectId);
+                relationships != null ? relationships.size() : 0, project.getId());
 
         if (relationships == null || relationships.isEmpty()) {
             log.debug("No relationships to save");
@@ -437,60 +347,11 @@ public class AICallbackService {
         }
 
         for (RelationshipDTO relData : relationships) {
-            String sourceName = relData.getSource();
-            String targetName = relData.getTarget();
-            String relationType = relData.getRelationType();
-            Integer strength = relData.getStrength() != null ? relData.getStrength() : 5;
-            String description = relData.getDescription();
-            Boolean bidirectional = relData.getBidirectional();
-
-            if (sourceName == null || targetName == null) {
-                log.warn("Skipping relationship with missing source/target: {} -> {}", sourceName, targetName);
+            if (relData.getSource() == null || relData.getTarget() == null) {
+                log.warn("Skipping relationship with missing source/target: {} -> {}",
+                        relData.getSource(), relData.getTarget());
                 continue;
             }
-
-            // --- Neo4j Processing ---
-            // Find or create source character
-            Character sourceChar = characterRepository.findByNameAndProjectId(sourceName, projectId)
-                    .orElseGet(() -> {
-                        log.info("Creating placeholder character for source: {} in project: {}", sourceName, projectId);
-                        Character placeholder = Character.builder()
-                                .projectId(projectId)
-                                .name(sourceName)
-                                .role("unknown")
-                                .status("unknown")
-                                .build();
-                        return characterRepository.save(placeholder);
-                    });
-
-            // Find or create target character
-            Character targetChar = characterRepository.findByNameAndProjectId(targetName, projectId)
-                    .orElseGet(() -> {
-                        log.info("Creating placeholder character for target: {} in project: {}", targetName, projectId);
-                        Character placeholder = Character.builder()
-                                .projectId(projectId)
-                                .name(targetName)
-                                .role("unknown")
-                                .status("unknown")
-                                .build();
-                        return characterRepository.save(placeholder);
-                    });
-
-            try {
-                characterRepository.createRelationship(
-                        sourceChar.getId(),
-                        targetChar.getId(),
-                        relationType != null ? relationType.toLowerCase() : "related",
-                        strength,
-                        description,
-                        bidirectional != null ? bidirectional : false);
-                log.info("Created relationship in Neo4j: {} -[{}]-> {}", sourceName, relationType, targetName);
-            } catch (Exception e) {
-                log.error("Failed to create relationship in Neo4j: {} -> {}: {}", sourceName, targetName,
-                        e.getMessage());
-            }
-
-            // --- PostgreSQL Processing ---
             saveRelationshipToPostgres(relData, project);
         }
     }
@@ -533,7 +394,7 @@ public class AICallbackService {
     }
 
     /**
-     * 이벤트 저장 (Neo4j & Postgres)
+     * 이벤트 저장 (PostgreSQL only - Neo4j는 AI Backend에서 처리)
      */
     private void saveEvents(List<EventDTO> events, Project project, UUID jobDocumentId) {
         if (events == null || events.isEmpty()) {
@@ -541,34 +402,16 @@ public class AICallbackService {
             return;
         }
 
-        String projectId = project.getId().toString();
-
         for (EventDTO eventData : events) {
-            String eventId = eventData.getEventId();
-            String eventType = eventData.getEventType();
-            String narrativeSummary = eventData.getNarrativeSummary();
-            String description = eventData.getDescription();
-            String visualScene = eventData.getVisualScene();
-            String cameraAngle = eventData.getCameraAngle();
-            String locationRef = eventData.getLocationRef();
-            String prevEventId = eventData.getPrevEventId();
-            Integer importance = eventData.getImportance() != null ? eventData.getImportance() : 5;
-            Boolean isForeshadowing = eventData.getIsForeshadowing();
-            Integer chapterRef = eventData.getChapter();
-            Integer sequenceOrder = eventData.getSequenceOrder();
-            UUID documentId = null;
-
+            UUID documentId = jobDocumentId;
             if (eventData.getDocumentId() != null) {
                 try {
                     documentId = UUID.fromString(eventData.getDocumentId());
                 } catch (IllegalArgumentException e) {
                     documentId = jobDocumentId;
                 }
-            } else {
-                documentId = jobDocumentId;
             }
 
-            // participants를 JSON 문자열로
             String participantsJson = null;
             if (eventData.getParticipants() != null) {
                 try {
@@ -578,65 +421,6 @@ public class AICallbackService {
                 }
             }
 
-            // --- Neo4j ---
-            // 기존 이벤트 조회 또는 새로 생성 (중복 안전 조회)
-            List<Event> existingEvents = eventNeo4jRepository.findAllByProjectIdAndEventId(projectId, eventId);
-
-            Event event;
-            if (!existingEvents.isEmpty()) {
-                event = existingEvents.get(0);
-            } else {
-                event = Event.builder()
-                        .projectId(projectId)
-                        .eventId(eventId)
-                        .build();
-            }
-
-            event.setEventType(eventType != null ? eventType.toUpperCase() : null);
-            event.setNarrativeSummary(narrativeSummary);
-            event.setDescription(description);
-            event.setVisualScene(visualScene);
-            event.setCameraAngle(cameraAngle);
-            event.setLocationRef(locationRef);
-            event.setPrevEventId(prevEventId);
-            event.setImportance(importance);
-            event.setIsForeshadowing(isForeshadowing != null ? isForeshadowing : false);
-            event.setChapterRef(chapterRef);
-            event.setParticipantsJson(participantsJson);
-            event.setSequenceOrder(sequenceOrder);
-            event.setDocumentId(documentId != null ? documentId.toString() : null);
-            event.setChapter(chapterRef);
-
-            // New AI schema fields
-            try {
-                if (eventData.getTimestamp() != null) {
-                    event.setTimestampJson(objectMapper.writeValueAsString(eventData.getTimestamp()));
-                }
-                if (eventData.getChangesMade() != null) {
-                    event.setChangesJson(objectMapper.writeValueAsString(eventData.getChangesMade()));
-                }
-                if (eventData.getEmbedding() != null) {
-                    event.setEmbeddingJson(objectMapper.writeValueAsString(eventData.getEmbedding()));
-                }
-            } catch (JsonProcessingException e) {
-                log.error("Failed to serialize event JSON fields: {}", e.getMessage());
-            }
-
-            eventNeo4jRepository.save(event);
-
-            // Neo4j Edge 생성: Event -> Setting (HAPPENED_AT)
-            if (locationRef != null && !locationRef.isBlank()) {
-                try {
-                    eventNeo4jRepository.createHappenedAtEdge(projectId, eventId, locationRef);
-                    log.debug("Created HAPPENED_AT edge: {} -> {}", eventId, locationRef);
-                } catch (Exception e) {
-                    log.warn("Failed to create HAPPENED_AT edge: {} -> {}: {}", eventId, locationRef, e.getMessage());
-                }
-            }
-
-            log.info("Saved event to Neo4j: {} (chapter: {}, seq: {})", eventId, chapterRef, sequenceOrder);
-
-            // --- PostgreSQL ---
             saveEventToPostgres(eventData, project, documentId, participantsJson);
         }
     }
@@ -700,7 +484,7 @@ public class AICallbackService {
     }
 
     /**
-     * 설정(장소) 저장 (Neo4j & Postgres)
+     * 설정(장소) 저장 (PostgreSQL only - Neo4j는 AI Backend에서 처리)
      */
     private void saveSettings(List<SettingDTO> settings, Project project) {
         if (settings == null || settings.isEmpty()) {
@@ -708,21 +492,7 @@ public class AICallbackService {
             return;
         }
 
-        String projectId = project.getId().toString();
-
         for (SettingDTO settingData : settings) {
-            String settingId = settingData.getSettingId();
-            String name = settingData.getName();
-            String locationType = settingData.getLocationType();
-            String visualPrompt = settingData.getVisualBackground();
-            String timeOfDay = settingData.getTimeOfDay();
-            String lightingDescription = settingData.getLighting();
-            String atmosphereKeywords = settingData.getAtmosphere();
-            String weatherCondition = settingData.getWeather();
-            Boolean isPrimary = settingData.getIsPrimary();
-            String storySignificance = settingData.getSignificance();
-
-            // static_objects를 JSON 문자열로
             String staticObjectsJson = null;
             if (settingData.getNotableFeatures() != null) {
                 try {
@@ -731,49 +501,6 @@ public class AICallbackService {
                     log.error("Failed to serialize static_objects: {}", e.getMessage());
                 }
             }
-
-            // --- Neo4j ---
-            List<Setting> existingSettings = settingNeo4jRepository.findAllByProjectIdAndName(projectId, name);
-            Setting setting;
-            if (!existingSettings.isEmpty()) {
-                setting = existingSettings.get(0);
-            } else {
-                setting = Setting.builder()
-                        .projectId(projectId)
-                        .settingId(settingId)
-                        .name(name)
-                        .build();
-            }
-
-            setting.setLocationType(locationType != null ? locationType.toUpperCase() : null);
-            setting.setLocationName(settingData.getLocationName());
-            setting.setVisualPrompt(visualPrompt);
-            setting.setVisualBackground(settingData.getVisualBackground());
-            setting.setTimeOfDay(timeOfDay);
-            setting.setLightingDescription(lightingDescription);
-            setting.setAtmosphereKeywords(atmosphereKeywords);
-            setting.setWeatherCondition(weatherCondition);
-            setting.setArtStyle(settingData.getArtStyle());
-            setting.setDescription(settingData.getDescription());
-            setting.setIsPrimaryLocation(isPrimary != null ? isPrimary : false);
-            setting.setStorySignificance(storySignificance);
-            setting.setStaticObjectsJson(staticObjectsJson);
-
-            setting.setParentLocation(settingData.getParentLocation());
-            setting.setFirstMentioned(settingData.getFirstMentioned());
-
-            try {
-                if (settingData.getEmbedding() != null) {
-                    setting.setEmbeddingJson(objectMapper.writeValueAsString(settingData.getEmbedding()));
-                }
-            } catch (JsonProcessingException e) {
-                log.error("Failed to serialize setting embedding: {}", e.getMessage());
-            }
-
-            settingNeo4jRepository.save(setting);
-            log.info("Saved setting to Neo4j: {} (type: {}, primary: {})", name, locationType, isPrimary);
-
-            // --- PostgreSQL ---
             saveSettingToPostgres(settingData, project, staticObjectsJson);
         }
     }
@@ -818,43 +545,11 @@ public class AICallbackService {
     }
 
     /**
-     * 감정 정보를 캐릭터에 업데이트 (Neo4j)
+     * 감정 정보를 캐릭터에 업데이트 (Neo4j 제거됨 - AI Backend에서 처리)
      */
-    @SuppressWarnings("unchecked")
     private void updateEmotions(Map<String, Object> result, String projectId) {
-        Map<String, Object> emotionsData = (Map<String, Object>) result.get("emotions");
-        if (emotionsData == null) {
-            log.debug("No emotions to update");
-            return;
-        }
-
-        List<Map<String, Object>> neo4jUpdates = (List<Map<String, Object>>) emotionsData.get("neo4j_updates");
-        if (neo4jUpdates == null || neo4jUpdates.isEmpty()) {
-            log.debug("No neo4j emotion updates");
-            return;
-        }
-
-        for (Map<String, Object> update : neo4jUpdates) {
-            String characterName = (String) update.get("character_name");
-            Map<String, Object> propertyUpdates = (Map<String, Object>) update.get("property_updates");
-
-            if (characterName == null || propertyUpdates == null) {
-                continue;
-            }
-
-            Optional<Character> charOpt = characterRepository.findAllByNameAndProjectId(characterName, projectId)
-                    .stream().findFirst();
-            if (charOpt.isPresent()) {
-                Character character = charOpt.get();
-                try {
-                    character.setCurrentMoodJson(objectMapper.writeValueAsString(propertyUpdates));
-                    characterRepository.save(character);
-                    log.info("Updated emotions for character: {}", characterName);
-                } catch (JsonProcessingException e) {
-                    log.error("Failed to serialize emotion data: {}", e.getMessage());
-                }
-            }
-        }
+        // Neo4j 저장 로직 제거됨 - AI Backend에서 처리
+        log.debug("updateEmotions skipped - Neo4j handling moved to AI Backend");
     }
 
     /**
@@ -907,11 +602,11 @@ public class AICallbackService {
             return;
         }
 
-        // 1. Character 노드 업데이트
+        // 1. Character 엔티티 업데이트 (PostgreSQL)
         final String finalImageUrl = imageUrl;
-        characterRepository.findById(characterId).ifPresent(character -> {
-            character.setImageUrl(finalImageUrl);
-            characterRepository.save(character);
+        characterJpaRepository.findByCharacterId(characterId).ifPresent(characterEntity -> {
+            characterEntity.setImageUrl(finalImageUrl);
+            characterJpaRepository.save(characterEntity);
             log.info("Updated character {} with image URL: {}", characterId, finalImageUrl);
         });
 
@@ -1136,12 +831,8 @@ public class AICallbackService {
                 for (String mergedId : mergedIds) {
                     if (mergedId.equals(primaryId))
                         continue;
-                    try {
-                        characterRepository.mergeNodes(primaryId, mergedId);
-                        log.info("Merged character {} into {}", mergedId, primaryId);
-                    } catch (Exception e) {
-                        log.error("Failed to merge {} into {}: {}", mergedId, primaryId, e.getMessage());
-                    }
+                    // Neo4j mergeNodes 제거됨 - AI Backend에서 처리
+                    log.info("Character merge skipped (Neo4j removed): {} into {}", mergedId, primaryId);
                 }
             }
         }

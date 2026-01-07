@@ -67,7 +67,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 10s
       start_period: 60s
@@ -89,7 +89,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 10s
       start_period: 60s
@@ -136,7 +136,7 @@ services:
       RABBITMQ_IMAGE_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_IMAGE_VHOST: stolink
       # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
       # CORS
