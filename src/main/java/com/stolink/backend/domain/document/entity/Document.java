@@ -94,6 +94,11 @@ public class Document extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // 커뮤니티(Storead) 게시 완료 여부
+    // Storead에서 최종 게시 완료 시 true로 업데이트됨
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished = false;
+
     @Builder
     public Document(UUID id, Project project, Document parent, DocumentType type, String title, String content,
             String synopsis, Integer order, DocumentStatus status, String label, String labelColor, Integer wordCount,
@@ -207,6 +212,20 @@ public class Document extends BaseEntity {
         this.analysisRetryCount++;
     }
 
+    // === 커뮤니티 게시 상태 관리 메서드 ===
+
+    /**
+     * 커뮤니티(Storead)에 게시 완료 상태로 변경
+     */
+    public void markAsPublished() {
+        this.isPublished = true;
+    }
+
+    /**
+     * 커뮤니티 게시 취소 (미배포 상태로 변경)
+     */
+    public void markAsUnpublished() {
+        this.isPublished = false;
     // === 분석 잠금 메서드 ===
 
     public void lockForAnalysis() {
