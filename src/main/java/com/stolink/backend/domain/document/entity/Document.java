@@ -94,6 +94,10 @@ public class Document extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // 커뮤니티(Storead) 게시 완료 여부
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished = false;
+
     @Builder
     public Document(UUID id, Project project, Document parent, DocumentType type, String title, String content,
             String synopsis, Integer order, DocumentStatus status, String label, String labelColor, Integer wordCount,
@@ -152,7 +156,7 @@ public class Document extends BaseEntity {
 
     /**
      * 문서의 부모를 변경합니다 (폴더 이동)
-     * 
+     *
      * @param newParent 새로운 부모 문서 (null이면 루트로 이동)
      * @param newOrder  새 부모 아래에서의 순서
      */
@@ -215,6 +219,16 @@ public class Document extends BaseEntity {
 
     public void unlockAfterAnalysis() {
         this.analysisLocked = false;
+    }
+
+    // === 커뮤니티 게시 상태 관리 메서드 ===
+
+    public void markAsPublished() {
+        this.isPublished = true;
+    }
+
+    public void markAsUnpublished() {
+        this.isPublished = false;
     }
 
     @Column(name = "plot_integration_json", columnDefinition = "jsonb")
