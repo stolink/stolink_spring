@@ -31,7 +31,7 @@ logs/
 .env.local
 application.yml
 
-# FASTAPI*.md
+FASTAPI*.md
 JOB*.md
 PROJECT*.md
 *.json

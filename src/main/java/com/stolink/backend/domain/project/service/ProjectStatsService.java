@@ -1,24 +1,33 @@
 package com.stolink.backend.domain.project.service;
 
+import java.sql.Date;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.stolink.backend.domain.character.repository.CharacterRepository;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
-import com.stolink.backend.domain.project.dto.*;
+import com.stolink.backend.domain.project.dto.ChapterStats;
+import com.stolink.backend.domain.project.dto.DailyStats;
+import com.stolink.backend.domain.project.dto.ProjectStatsResponse;
+import com.stolink.backend.domain.project.dto.WritingActivity;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.math.BigInteger;
-import java.sql.Date;
-import java.time.LocalDate;
-import java.util.*;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
