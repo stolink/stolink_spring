@@ -1,7 +1,5 @@
 package com.stolink.backend.global.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
@@ -14,11 +12,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 @Configuration
 public class RabbitMQConfig {
-
-    @Value("${app.rabbitmq.queues.analysis}")
-    private String analysisQueue;
 
     @Value("${app.rabbitmq.queues.image}")
     private String imageQueue;
@@ -63,21 +61,19 @@ public class RabbitMQConfig {
     private String agentVirtualHost;
 
     @Bean
-    public Queue analysisQueue() {
-        return new Queue(analysisQueue, true);
-    }
-
-    @Bean
     public Queue imageQueue() {
         return new Queue(imageQueue, true);
     }
 
     /**
      * 문서 분석 큐 (대용량 분석 아키텍처)
+     * 우선순위 큐 설정 (x-max-priority: 10)
      */
     @Bean
     public Queue documentAnalysisQueue() {
-        return new Queue(documentAnalysisQueue, true);
+        return org.springframework.amqp.core.QueueBuilder.durable(documentAnalysisQueue)
+                .withArgument("x-max-priority", 10)
+                .build();
     }
 
     /**

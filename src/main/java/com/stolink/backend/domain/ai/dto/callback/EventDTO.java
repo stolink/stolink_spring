@@ -35,12 +35,12 @@ public class EventDTO {
     @JsonProperty("prev_event_id")
     private String prevEventId;
 
-    private String timestamp;
+    private java.util.Map<String, Object> timestamp;
 
     private Integer importance;
 
     @JsonProperty("changes_made")
-    private String changesMade;
+    private java.util.Map<String, Object> changesMade;
 
     private List<Double> embedding;
 

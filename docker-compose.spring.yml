@@ -48,7 +48,6 @@ services:
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
       # AI Callback URL (base URL - endpoint paths are appended in code)
       APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api
-      APP_CALLBACK_BASE_URL: http://stolink-backend:8080
       # Analysis Settings
       APP_ANALYSIS_MAX_RETRY_COUNT: 3
       # Storage path
@@ -66,9 +65,16 @@ services:
       - "8080:8080"
     volumes:
       - backend_storage:/app/storage/uploads
+      # Gradle 캐시 바인드 마운트 (빌드 속도 향상)
+      - gradle_cache:/root/.gradle
     networks:
       - ai-backend-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
       interval: 30s
@@ -78,6 +84,7 @@ services:
 
 volumes:
   backend_storage:
+  gradle_cache:
 
 
 networks:

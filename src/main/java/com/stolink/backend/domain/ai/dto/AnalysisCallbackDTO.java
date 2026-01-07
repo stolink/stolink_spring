@@ -8,6 +8,13 @@ import lombok.*;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 /**
  * AI 분석 결과 콜백 DTO (Multi-Agent 파이프라인 결과)
  *
@@ -191,6 +198,10 @@ public class AnalysisCallbackDTO {
             return result.getMetadata().getTraceId();
         }
         return traceId;
+    }
+
+    public void setResult(AnalysisResultDTO result) {
+        this.result = result;
     }
 
     /**

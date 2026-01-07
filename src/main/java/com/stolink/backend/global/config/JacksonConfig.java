@@ -4,8 +4,9 @@ import org.neo4j.driver.Value;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import com.fasterxml.jackson.databind.JsonSerializer;
+
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 
 @Configuration
@@ -15,7 +16,9 @@ public class JacksonConfig {
     public Jackson2ObjectMapperBuilderCustomizer jacksonCustomizer() {
         return builder -> {
             builder.serializerByType(Value.class, new Neo4jValueSerializer());
+            builder.failOnUnknownProperties(false);
         };
+
     }
 
     public static class Neo4jValueSerializer extends JsonSerializer<Value> {

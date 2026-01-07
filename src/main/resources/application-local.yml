@@ -13,6 +13,15 @@ spring:
       connection-timeout: 20000
       max-lifetime: 1200000
 
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
   # Neo4j Configuration
   neo4j:
     uri: ${SPRING_NEO4J_URI:bolt://localhost:7687}
@@ -31,10 +40,9 @@ spring:
       client:
         registration:
           google:
-            client-id: ${GOOGLE_CLIENT_ID:your-google-client-id}
-            client-secret: ${GOOGLE_CLIENT_SECRET:your-google-client-secret}
-            scope: email, profile
-            redirect-uri: http://localhost:8080/api/login/oauth2/code/google
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            redirect-uri: "{baseUrl}/api/login/oauth2/code/{registrationId}"
 
 # JWT Configuration
 jwt:
@@ -63,26 +71,36 @@ app:
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST:localhost}
-      port: ${RABBITMQ_IMAGE_PORT:5672}
-      username: ${RABBITMQ_USER:stolink}
-      password: ${RABBITMQ_PASSWORD:stolink123}
-      virtual-host: ${RABBITMQ_VHOST:stolink}
+      port: ${RABBITMQ_IMAGE_PORT:5673}
+      username: ${RABBITMQ_IMAGE_USERNAME:stolink}
+      password: ${RABBITMQ_IMAGE_PASSWORD:stolink123}
+      virtual-host: ${RABBITMQ_IMAGE_VHOST:stolink}
     # Agent RabbitMQ (분석용)
     agent:
       host: ${SPRING_RABBITMQ_HOST:localhost}
       port: ${SPRING_RABBITMQ_PORT:5672}
-      username: ${RABBITMQ_USER:stolink}
-      password: ${RABBITMQ_PASSWORD:stolink123}
-      virtual-host: ${RABBITMQ_VHOST:stolink}
+      username: ${SPRING_RABBITMQ_USERNAME:stolink}
+      password: ${SPRING_RABBITMQ_PASSWORD:stolink123}
+      virtual-host: ${SPRING_RABBITMQ_VIRTUAL_HOST:stolink}
   ai:
-    callback-base-url: http://host.docker.internal:8080/api
+    callback-base-url: ${APP_AI_CALLBACK_BASE_URL:http://host.docker.internal:8080/api}
   callback:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:
     max-retry-count: ${APP_ANALYSIS_MAX_RETRY_COUNT:3}
+  image-server-url: ${IMAGE_SERVER_URL:http://host.docker.internal:8001}
   storead:
     base-url: ${STOREAD_API_URL:http://localhost:8081}
     service-key: ${STOREAD_SERVICE_KEY:stolink-service-key}
+
+logging:
+  level:
+    root: INFO
+    com.stolink.backend: DEBUG
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: INFO
+    org.springframework.transaction: INFO
+
   image-server:
     url: ${IMAGE_SERVER_URL:http://localhost:8001}
     health-endpoint: ${IMAGE_SERVER_HEALTH_ENDPOINT:/health}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+
+    <!-- Suppress benign Neo4j warnings -->
+    
+    <!-- 
+      UnknownPropertyKeyWarning: Occurs when querying fields that are mapped in Entity but null in DB (sparse data).
+      Safe to ignore as they are created when non-null data arrives.
+    -->
+    <logger name="org.springframework.data.neo4j.cypher.unrecognized" level="ERROR"/>
+
+    <!-- 
+      FeatureDeprecationWarning: Occurs due to SDN using deprecated 'id()' function internally.
+      Framework level issue, safe to ignore.
+    -->
+    <logger name="org.springframework.data.neo4j.cypher.deprecation" level="ERROR"/>
+
+</configuration>

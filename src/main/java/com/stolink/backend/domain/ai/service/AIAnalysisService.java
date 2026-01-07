@@ -3,6 +3,7 @@ package com.stolink.backend.domain.ai.service;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
+import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.character.repository.CharacterJpaRepository;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
@@ -47,6 +48,7 @@ public class AIAnalysisService {
 
     // Repositories for data cleanup
     private final AnalysisJobRepository analysisJobRepository;
+
     private final CharacterRepository characterRepository; // Neo4j
     private final EventNeo4jRepository eventNeo4jRepository;
     private final SettingNeo4jRepository settingNeo4jRepository;
@@ -196,6 +198,18 @@ public class AIAnalysisService {
         String jobId = UUID.randomUUID().toString();
         String traceId = generateTraceId();
 
+        // AnalysisJob 생성 및 저장 (콜백 수신을 위해 필수)
+        AnalysisJob analysisJob = AnalysisJob.builder()
+                .jobId(jobId)
+                .project(doc.getProject())
+                .documentId(doc.getId())
+                .status(AnalysisJob.JobStatus.PROCESSING) // RabbitMQ로 바로 전송되므로 PROCESSING
+                .traceId(traceId)
+                .startedAt(java.time.LocalDateTime.now())
+                .build();
+        analysisJobRepository.save(analysisJob);
+        log.info("Created AnalysisJob: {}", jobId);
+
         // Context 생성
         AnalysisContext context = AnalysisContext.builder()
                 .chapterNumber(chapterNumber)
@@ -210,6 +224,7 @@ public class AIAnalysisService {
                 .content(doc.getContent())
                 .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
+                .requiresDeepAnalysis(true)
                 .context(context)
                 .build();
     }
@@ -243,6 +258,8 @@ public class AIAnalysisService {
 
         log.info("Document analysis triggered: documentId={}, jobId={}, chapter={}/{}",
                 doc.getId(), task.getJobId(), chapterNumber, totalChapters);
+        System.out.println(
+                "DEBUG_LOG: AIAnalysisService trigger - requiresDeepAnalysis=" + task.isRequiresDeepAnalysis());
     }
 
     /**

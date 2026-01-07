@@ -112,9 +112,15 @@ public class CharacterService {
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
             String type, Integer strength, String description) {
+        createRelationship(userId, sourceId, targetId, type, strength, description, false);
+    }
+
+    @Transactional
+    public void createRelationship(UUID userId, String sourceId, String targetId,
+            String type, Integer strength, String description, Boolean bidirectional) {
         // For simplicity, just create the relationship
         // In production, verify ownership of both characters
-        characterRepository.createRelationship(sourceId, targetId, type, strength, description);
+        characterRepository.createRelationship(sourceId, targetId, type, strength, description, bidirectional);
         log.info("Relationship created: {} -> {}", sourceId, targetId);
     }
 

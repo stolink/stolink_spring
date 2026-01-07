@@ -1,16 +1,18 @@
 package com.stolink.backend.domain.ai.service;
 
-import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
-import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
-import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
-import lombok.extern.slf4j.Slf4j;
+import java.util.List;
+
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
+import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
+import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
+import com.stolink.backend.domain.ai.dto.ImageGenerationTaskDTO;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -18,9 +20,6 @@ public class RabbitMQProducerService {
 
     private final RabbitTemplate imageRabbitTemplate;
     private final RabbitTemplate agentRabbitTemplate;
-
-    @Value("${app.rabbitmq.queues.analysis}")
-    private String analysisQueue;
 
     @Value("${app.rabbitmq.queues.image}")
     private String imageQueue;
