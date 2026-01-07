@@ -1,37 +1,44 @@
 package com.stolink.backend.domain.ai.dto;
 
-import com.fasterxml.jackson.annotation.JsonAlias;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.stolink.backend.domain.ai.dto.callback.*;
-import lombok.*;
-
 import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.stolink.backend.domain.ai.dto.callback.AnalysisResultDTO;
+import com.stolink.backend.domain.ai.dto.callback.CharacterDTO;
+import com.stolink.backend.domain.ai.dto.callback.ConsistencyReportDTO;
+import com.stolink.backend.domain.ai.dto.callback.EventDTO;
+import com.stolink.backend.domain.ai.dto.callback.PlotDTO;
+import com.stolink.backend.domain.ai.dto.callback.RelationshipDTO;
+import com.stolink.backend.domain.ai.dto.callback.SectionDTO;
+import com.stolink.backend.domain.ai.dto.callback.SettingDTO;
+import com.stolink.backend.domain.ai.dto.callback.ValidationDTO;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * AI 분석 결과 콜백 DTO (Multi-Agent 파이프라인 결과)
  *
  * Python AI Agent가 전송하는 JSON 구조:
  * {
- *   "jobId": "...",
- *   "status": "COMPLETED",
- *   "result": {
- *     "characters": [...],
- *     "events": [...],
- *     "settings": [...],
- *     "relationships": [{ "source": "Name A", "target": "Name B", "relation_type": "FRIEND", ... }],
- *     "plot": { "summary": "...", "foreshadowing": [...] },
- *     "consistency_report": { "score": 95, "conflicts": [...] },
- *     "validation": { "is_valid": true, "quality_score": 98 },
- *     "metadata": { "processing_time_ms": 1234 }
- *   }
+ * "jobId": "...",
+ * "status": "COMPLETED",
+ * "result": {
+ * "characters": [...],
+ * "events": [...],
+ * "settings": [...],
+ * "relationships": [{ "source": "Name A", "target": "Name B", "relation_type":
+ * "FRIEND", ... }],
+ * "plot": { "summary": "...", "foreshadowing": [...] },
+ * "consistency_report": { "score": 95, "conflicts": [...] },
+ * "validation": { "is_valid": true, "quality_score": 98 },
+ * "metadata": { "processing_time_ms": 1234 }
+ * }
  * }
  */
 @Getter

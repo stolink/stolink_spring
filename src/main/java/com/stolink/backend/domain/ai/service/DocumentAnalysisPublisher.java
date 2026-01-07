@@ -17,7 +17,6 @@ import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.entity.Document.AnalysisStatus;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
