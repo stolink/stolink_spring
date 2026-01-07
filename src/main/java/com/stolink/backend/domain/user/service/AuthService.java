@@ -99,8 +99,24 @@ public class AuthService {
 
         User user = storedToken.getUser();
 
-        // 3. 기존 토큰 삭제 (Token Rotation - 보안 강화)
-        refreshTokenRepository.delete(storedToken);
+        // 3. Replaced 여부 확인 (Token Reuse Detection with Grace Period)
+        if (storedToken.isReplaced()) {
+            // Grace Period: 10초 이내면 허용 (동시성 이슈 해결)
+            if (storedToken.getReplacedAt().isAfter(LocalDateTime.now().minusSeconds(10))) {
+                log.info("Reuse of recently rotated token allowed (Grace Period): {}", user.getEmail());
+                // 새로운 토큰 세트 발급 (Forking)
+                return generateTokenResponse(user);
+            } else {
+                // Grace Period 지남 -> 보안 위협으로 간주하고 모든 세션 종료 등 조치 가능
+                // 여기서는 해당 요청만 거부
+                log.warn("Reuse of old refresh token detected (Potential Theft): {}", user.getEmail());
+                throw new IllegalArgumentException("이미 사용된 refresh token입니다. (재사용 감지)");
+            }
+        }
+
+        // 4. 토큰 교체 처리 (Soft Delete)
+        storedToken.rotate();
+        refreshTokenRepository.save(storedToken);
 
         log.info("Token refreshed for user: {}", user.getEmail());
         return generateTokenResponse(user);

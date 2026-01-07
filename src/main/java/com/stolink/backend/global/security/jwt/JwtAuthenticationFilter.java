@@ -1,7 +1,9 @@
 package com.stolink.backend.global.security.jwt;
 
+import com.stolink.backend.global.util.CookieUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +22,7 @@ import java.util.UUID;
 /**
  * JWT 인증 필터
  *
- * 모든 요청에서 Authorization 헤더의 JWT 토큰을 검증하고
+ * HttpOnly 쿠키에서 JWT Access Token을 추출하여 검증하고
  * 유효한 경우 SecurityContext에 인증 정보를 설정합니다.
  */
 @Slf4j
@@ -30,7 +32,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String ACCESS_TOKEN_COOKIE = "access_token";
 
     private final JwtTokenProvider jwtTokenProvider;
 
@@ -72,18 +73,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return bearerToken.substring(BEARER_PREFIX.length());
         }
 
-        // 2. 쿠키 확인
+        // 2. 쿠키 확인 (CookieUtils 사용 권장하지만, 기존 로직 유지 + Dev 병합)
         if (request.getCookies() != null) {
-            log.debug("Cookies found in request: {}", request.getCookies().length);
-            for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
-                log.trace("Cookie: {} = {}", cookie.getName(), cookie.getName().contains("token") ? "[PROTECTED]" : cookie.getValue());
-                if (ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
-                    log.debug("Found access_token in cookie");
+            for (Cookie cookie : request.getCookies()) {
+                if (CookieUtils.ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
                     return cookie.getValue();
                 }
             }
-        } else {
-            log.debug("No cookies found in request");
         }
         return null;
     }

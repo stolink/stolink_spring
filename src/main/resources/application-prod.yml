@@ -21,10 +21,35 @@ spring:
 
   # Production JPA settings
   jpa:
+    hibernate:
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
         format_sql: false
+
+  # Google OAuth2 Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: email, profile
+            redirect-uri: https://${JWT_COOKIE_DOMAIN}/api/login/oauth2/code/google
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:very-long-and-secure-random-secret-key-that-is-at-least-512-bits-for-hs512-algorithm-security-must-be-kept-secret-for-production}
+  access-token-expiry: 1800000 # 30분 (ms)
+  refresh-token-expiry: 604800000 # 7일 (ms)
+  cookie-domain: ${JWT_COOKIE_DOMAIN}
+  cookie-secure: ${JWT_COOKIE_SECURE:true}
+
+# OAuth2 Redirect URI (for OAuth2SuccessHandler)
+oauth2:
+  redirect-uri: ${OAUTH2_REDIRECT_URI}
 
 # Application Configuration
 app:
@@ -52,25 +77,12 @@ app:
       virtual-host: ${RABBITMQ_AGENT_VHOST}
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
-
-# JWT Configuration
-jwt:
-  secret: ${JWT_SECRET:very-long-and-secure-random-secret-key-that-is-at-least-512-bits-for-hs512-algorithm-security-must-be-kept-secret-for-production}
-  access-token-expiry: 1800000 # 30분 (ms)
-  refresh-token-expiry: 604800000 # 7일 (ms)
-  cookie-domain: ${JWT_COOKIE_DOMAIN}
-  cookie-secure: ${JWT_COOKIE_SECURE:true}
-
-# OAuth2 Configuration
-security:
-  oauth2:
-    client:
-      registration:
-        google:
-          client-id: ${GOOGLE_CLIENT_ID}
-          client-secret: ${GOOGLE_CLIENT_SECRET}
-          scope: email, profile
-          redirect-uri: ${OAUTH2_REDIRECT_URI}
+  callback:
+    base-url: ${APP_AI_CALLBACK_BASE_URL}
+  # Storead API 연동 (Draft 퍼블리시)
+  storead:
+    base-url: ${STOREAD_SPRING_URL}
+    service-key: ${STOREAD_SPRING_SERVICE_KEY}
 
 # Production Logging
 logging:

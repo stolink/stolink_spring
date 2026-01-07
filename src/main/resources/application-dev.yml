@@ -6,6 +6,13 @@ spring:
     username: ${POSTGRESQL_USERNAME}
     password: ${POSTGRESQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20 # 기본값 10 → 증가
+      minimum-idle: 5
+      connection-timeout: 30000 # 30초 (기본값)
+      idle-timeout: 600000 # 10분
+      max-lifetime: 1800000 # 30분
+      leak-detection-threshold: 60000 # 🔴 60초 이상 커넥션 보유 시 로그
 
   # Neo4j Configuration
   neo4j:
@@ -19,8 +26,10 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
-  # Production JPA settings
+  # Development JPA settings
   jpa:
+    hibernate:
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -35,6 +44,7 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: email, profile
+            redirect-uri: https://${JWT_COOKIE_DOMAIN}/api/login/oauth2/code/google
 
 # JWT Configuration (shared with storead_spring)
 jwt:
@@ -50,6 +60,8 @@ oauth2:
 
 # Application Configuration
 app:
+  image-server:
+    health-check-enabled: false
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174}
   storage:
@@ -78,6 +90,10 @@ app:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
   callback:
     base-url: ${APP_AI_CALLBACK_BASE_URL}
+  # Storead API 연동 (Draft 퍼블리시)
+  storead:
+    base-url: ${STOREAD_SPRING_URL}
+    service-key: ${STOREAD_SPRING_SERVICE_KEY:temp-key}
 
 # Development Logging
 logging:

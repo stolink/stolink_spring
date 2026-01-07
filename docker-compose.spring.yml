@@ -11,12 +11,13 @@ version: '3.8'
 
 services:
   backend:
+    env_file: .env
     build:
       context: .
       dockerfile: Dockerfile
     container_name: stolink-backend
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      SPRING_PROFILES_ACTIVE: dev
       # PostgreSQL (컨테이너 이름으로 접근)
       SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres:5432/stolink
       SPRING_DATASOURCE_USERNAME: stolink
@@ -45,13 +46,21 @@ services:
       APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue
       APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
-      # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai/analysis/callback
-      APP_CALLBACK_BASE_URL: http://stolink-backend:8080
+      # AI Callback URL (base URL - endpoint paths are appended in code)
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api
       # Analysis Settings
       APP_ANALYSIS_MAX_RETRY_COUNT: 3
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
+      # CORS
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      # OAuth2 (Google)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI}
+      # Security (JWT)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_COOKIE_DOMAIN: ${JWT_COOKIE_DOMAIN}
     ports:
       - "8080:8080"
     volumes:
@@ -81,4 +90,5 @@ volumes:
 networks:
   ai-backend-network:
     external: true
-    name: sto-link-ai-backend_stolink-network
+    name: stolink_fastapi_agent_stolink-network
+

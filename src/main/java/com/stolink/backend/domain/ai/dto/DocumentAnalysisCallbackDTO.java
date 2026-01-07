@@ -5,6 +5,10 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.stolink.backend.domain.ai.dto.callback.CharacterDTO;
+import com.stolink.backend.domain.ai.dto.callback.EventDTO;
+import com.stolink.backend.domain.ai.dto.callback.SectionDTO;
+import com.stolink.backend.domain.ai.dto.callback.SettingDTO;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,7 +18,7 @@ import lombok.Setter;
 
 /**
  * 문서 분석 결과 콜백 DTO (Python → Spring)
- * 
+ *
  * AI 분석 완료 후 Python에서 Spring으로 전송하는 결과입니다.
  */
 @Getter
@@ -38,11 +42,11 @@ public class DocumentAnalysisCallbackDTO {
 
     private List<SectionDTO> sections;
 
-    private List<Map<String, Object>> characters;
+    private List<CharacterDTO> characters;
 
-    private List<Map<String, Object>> events;
+    private List<EventDTO> events;
 
-    private List<Map<String, Object>> settings;
+    private List<SettingDTO> settings;
 
     private List<Map<String, Object>> relationships;
 
@@ -79,33 +83,5 @@ public class DocumentAnalysisCallbackDTO {
      */
     public boolean isFailed() {
         return "FAILED".equalsIgnoreCase(status);
-    }
-
-    /**
-     * Section DTO
-     */
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class SectionDTO {
-
-        @JsonProperty("sequence_order")
-        private Integer sequenceOrder;
-
-        @JsonProperty("nav_title")
-        private String navTitle;
-
-        private String content;
-
-        private List<Double> embedding;
-
-        @JsonProperty("related_characters")
-        private List<String> relatedCharacters;
-
-        @JsonProperty("related_events")
-        private List<String> relatedEvents;
     }
 }

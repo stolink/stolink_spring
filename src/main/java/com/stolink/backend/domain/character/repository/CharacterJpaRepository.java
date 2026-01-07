@@ -13,4 +13,6 @@ public interface CharacterJpaRepository extends JpaRepository<CharacterEntity, U
 
     // 중복 캐릭터 존재 시에도 안전하게 조회
     java.util.List<CharacterEntity> findAllByProjectAndName(Project project, String name);
+
+    void deleteAllByProject(Project project);
 }

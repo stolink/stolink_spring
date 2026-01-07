@@ -65,6 +65,7 @@ dependencies {
 	// Utility
 	implementation 'org.apache.commons:commons-lang3:3.14.0'
 	implementation 'com.google.guava:guava:33.0.0-jre'
+	implementation 'io.github.cdimascio:java-dotenv:5.2.2'
 
 	// HTTP Client for AI callback
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'

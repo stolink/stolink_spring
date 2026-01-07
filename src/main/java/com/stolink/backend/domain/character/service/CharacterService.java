@@ -299,6 +299,13 @@ public class CharacterService {
         String safeAction = (action == null || action.isBlank()) ? "create" : action;
         String originalImageUrl = "edit".equalsIgnoreCase(safeAction) ? character.getImageUrl() : null;
 
+        log.info("Before URL Replace - action: {}, url: {}", safeAction, originalImageUrl);
+        // Docker 환경 호환성: localhost URL을 내부 컨테이너 호스트명으로 변환
+        if (originalImageUrl != null && originalImageUrl.contains("localhost")) {
+            originalImageUrl = originalImageUrl.replace("localhost", "stolink-minio-local");
+            log.info("After URL Replace: {}", originalImageUrl);
+        }
+
         // Generate comprehensive prompt
         Map<String, Object> appearance = Collections.emptyMap();
         if (character.getAppearanceJson() != null) {
@@ -380,7 +387,7 @@ public class CharacterService {
 
     // AI 콜백 URL 생성
     private String buildCallbackUrl() {
-        return callbackBaseUrl + "/image/callback";
+        return callbackBaseUrl + "/api/internal/ai/image/callback";
     }
 
     /**
@@ -400,6 +407,30 @@ public class CharacterService {
         }
 
         log.info("Character imageUrl updated: characterId={}, imageUrl={}", characterId, imageUrl);
+    }
+
+    /**
+     * 캐릭터 위치 업데이트 (프론트엔드 그래프 노드 위치 저장용)
+     *
+     * @param userId      사용자 ID
+     * @param characterId 캐릭터 ID
+     * @param positionX   X 좌표
+     * @param positionY   Y 좌표
+     * @return 업데이트된 캐릭터
+     */
+    @Transactional
+    public Character updateCharacterPosition(UUID userId, String characterId, Double positionX, Double positionY) {
+        // Verify user existence
+        getUserOrThrow(userId);
+
+        Character updated = characterRepository.updatePosition(characterId, positionX, positionY);
+        if (updated == null) {
+            throw new ResourceNotFoundException("Character", "id", characterId);
+        }
+
+        log.info("Character position updated: characterId={}, positionX={}, positionY={}", characterId, positionX,
+                positionY);
+        return updated;
     }
 
     private String generatePrompt(Character character, Map<String, Object> appearance, Map<String, Object> setting,

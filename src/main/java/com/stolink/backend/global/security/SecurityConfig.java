@@ -1,8 +1,10 @@
 package com.stolink.backend.global.security;
 
-import java.util.Arrays;
-import java.util.List;
-
+import com.stolink.backend.global.security.jwt.JwtAuthenticationFilter;
+import com.stolink.backend.global.security.oauth2.CustomOAuth2UserService;
+import com.stolink.backend.global.security.oauth2.OAuth2SuccessHandler;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,32 +20,35 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import com.stolink.backend.global.security.jwt.JwtAuthenticationFilter;
-import com.stolink.backend.global.security.oauth2.CustomOAuth2UserService;
-import com.stolink.backend.global.security.oauth2.OAuth2SuccessHandler;
-
-import lombok.RequiredArgsConstructor;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Spring Security 설정
  *
  * 보안 사항:
- * - CSRF 비활성화 (Stateless JWT 사용)
+ * - 쿠키 기반 JWT 인증
+ * - CSRF Origin 검증 (SameSite=Strict + Origin 헤더 검증)
  * - 세션 정책: STATELESS
  * - BCrypt 비밀번호 인코더
  */
+@Slf4j
 @Configuration
 @EnableWebSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
         private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final CsrfOriginFilter csrfOriginFilter;
         private final CustomOAuth2UserService customOAuth2UserService;
         private final OAuth2SuccessHandler oAuth2SuccessHandler;
         private final org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository;
 
         @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173,http://localhost:5174}")
         private String allowedOrigins;
+
+        @Value("${oauth2.redirect-uri:http://localhost:5173/oauth2/callback}")
+        private String oauth2RedirectUri;
 
         @Bean
         public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -68,12 +73,15 @@ public class SecurityConfig {
                                                                 "/api/auth/logout",
                                                                 "/api/oauth2/**",
                                                                 "/api/login/oauth2/**",
+                                                                "/oauth2/**",
+                                                                "/login/oauth2/**",
                                                                 "/actuator/health",
                                                                 "/actuator/info",
                                                                 "/api/internal/**",
                                                                 "/api/test/**",
                                                                 "/api/ai-callback/**",
                                                                 "/api/documents/*/analysis-status",
+                                                                "/api/project/*/analysis/reset",
                                                                 "/error")
                                                 .permitAll()
                                                 // 그 외 모든 요청은 인증 필요
@@ -81,24 +89,41 @@ public class SecurityConfig {
 
                                 // OAuth2 로그인 설정
                                 .oauth2Login(oauth2 -> oauth2
-                                                .authorizationEndpoint(endpoint -> endpoint
+                                                // 로그인 시작 URL: /api/oauth2/authorization/{registrationId}
+                                                .authorizationEndpoint(authorization -> authorization
                                                                 .baseUri("/api/oauth2/authorization")
                                                                 .authorizationRequestResolver(
                                                                                 customAuthorizationRequestResolver(
                                                                                                 clientRegistrationRepository)))
-                                                .redirectionEndpoint(endpoint -> endpoint
+
+                                                // 로그인 콜백 URL: /api/login/oauth2/code/{registrationId}
+                                                .redirectionEndpoint(redirection -> redirection
                                                                 .baseUri("/api/login/oauth2/code/*"))
+
                                                 .userInfoEndpoint(userInfo -> userInfo
                                                                 .userService(customOAuth2UserService))
-                                                .successHandler(oAuth2SuccessHandler))
+                                                .successHandler(oAuth2SuccessHandler)
+                                                // OAuth2 실패 시 프론트엔드로 리다이렉트
+                                                .failureHandler((request, response, exception) -> {
+                                                        log.error("OAuth2 login failed", exception);
+                                                        String errorMessage = exception.getMessage();
+                                                        if (errorMessage == null) {
+                                                                errorMessage = "oauth_failed";
+                                                        }
+                                                        String encodedMessage = java.net.URLEncoder.encode(errorMessage,
+                                                                        java.nio.charset.StandardCharsets.UTF_8);
+                                                        response.sendRedirect(
+                                                                        oauth2RedirectUri + "?error=" + encodedMessage);
+                                                }))
 
                                 // 인증 되지 않은 경우 401 반환 (기본값인 302 redirect 방지)
                                 .exceptionHandling(exception -> exception
                                                 .authenticationEntryPoint(
                                                                 new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
 
-                                // JWT 필터 추가
-                                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                                // 필터 순서: CSRF Origin Filter -> JWT Filter
+                                .addFilterBefore(csrfOriginFilter, UsernamePasswordAuthenticationFilter.class)
+                                .addFilterBefore(jwtAuthenticationFilter, CsrfOriginFilter.class)
 
                                 .build();
         }

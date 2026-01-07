@@ -1,5 +1,11 @@
 package com.stolink.backend.domain.ai.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.stolink.backend.domain.ai.dto.callback.*;
+import lombok.*;
+
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
@@ -11,43 +17,191 @@ import lombok.NoArgsConstructor;
 
 /**
  * AI 분석 결과 콜백 DTO (Multi-Agent 파이프라인 결과)
+ *
+ * Python AI Agent가 전송하는 JSON 구조:
+ * {
+ *   "jobId": "...",
+ *   "status": "COMPLETED",
+ *   "result": {
+ *     "characters": [...],
+ *     "events": [...],
+ *     "settings": [...],
+ *     "relationships": [{ "source": "Name A", "target": "Name B", "relation_type": "FRIEND", ... }],
+ *     "plot": { "summary": "...", "foreshadowing": [...] },
+ *     "consistency_report": { "score": 95, "conflicts": [...] },
+ *     "validation": { "is_valid": true, "quality_score": 98 },
+ *     "metadata": { "processing_time_ms": 1234 }
+ *   }
+ * }
  */
 @Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class AnalysisCallbackDTO {
 
-    @JsonAlias("job_id")
+    @JsonAlias("jobId")
+    @JsonProperty("jobId")
     private String jobId;
 
-    private String status; // "completed", "warning", "failed" (case-insensitive)
-
-    // JSON에서는 "results" (복수형)으로 옴, but handling "result" alias too
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    @Builder.Default
-    private Map<String, Object> results = new java.util.HashMap<>();
+    private String status; // "COMPLETED", "FAILED", "WARNING"
 
     private String error;
 
-    // ✅ 메타데이터 필드 추가
-    @JsonAlias("processing_time_ms")
-    private Integer processingTimeMs;
+    /**
+     * Nested result object containing all analysis data
+     * This is the PRIMARY field - Python sends data here
+     */
+    private AnalysisResultDTO result;
 
-    @JsonAlias("trace_id")
+    // ============================================================
+    // Backward compatibility fields (flat structure, deprecated)
+    // These are used if 'result' is null
+    // ============================================================
+
+    @JsonProperty("processing_time_ms")
+    private Long processingTimeMs;
+
+    @JsonProperty("trace_id")
     private String traceId;
 
-    @com.fasterxml.jackson.annotation.JsonAnySetter
-    public void add(String key, Object value) {
-        results.put(key, value);
+    private List<SectionDTO> sections;
+
+    private List<CharacterDTO> characters;
+
+    private List<EventDTO> events;
+
+    private List<SettingDTO> settings;
+
+    private List<RelationshipDTO> relationships;
+
+    @JsonProperty("plot_integration")
+    private PlotDTO plotIntegration;
+
+    @JsonProperty("consistency_report")
+    private ConsistencyReportDTO consistencyReport;
+
+    private ValidationDTO validation;
+
+    private Map<String, Object> emotions;
+
+    // ============================================================
+    // Unified Getters (handle both nested and flat structures)
+    // ============================================================
+
+    /**
+     * Get characters from nested result or flat structure
+     */
+    public List<CharacterDTO> getEffectiveCharacters() {
+        if (result != null && result.getCharacters() != null) {
+            return result.getCharacters();
+        }
+        return characters;
     }
 
-    public Map<String, Object> getResult() {
-        return results;
+    /**
+     * Get events from nested result or flat structure
+     */
+    public List<EventDTO> getEffectiveEvents() {
+        if (result != null && result.getEvents() != null) {
+            return result.getEvents();
+        }
+        return events;
     }
 
-    public void setResult(Map<String, Object> result) {
-        this.results = result;
+    /**
+     * Get settings from nested result or flat structure
+     */
+    public List<SettingDTO> getEffectiveSettings() {
+        if (result != null && result.getSettings() != null) {
+            return result.getSettings();
+        }
+        return settings;
+    }
+
+    /**
+     * Get relationships from nested result or flat structure
+     */
+    public List<RelationshipDTO> getEffectiveRelationships() {
+        if (result != null && result.getRelationships() != null) {
+            return result.getRelationships();
+        }
+        return relationships;
+    }
+
+    /**
+     * Get plot data from nested result or flat structure
+     */
+    public PlotDTO getEffectivePlot() {
+        if (result != null && result.getPlot() != null) {
+            return result.getPlot();
+        }
+        return plotIntegration;
+    }
+
+    /**
+     * Get consistency report from nested result or flat structure
+     */
+    public ConsistencyReportDTO getEffectiveConsistencyReport() {
+        if (result != null && result.getConsistencyReport() != null) {
+            return result.getConsistencyReport();
+        }
+        return consistencyReport;
+    }
+
+    /**
+     * Get validation from nested result or flat structure
+     */
+    public ValidationDTO getEffectiveValidation() {
+        if (result != null && result.getValidation() != null) {
+            return result.getValidation();
+        }
+        return validation;
+    }
+
+    /**
+     * Get sections from nested result or flat structure
+     */
+    public List<SectionDTO> getEffectiveSections() {
+        if (result != null && result.getSections() != null) {
+            return result.getSections();
+        }
+        return sections;
+    }
+
+    /**
+     * Get emotions from nested result or flat structure
+     */
+    public Map<String, Object> getEffectiveEmotions() {
+        if (result != null && result.getEmotions() != null) {
+            return result.getEmotions();
+        }
+        return emotions;
+    }
+
+    /**
+     * Get processing time from metadata or flat structure
+     */
+    public Long getEffectiveProcessingTimeMs() {
+        if (result != null && result.getMetadata() != null && result.getMetadata().getProcessingTimeMs() != null) {
+            return result.getMetadata().getProcessingTimeMs();
+        }
+        return processingTimeMs;
+    }
+
+    /**
+     * Get trace ID from metadata or flat structure
+     */
+    public String getEffectiveTraceId() {
+        if (result != null && result.getMetadata() != null && result.getMetadata().getTraceId() != null) {
+            return result.getMetadata().getTraceId();
+        }
+        return traceId;
+    }
+
+    public void setResult(AnalysisResultDTO result) {
+        this.result = result;
     }
 
     /**

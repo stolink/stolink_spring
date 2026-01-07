@@ -1,11 +1,4 @@
-# Build stage
-FROM gradle:8.11-jdk21 AS builder
-WORKDIR /app
-COPY . .
-RUN gradle clean build -x test --no-daemon
-
-
-# Runtime stage
+# Runtime stage only (빌드는 CI에서 완료됨)
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
@@ -13,8 +6,8 @@ WORKDIR /app
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
-# Copy jar file
-COPY --from=builder /app/build/libs/*.jar app.jar
+# Copy pre-built jar file from CI
+COPY build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080

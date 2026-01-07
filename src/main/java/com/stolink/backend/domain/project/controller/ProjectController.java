@@ -2,7 +2,9 @@ package com.stolink.backend.domain.project.controller;
 
 import com.stolink.backend.domain.project.dto.CreateProjectRequest;
 import com.stolink.backend.domain.project.dto.ProjectResponse;
+import com.stolink.backend.domain.project.dto.ProjectStatsResponse;
 import com.stolink.backend.domain.project.service.ProjectService;
+import com.stolink.backend.domain.project.service.ProjectStatsService;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +25,7 @@ import java.util.UUID;
 public class ProjectController {
 
     private final ProjectService projectService;
+    private final ProjectStatsService projectStatsService;
 
     @GetMapping
     public ApiResponse<Map<String, Object>> getProjects(
@@ -31,6 +34,8 @@ public class ProjectController {
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(defaultValue = "updatedAt") String sort,
             @RequestParam(defaultValue = "desc") String order) {
+        // [DEBUG] 사용자 ID 로깅
+        org.slf4j.LoggerFactory.getLogger(ProjectController.class).info("GET /api/projects called by user: {}", userId);
         Sort.Direction direction = order.equalsIgnoreCase("asc") ? Sort.Direction.ASC : Sort.Direction.DESC;
         Pageable pageable = PageRequest.of(page - 1, limit, Sort.by(direction, sort));
 
@@ -71,6 +76,14 @@ public class ProjectController {
             @RequestBody CreateProjectRequest request) {
         ProjectResponse project = projectService.updateProject(userId, id, request);
         return ApiResponse.ok(project);
+    }
+
+    @GetMapping("/{id}/stats")
+    public ApiResponse<ProjectStatsResponse> getProjectStats(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable("id") UUID projectId) {
+        ProjectStatsResponse stats = projectStatsService.calculateStats(userId, projectId);
+        return ApiResponse.ok(stats);
     }
 
     @DeleteMapping("/{id}")

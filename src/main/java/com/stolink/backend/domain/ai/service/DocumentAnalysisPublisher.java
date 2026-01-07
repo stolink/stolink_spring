@@ -22,19 +22,25 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 문서 분석 메시지 발행 서비스
- * 
+ *
  * 대용량 문서 분석을 위한 RabbitMQ 메시지 발행을 담당합니다.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DocumentAnalysisPublisher {
 
     private final DocumentRepository documentRepository;
     private final AnalysisJobRepository analysisJobRepository;
-
-    @Qualifier("agentRabbitTemplate")
     private final RabbitTemplate agentRabbitTemplate;
+
+    public DocumentAnalysisPublisher(
+            DocumentRepository documentRepository,
+            AnalysisJobRepository analysisJobRepository,
+            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
+        this.documentRepository = documentRepository;
+        this.analysisJobRepository = analysisJobRepository;
+        this.agentRabbitTemplate = agentRabbitTemplate;
+    }
 
     @Value("${app.rabbitmq.queues.document-analysis:document_analysis_queue}")
     private String documentAnalysisQueue;
@@ -47,7 +53,7 @@ public class DocumentAnalysisPublisher {
 
     /**
      * 프로젝트 내 모든 TEXT 문서에 대해 분석 요청 발행
-     * 
+     *
      * @param projectId 프로젝트 ID
      * @return 발행된 메시지 수
      */
@@ -144,7 +150,7 @@ public class DocumentAnalysisPublisher {
     public void publishGlobalMerge(UUID projectId, String traceId) {
         GlobalMergeMessage message = GlobalMergeMessage.builder()
                 .projectId(projectId.toString())
-                .callbackUrl(callbackBaseUrl)
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
                 .build();
 
@@ -172,7 +178,7 @@ public class DocumentAnalysisPublisher {
                 .totalDocumentsInChapter(totalDocuments)
                 .analysisPass(1)
                 .requiresDeepAnalysis(true) // 무조건 심화 분석 수행
-                .callbackUrl(callbackBaseUrl)
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .analysisType(analysisType != null ? analysisType : "full_manuscript")
                 .context(DocumentAnalysisMessage.AnalysisContext.builder()
                         .existingCharacters(List.of()) // 1차 Pass는 빈 배열

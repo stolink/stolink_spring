@@ -107,4 +107,17 @@ public class CharacterController {
 
         return ApiResponse.accepted(Map.of("jobId", jobId));
     }
+
+    /**
+     * 캐릭터 부분 업데이트 (위치 등)
+     */
+    @PatchMapping("/characters/{characterId}")
+    public ApiResponse<CharacterResponse> updateCharacter(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable String characterId,
+            @RequestBody com.stolink.backend.domain.character.dto.CharacterUpdateRequest request) {
+        Character updated = characterService.updateCharacterPosition(
+                userId, characterId, request.getPositionX(), request.getPositionY());
+        return ApiResponse.ok(characterMapper.toResponse(updated));
+    }
 }

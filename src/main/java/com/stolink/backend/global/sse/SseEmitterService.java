@@ -1,6 +1,7 @@
 package com.stolink.backend.global.sse;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -80,6 +81,30 @@ public class SseEmitterService {
             emitter.complete();
             log.info("SSE completed for project: {}", projectId);
         }
+    }
+
+    /**
+     * 30초마다 모든 활성 SSE 연결에 heartbeat를 전송합니다.
+     * 프록시/로드밸런서가 유휴 연결을 끊는 것을 방지합니다.
+     */
+    @Scheduled(fixedRate = 30000)
+    public void sendHeartbeat() {
+        if (emitters.isEmpty()) {
+            return;
+        }
+
+        log.debug("Sending heartbeat to {} SSE connections", emitters.size());
+
+        emitters.forEach((projectId, emitter) -> {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("heartbeat")
+                        .data("ping"));
+            } catch (IOException e) {
+                log.debug("Heartbeat failed for project: {}, removing emitter", projectId);
+                emitters.remove(projectId);
+            }
+        });
     }
 
     /**

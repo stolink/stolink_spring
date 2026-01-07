@@ -43,6 +43,9 @@ public class RefreshToken extends BaseEntity {
     @Column(length = 45)
     private String ipAddress; // 접속 IP (옵션)
 
+    @Column
+    private LocalDateTime replacedAt;
+
     /**
      * 토큰 만료 여부 확인
      */
@@ -51,10 +54,16 @@ public class RefreshToken extends BaseEntity {
     }
 
     /**
-     * 새 토큰으로 갱신 (Rotation)
+     * 토큰이 교체(Revoked) 되었는지 확인
      */
-    public void rotateToken(String newToken, LocalDateTime newExpiresAt) {
-        this.token = newToken;
-        this.expiresAt = newExpiresAt;
+    public boolean isReplaced() {
+        return replacedAt != null;
+    }
+
+    /**
+     * 새 토큰으로 갱신 (Rotation) - Soft Delete 개념
+     */
+    public void rotate() {
+        this.replacedAt = LocalDateTime.now();
     }
 }
