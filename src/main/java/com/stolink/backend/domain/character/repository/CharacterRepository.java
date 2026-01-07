@@ -1,12 +1,13 @@
 package com.stolink.backend.domain.character.repository;
 
-import com.stolink.backend.domain.character.node.Character;
+import java.util.List;
+
 import org.springframework.data.neo4j.repository.Neo4jRepository;
 import org.springframework.data.neo4j.repository.query.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
+import com.stolink.backend.domain.character.node.Character;
 
 @Repository
 public interface CharacterRepository extends Neo4jRepository<Character, String> {
@@ -33,7 +34,10 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         java.util.Optional<Character> findByIdWithRelationships(@Param("characterId") String characterId);
 
         @Query("MATCH (source:Character {id: $sourceId}), (target:Character {id: $targetId}) " +
-                        "CREATE (source)-[r:RELATED_TO {id: randomUUID(), type: $type, strength: $strength, description: $description}]->(target) "
+                        "MERGE (source)-[r:RELATED_TO]->(target) " +
+                        "ON CREATE SET r.id = randomUUID(), r.type = $type, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
+                        +
+                        "ON MATCH SET r.type = $type, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
                         +
                         "RETURN r")
         void createRelationship(
@@ -41,11 +45,15 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         @Param("targetId") String targetId,
                         @Param("type") String type,
                         @Param("strength") Integer strength,
-                        @Param("description") String description);
+                        @Param("description") String description,
+                        @Param("bidirectional") Boolean bidirectional);
 
         void deleteByProjectId(String projectId);
 
         java.util.Optional<Character> findByNameAndProjectId(String name, String projectId);
+
+        // 중복 안전 조회 - 여러 결과가 있을 수 있는 경우 사용
+        List<Character> findAllByNameAndProjectId(String name, String projectId);
 
         @Query("MATCH (c:Character {id: $characterId}) " +
                         "SET c.imageUrl = $imageUrl " +

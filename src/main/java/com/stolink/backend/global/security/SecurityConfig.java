@@ -78,6 +78,10 @@ public class SecurityConfig {
                                                                 "/actuator/health",
                                                                 "/actuator/info",
                                                                 "/api/internal/**",
+                                                                "/api/test/**",
+                                                                "/api/ai-callback/**",
+                                                                "/api/documents/*/analysis-status",
+                                                                "/api/project/*/analysis/reset",
                                                                 "/error")
                                                 .permitAll()
                                                 // 그 외 모든 요청은 인증 필요
@@ -87,7 +91,10 @@ public class SecurityConfig {
                                 .oauth2Login(oauth2 -> oauth2
                                                 // 로그인 시작 URL: /api/oauth2/authorization/{registrationId}
                                                 .authorizationEndpoint(authorization -> authorization
-                                                                .baseUri("/api/oauth2/authorization"))
+                                                                .baseUri("/api/oauth2/authorization")
+                                                                .authorizationRequestResolver(
+                                                                                customAuthorizationRequestResolver(
+                                                                                                clientRegistrationRepository)))
 
                                                 // 로그인 콜백 URL: /api/login/oauth2/code/{registrationId}
                                                 .redirectionEndpoint(redirection -> redirection
@@ -119,6 +126,18 @@ public class SecurityConfig {
                                 .addFilterBefore(jwtAuthenticationFilter, CsrfOriginFilter.class)
 
                                 .build();
+        }
+
+        private org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver customAuthorizationRequestResolver(
+                        org.springframework.security.oauth2.client.registration.ClientRegistrationRepository clientRegistrationRepository) {
+
+                org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver resolver = new org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver(
+                                clientRegistrationRepository, "/api/oauth2/authorization");
+
+                resolver.setAuthorizationRequestCustomizer(builder -> builder
+                                .additionalParameters(params -> params.remove("prompt")));
+
+                return resolver;
         }
 
         @Bean

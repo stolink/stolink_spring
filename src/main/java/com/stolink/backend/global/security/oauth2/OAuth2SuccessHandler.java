@@ -50,10 +50,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 String accessToken = jwtTokenProvider.createAccessToken(userId);
                 String refreshToken = jwtTokenProvider.createRefreshToken(userId);
 
-                log.info("OAuth2 login success. Issuing JWT for user: {}", userId);
+                log.info("OAuth2 login success. Issuing tokens for user: {}", userId);
 
                 // Refresh Token을 RDB에 저장
                 authService.saveRefreshToken(userId, refreshToken);
+                log.debug("Refresh token saved for user: {}", userId);
+
+                // Refresh Token을 RDB에 저장
+                authService.saveRefreshToken(userId, refreshToken);
+                log.debug("Refresh token saved for user: {}", userId);
 
                 // Access Token, Refresh Token을 HttpOnly 쿠키로 설정
                 ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(accessToken);

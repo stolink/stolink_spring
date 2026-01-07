@@ -1,10 +1,15 @@
 package com.stolink.backend.domain.ai.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.*;
-
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 글로벌 병합 결과 콜백 DTO (2차 Pass 결과)
@@ -70,5 +75,8 @@ public class GlobalMergeCallbackDTO {
         private List<String> mergedAliases;
 
         private Double confidence;
+
+        // 병합 중 발견된 충돌 리스트
+        private List<String> conflicts;
     }
 }

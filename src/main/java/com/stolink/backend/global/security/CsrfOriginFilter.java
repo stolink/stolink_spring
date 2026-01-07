@@ -117,6 +117,11 @@ public class CsrfOriginFilter extends OncePerRequestFilter {
             return true;
         }
 
+        // AI 콜백 레거시 엔드포인트 스킵 (FastAPI → Spring 서버 간 통신)
+        if (path.equals("/api/ai-callback")) {
+            return true;
+        }
+
         // Actuator 엔드포인트 스킵
         if (path.startsWith("/actuator/")) {
             return true;

@@ -3,9 +3,22 @@ package com.stolink.backend.domain.ai.service;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
+import com.stolink.backend.domain.ai.entity.AnalysisJob;
+import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
+import com.stolink.backend.domain.character.repository.CharacterJpaRepository;
+import com.stolink.backend.domain.character.repository.CharacterRepository;
+import com.stolink.backend.domain.consistency.repository.ConsistencyReportRepository;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
+import com.stolink.backend.domain.event.repository.EventNeo4jRepository;
+import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
+import com.stolink.backend.domain.plot.repository.PlotIntegrationRepository;
+import com.stolink.backend.domain.project.entity.Project;
+import com.stolink.backend.domain.project.repository.ProjectRepository;
+import com.stolink.backend.domain.setting.repository.SettingNeo4jRepository;
+import com.stolink.backend.domain.validation.repository.ValidationResultRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+import com.stolink.backend.global.sse.SseEmitterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,10 +42,103 @@ import java.util.UUID;
 public class AIAnalysisService {
 
     private final DocumentRepository documentRepository;
+    private final ProjectRepository projectRepository;
     private final RabbitMQProducerService producerService;
+    private final SseEmitterService sseEmitterService;
+
+    // Repositories for data cleanup
+    private final AnalysisJobRepository analysisJobRepository;
+
+    private final CharacterRepository characterRepository; // Neo4j
+    private final EventNeo4jRepository eventNeo4jRepository;
+    private final SettingNeo4jRepository settingNeo4jRepository;
+    private final PlotIntegrationRepository plotIntegrationRepository;
+    private final ConsistencyReportRepository consistencyReportRepository;
+    private final ValidationResultRepository validationResultRepository;
+    private final ForeshadowingRepository foreshadowingRepository;
+    private final CharacterJpaRepository characterJpaRepository; // Postgres
 
     @Value("${app.ai.callback-base-url}")
     private String callbackBaseUrl;
+
+    /**
+     * 프로젝트의 현재 분석 상태를 조회합니다.
+     * SSE 연결 초기화 시 클라이언트에게 현재 상태를 전달하기 위해 사용됩니다.
+     */
+    @Transactional(readOnly = true)
+    public SseEmitterService.AnalysisStatusEvent getAnalysisStatus(UUID projectId) {
+        long totalTextDocs = documentRepository.countTextDocumentsByProjectId(projectId);
+        if (totalTextDocs == 0) {
+            return new SseEmitterService.AnalysisStatusEvent("NONE", 0, 0, "분석할 문서가 없습니다.");
+        }
+
+        long completedDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                projectId, Document.AnalysisStatus.COMPLETED);
+
+        long failedDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                projectId, Document.AnalysisStatus.FAILED);
+
+        long processingDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                projectId, Document.AnalysisStatus.PROCESSING);
+        long queuedDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                projectId, Document.AnalysisStatus.QUEUED);
+
+        String status;
+        String message;
+
+        if (completedDocs == totalTextDocs) {
+            status = "COMPLETED";
+            message = "분석이 완료되었습니다.";
+        } else if (failedDocs > 0) {
+            status = "FAILED";
+            message = "일부 문서 분석에 실패했습니다.";
+        } else if (processingDocs > 0 || queuedDocs > 0) {
+            status = "ANALYZING";
+            message = String.format("분석 진행 중: %d/%d 챕터", completedDocs, totalTextDocs);
+        } else {
+            status = "NONE";
+            message = "분석 대기 중";
+        }
+
+        return new SseEmitterService.AnalysisStatusEvent(status, (int) completedDocs, (int) totalTextDocs, message);
+    }
+
+    /**
+     * 프로젝트 분석 상태를 강제로 초기화(리셋)합니다.
+     * 멈춘 분석 작업을 취소할 때 사용합니다.
+     * 또한 프로젝트와 연관된 모든 AI 분석 결과 데이터(DB)를 삭제합니다.
+     */
+    @Transactional
+    public void resetProjectAnalysis(UUID projectId) {
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+
+        // 1. PostgreSQL 데이터 삭제
+        analysisJobRepository.deleteAllByProject(project);
+        plotIntegrationRepository.deleteAllByProject(project);
+        consistencyReportRepository.deleteAllByProject(project);
+        validationResultRepository.deleteAllByProject(project);
+        foreshadowingRepository.deleteAllByProject(project);
+        characterJpaRepository.deleteAllByProject(project);
+
+        // 2. Neo4j 데이터 삭제
+        String projectIdStr = projectId.toString();
+        characterRepository.deleteByProjectId(projectIdStr);
+        eventNeo4jRepository.deleteByProjectId(projectIdStr);
+        settingNeo4jRepository.deleteByProjectId(projectIdStr);
+
+        // 3. 문서 상태 초기화
+        List<Document> documents = documentRepository.findTextDocumentsByProjectId(projectId);
+        for (Document doc : documents) {
+            doc.updateAnalysisStatus(Document.AnalysisStatus.NONE);
+        }
+        documentRepository.saveAll(documents);
+
+        // SSE로 상태 초기화 알림 전송
+        sseEmitterService.sendStatus(projectId, new SseEmitterService.AnalysisStatusEvent(
+                "NONE", 0, documents.size(), "분석이 초기화되었습니다."));
+        log.info("Project analysis reset and data deleted for projectId: {}", projectId);
+    }
 
     /**
      * 프로젝트의 모든 TEXT 문서에 대해 분석 요청을 발행합니다.
@@ -92,6 +198,18 @@ public class AIAnalysisService {
         String jobId = UUID.randomUUID().toString();
         String traceId = generateTraceId();
 
+        // AnalysisJob 생성 및 저장 (콜백 수신을 위해 필수)
+        AnalysisJob analysisJob = AnalysisJob.builder()
+                .jobId(jobId)
+                .project(doc.getProject())
+                .documentId(doc.getId())
+                .status(AnalysisJob.JobStatus.PROCESSING) // RabbitMQ로 바로 전송되므로 PROCESSING
+                .traceId(traceId)
+                .startedAt(java.time.LocalDateTime.now())
+                .build();
+        analysisJobRepository.save(analysisJob);
+        log.info("Created AnalysisJob: {}", jobId);
+
         // Context 생성
         AnalysisContext context = AnalysisContext.builder()
                 .chapterNumber(chapterNumber)
@@ -104,8 +222,9 @@ public class AIAnalysisService {
                 .projectId(doc.getProject().getId())
                 .documentId(doc.getId())
                 .content(doc.getContent())
-                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
+                .requiresDeepAnalysis(true)
                 .context(context)
                 .build();
     }
@@ -139,6 +258,8 @@ public class AIAnalysisService {
 
         log.info("Document analysis triggered: documentId={}, jobId={}, chapter={}/{}",
                 doc.getId(), task.getJobId(), chapterNumber, totalChapters);
+        System.out.println(
+                "DEBUG_LOG: AIAnalysisService trigger - requiresDeepAnalysis=" + task.isRequiresDeepAnalysis());
     }
 
     /**
@@ -176,7 +297,7 @@ public class AIAnalysisService {
 
         GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
                 .projectId(projectId)
-                .callbackUrl(callbackBaseUrl + "/ai-callback")
+                .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
                 .traceId(traceId)
                 .build();
 

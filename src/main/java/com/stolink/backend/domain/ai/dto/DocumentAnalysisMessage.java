@@ -1,10 +1,15 @@
 package com.stolink.backend.domain.ai.dto;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.*;
-
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 문서 분석 요청 메시지 (RabbitMQ 발행용)
@@ -24,6 +29,9 @@ public class DocumentAnalysisMessage {
 
     @JsonProperty("document_id")
     private String documentId;
+
+    @JsonProperty("job_id")
+    private String jobId;
 
     @JsonProperty("project_id")
     private String projectId;
@@ -46,6 +54,23 @@ public class DocumentAnalysisMessage {
 
     @JsonProperty("callback_url")
     private String callbackUrl;
+
+    /**
+     * 분석 유형 (full_manuscript: 전체 분석, partial_snippet: 경량 분석)
+     * - full_manuscript: 전체 분석 (청킹 + 관계분석 + GlobalMerge)
+     * - partial_snippet: 경량 Fast Track 분석
+     */
+    @JsonProperty("analysis_type")
+    @Builder.Default
+    private String analysisType = "full_manuscript";
+
+    /**
+     * 심화 분석 수행 여부 (복선, 플롯 통합 등)
+     * 무조건 true로 설정 (사용자 요청)
+     */
+    @JsonProperty("requires_deep_analysis")
+    @Builder.Default
+    private boolean requiresDeepAnalysis = true;
 
     private AnalysisContext context;
 

@@ -6,6 +6,13 @@ spring:
     username: ${POSTGRESQL_USERNAME}
     password: ${POSTGRESQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20 # 기본값 10 → 증가
+      minimum-idle: 5
+      connection-timeout: 30000 # 30초 (기본값)
+      idle-timeout: 600000 # 10분
+      max-lifetime: 1800000 # 30분
+      leak-detection-threshold: 60000 # 🔴 60초 이상 커넥션 보유 시 로그
 
   # Neo4j Configuration
   neo4j:
@@ -19,8 +26,10 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
-  # Production JPA settings
+  # Development JPA settings
   jpa:
+    hibernate:
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -51,6 +60,8 @@ oauth2:
 
 # Application Configuration
 app:
+  image-server:
+    health-check-enabled: false
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174}
   storage:

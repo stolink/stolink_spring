@@ -1,14 +1,17 @@
 package com.stolink.backend.domain.character.service;
 
+import java.util.Map;
+
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Profile;
-import java.util.Map;
 
 @Slf4j
 // @Component
@@ -63,11 +66,11 @@ public class CharacterDataInitializer implements CommandLineRunner {
 
                 // Create Relationships
                 characterRepository.createRelationship(protagonist.getId(), helper.getId(), "ally", 5,
-                                "Trusted companion");
+                                "Trusted companion", false);
                 characterRepository.createRelationship(protagonist.getId(), antagonist.getId(), "enemy", -5,
-                                "Destined rival");
+                                "Destined rival", false);
                 characterRepository.createRelationship(antagonist.getId(), protagonist.getId(), "enemy", -5,
-                                "Obstacle to power");
+                                "Obstacle to power", false);
 
                 log.info("Dummy character data initialized successfully.");
         }

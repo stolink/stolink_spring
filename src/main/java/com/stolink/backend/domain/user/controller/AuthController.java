@@ -5,6 +5,7 @@ import com.stolink.backend.domain.user.service.AuthService;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import com.stolink.backend.global.util.CookieUtils;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
@@ -21,6 +22,9 @@ public class AuthController {
 
     private final AuthService authService;
     private final CookieUtils cookieUtils;
+
+    @Value("${jwt.cookie-secure:false}")
+    private boolean cookieSecure;
 
     /**
      * 일반 회원가입
@@ -145,3 +149,4 @@ public class AuthController {
         return ApiResponse.ok(user);
     }
 }
+

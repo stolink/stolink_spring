@@ -1,11 +1,26 @@
 package com.stolink.backend.domain.character.entity;
 
+import java.util.UUID;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.global.common.entity.BaseEntity;
-import jakarta.persistence.*;
-import lombok.*;
 
-import java.util.UUID;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * AI 서버 호환용 캐릭터 엔티티 (PostgreSQL)
@@ -21,7 +36,7 @@ import java.util.UUID;
 public class CharacterEntity extends BaseEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(updatable = false, nullable = false)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -67,37 +82,47 @@ public class CharacterEntity extends BaseEntity {
     private String imageUrl;
 
     // JSON fields for complex objects
-    @Column(name = "aliases_json", columnDefinition = "TEXT")
+    @Column(name = "aliases_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String aliasesJson;
 
-    @Column(name = "profile_json", columnDefinition = "TEXT")
+    @Column(name = "profile_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String profileJson;
 
-    @Column(name = "appearance_json", columnDefinition = "TEXT")
+    @Column(name = "appearance_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String appearanceJson;
 
-    @Column(name = "visual_json", columnDefinition = "TEXT")
+    @Column(name = "visual_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String visualJson;
 
-    @Column(name = "personality_json", columnDefinition = "TEXT")
+    @Column(name = "personality_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String personalityJson;
 
-    @Column(name = "relations_json", columnDefinition = "TEXT")
+    @Column(name = "relations_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String relationsJson;
 
-    @Column(name = "current_mood_json", columnDefinition = "TEXT")
+    @Column(name = "current_mood_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String currentMoodJson;
 
-    @Column(name = "meta_json", columnDefinition = "TEXT")
+    @Column(name = "meta_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String metaJson;
 
-    @Column(name = "embedding_json", columnDefinition = "TEXT")
+    @Column(name = "embedding_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String embeddingJson;
 
     @Column(name = "motivation", columnDefinition = "TEXT")
     private String motivation;
 
-    @Column(name = "inventory_json", columnDefinition = "TEXT")
+    @Column(name = "inventory_json", columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
     private String inventoryJson;
 
     @Column(name = "first_appearance", length = 255)

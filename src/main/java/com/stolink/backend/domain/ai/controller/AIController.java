@@ -1,6 +1,24 @@
 package com.stolink.backend.domain.ai.controller;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
@@ -18,17 +36,11 @@ import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+import com.stolink.backend.global.sse.SseEmitterService;
+
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -36,299 +48,321 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AIController {
 
-        private final RabbitMQProducerService producerService;
-        private final AICallbackService callbackService;
-        private final AnalysisJobRepository analysisJobRepository;
-        private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
-        private final ProjectRepository projectRepository;
-        private final ObjectMapper objectMapper;
+    private final RabbitMQProducerService producerService;
+    private final AICallbackService callbackService;
+    private final AnalysisJobRepository analysisJobRepository;
+    private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
+    private final ProjectRepository projectRepository;
+    private final ObjectMapper objectMapper;
+    private final SseEmitterService sseEmitterService;
 
-        @Value("${app.ai.callback-base-url}")
-        private String callbackBaseUrl;
+    @Value("${app.ai.callback-base-url}")
+    private String callbackBaseUrl;
 
-        /**
-         * AI 분석 요청
-         */
-        @PostMapping("/ai/analyze")
-        @ResponseStatus(HttpStatus.ACCEPTED)
-        public ApiResponse<Map<String, String>> analyze(
-                        @AuthenticationPrincipal UUID userId,
-                        @RequestBody Map<String, Object> request) {
+    /**
+     * 작업별 전용 스트림 (프론트엔드 호환용)
+     */
+    @GetMapping(value = "/ai/jobs/{jobId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamJobStatus(@PathVariable String jobId) {
+        log.info("SSE stream requested for job: {}", jobId);
+        AnalysisJob job = analysisJobRepository.findByJobId(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+        return sseEmitterService.createEmitter(job.getProject().getId());
+    }
 
-                String jobId = UUID.randomUUID().toString();
-                String traceId = generateTraceId();
+    @PostMapping("/ai/analyze")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @SuppressWarnings("unchecked")
+    public ApiResponse<Map<String, Object>> analyze(
+            @AuthenticationPrincipal UUID userId,
+            @RequestBody Map<String, Object> request) { // Using Map for flexibility as per Dev
 
-                UUID projectId = UUID.fromString((String) request.get("projectId"));
-                UUID documentId = UUID.fromString((String) request.get("documentId"));
+        log.info("Analyze request body: {}", request);
 
-                // Project 조회
-                Project project = projectRepository.findById(projectId)
-                                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
-
-                // Job 생성 및 저장
-                AnalysisJob job = AnalysisJob.builder()
-                                .jobId(jobId)
-                                .project(project)
-                                .documentId(documentId)
-                                .traceId(traceId)
-                                .status(AnalysisJob.JobStatus.PENDING)
-                                .build();
-                analysisJobRepository.save(job);
-                log.info("Created analysis job: {}", jobId);
-
-                // Context 빌드 (선택적)
-                AnalysisContext context = buildContext(request);
-
-                AnalysisTaskDTO task = AnalysisTaskDTO.builder()
-                                .jobId(jobId)
-                                .projectId(projectId)
-                                .documentId(documentId)
-                                .content((String) request.get("content"))
-                                .callbackUrl(callbackBaseUrl + "/ai-callback")
-                                .traceId(traceId)
-                                .context(context)
-                                .build();
-
-                producerService.sendAnalysisTask(task);
-
-                // Job 상태를 PROCESSING으로 업데이트
-                job.markAsProcessing();
-                analysisJobRepository.save(job);
-
-                log.info("Analysis request sent: jobId={}, traceId={}", jobId, traceId);
-
-                return ApiResponse.<Map<String, String>>builder()
-                                .status(HttpStatus.ACCEPTED)
-                                .message("Analysis started")
-                                .data(Map.of(
-                                                "jobId", jobId,
-                                                "traceId", traceId,
-                                                "status", "processing"))
-                                .build();
+        Object projectIdObj = request.get("projectId");
+        if (projectIdObj == null) {
+            throw new IllegalArgumentException("projectId is required");
         }
 
-        /**
-         * Job 상태 조회 (프론트엔드 폴링용)
-         */
-        @GetMapping("/ai/jobs/{jobId}")
-        public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {
-                AnalysisJob job = analysisJobRepository.findByJobId(jobId)
-                                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+        UUID projectId = UUID.fromString(projectIdObj.toString());
+        Project project = projectRepository.findById(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
 
-                return ApiResponse.ok(Map.of(
-                                "jobId", job.getJobId(),
-                                "projectId", job.getProject().getId().toString(),
-                                "status", job.getStatus().name(),
-                                "traceId", job.getTraceId() != null ? job.getTraceId() : "",
-                                "processingTimeMs", job.getProcessingTimeMs() != null ? job.getProcessingTimeMs() : 0));
+        // documentId (단일) 또는 documentIds (리스트) 처리
+        java.util.List<UUID> documentIds = new java.util.ArrayList<>();
+        if (request.containsKey("documentId") && request.get("documentId") != null) {
+            documentIds.add(UUID.fromString(request.get("documentId").toString()));
+        } else if (request.containsKey("documentIds") && request.get("documentIds") instanceof java.util.List) {
+            java.util.List<String> ids = (java.util.List<String>) request.get("documentIds");
+            for (String id : ids) {
+                documentIds.add(UUID.fromString(id));
+            }
         }
 
-        /**
-         * /**
-         * AI Callback 엔드포인트 (Python → Spring)
-         *
-         * message_type 필드로 분기하여 처리합니다:
-         * - DOCUMENT_ANALYSIS_RESULT: 1차 Pass 문서별 분석 결과
-         * - GLOBAL_MERGE_RESULT: 2차 Pass 캐릭터 병합 결과
-         * - 그 외: 기존 FULL_DOCUMENT 분석 결과
-         */
-        @PostMapping("/ai-callback")
-        public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
-                try {
-                        JsonNode root = objectMapper.readTree(rawPayload);
-                        String messageType = root.path("message_type").asText(null);
-
-                        log.info("Received AI callback, message_type: {}", messageType);
-
-                        if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
-                                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                DocumentAnalysisCallbackDTO.class);
-                                callbackService.handleDocumentAnalysisCallback(callback);
-                                log.info("Document analysis callback processed for document: {}",
-                                                callback.getDocumentId());
-
-                        } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
-                                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                GlobalMergeCallbackDTO.class);
-                                callbackService.handleGlobalMergeCallback(callback);
-                                log.info("Global merge callback processed for project: {}", callback.getProjectId());
-
-                        } else {
-                                // 기존 FULL_DOCUMENT 분석 결과 또는 message_type 없는 경우
-                                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
-                                                AnalysisCallbackDTO.class);
-                                callbackService.handleAnalysisCallback(callback);
-                                log.info("Legacy analysis callback processed for job: {}", callback.getJobId());
-                        }
-
-                        return ApiResponse.ok();
-                } catch (JsonProcessingException e) {
-                        log.error("Failed to parse AI callback payload: {}", e.getMessage());
-                        return ApiResponse.<Void>builder()
-                                        .status(HttpStatus.BAD_REQUEST)
-                                        .message("Invalid JSON payload: " + e.getMessage())
-                                        .build();
-                }
+        if (documentIds.isEmpty()) {
+            throw new IllegalArgumentException("documentId or documentIds is required");
         }
 
-        /**
-         * 이미지 생성 Job 상태 조회 (프론트엔드 폴링용 - 분리된 엔드포인트)
-         */
-        @GetMapping("/ai/image/jobs/{jobId}")
-        public ApiResponse<Map<String, Object>> getImageJobStatus(@PathVariable String jobId) {
-                com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
-                                .findById(jobId)
-                                .orElseThrow(() -> new ResourceNotFoundException("ImageJob", "jobId", jobId));
+        log.info("Processing analysis for {} documents", documentIds.size());
 
-                java.util.Map<String, Object> response = new java.util.HashMap<>();
-                response.put("jobId", task.getJobId());
-                response.put("status", task.getStatus().name());
-                response.put("imageUrl", task.getImageUrl() != null ? task.getImageUrl() : "");
-                response.put("errorMessage", task.getErrorMessage() != null ? task.getErrorMessage() : "");
+        String firstJobId = null;
+        String traceId = generateTraceId();
+        AnalysisContext context = buildContext(request);
+        String content = (String) request.get("content");
 
-                if (task.getProjectId() != null) {
-                        response.put("projectId", task.getProjectId().toString());
-                }
-                if (task.getCharacterId() != null) {
-                        response.put("characterId", task.getCharacterId().toString());
-                }
+        for (UUID documentId : documentIds) {
+            String jobId = UUID.randomUUID().toString();
+            if (firstJobId == null)
+                firstJobId = jobId;
 
-                return ApiResponse.ok(response);
+            // Job 생성 및 저장
+            AnalysisJob job = AnalysisJob.builder()
+                    .jobId(jobId)
+                    .project(project)
+                    .documentId(documentId)
+                    .traceId(traceId)
+                    .status(AnalysisJob.JobStatus.PENDING)
+                    .build();
+            analysisJobRepository.save(job);
+
+            AnalysisTaskDTO task = AnalysisTaskDTO.builder()
+                    .jobId(jobId)
+                    .projectId(projectId)
+                    .documentId(documentId)
+                    .content(content)
+                    .callbackUrl(callbackBaseUrl + "/internal/ai/analysis/callback")
+                    .traceId(traceId)
+                    .context(context)
+                    .build();
+
+            producerService.sendAnalysisTask(task);
+
+            // Job 상태를 PROCESSING으로 업데이트
+            job.markAsProcessing();
+            analysisJobRepository.save(job);
+            log.info("Analysis request sent: jobId={}, documentId={}", jobId, documentId);
         }
 
-        /**
-         * Internal callback endpoint for Analysis Worker
-         */
-        @PostMapping("/internal/ai/analysis/callback")
-        public ApiResponse<Void> handleAnalysisCallback(@RequestBody AnalysisCallbackDTO callback) {
-                log.info("Received analysis callback for job: {}, status: {}",
-                                callback.getJobId(), callback.getStatus());
+        return ApiResponse.<Map<String, Object>>builder()
+                .status(HttpStatus.ACCEPTED)
+                .message("Analysis started for " + documentIds.size() + " documents")
+                .data(Map.of(
+                        "jobId", firstJobId,
+                        "jobIds", documentIds.stream().map(Object::toString).toList(),
+                        "traceId", traceId,
+                        "status", "processing"))
+                .build();
+    }
+
+    /**
+     * Job 상태 조회 (프론트엔드 폴링용)
+     */
+    @GetMapping("/ai/jobs/{jobId}")
+    public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {
+        AnalysisJob job = analysisJobRepository.findByJobId(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+
+        return ApiResponse.ok(Map.of(
+                "jobId", job.getJobId(),
+                "projectId", job.getProject().getId().toString(),
+                "status", job.getStatus().name(),
+                "traceId", job.getTraceId() != null ? job.getTraceId() : "",
+                "documentId", job.getDocumentId() != null ? job.getDocumentId().toString() : "",
+                "processingTimeMs", job.getProcessingTimeMs() != null ? job.getProcessingTimeMs() : 0));
+    }
+
+    /**
+     * 이미지 생성 Job 상태 조회
+     */
+    @GetMapping("/ai/image/jobs/{jobId}")
+    public ApiResponse<Map<String, Object>> getImageJobStatus(@PathVariable String jobId) {
+        com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
+                .findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("ImageJob", "jobId", jobId));
+
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("jobId", task.getJobId());
+        response.put("status", task.getStatus().name());
+        response.put("imageUrl", task.getImageUrl() != null ? task.getImageUrl() : "");
+        response.put("errorMessage", task.getErrorMessage() != null ? task.getErrorMessage() : "");
+
+        if (task.getProjectId() != null) {
+            response.put("projectId", task.getProjectId().toString());
+        }
+        if (task.getCharacterId() != null) {
+            response.put("characterId", task.getCharacterId().toString());
+        }
+
+        return ApiResponse.ok(response);
+    }
+
+    /**
+     * Internal callback endpoint for Analysis Worker (Documented path)
+     */
+    @PostMapping("/internal/ai/analysis/callback")
+    public ApiResponse<Void> handleInternalAICallback(@RequestBody String rawPayload) {
+        return processPayload(rawPayload);
+    }
+
+    /**
+     * Legacy callback endpoint
+     */
+    @PostMapping("/ai-callback")
+    public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
+        return processPayload(rawPayload);
+    }
+
+    private ApiResponse<Void> processPayload(String rawPayload) {
+        try {
+            JsonNode root = objectMapper.readTree(rawPayload);
+            String messageType = root.path("message_type").asText(null);
+
+            log.info("Processing AI callback, message_type: {}", messageType);
+
+            if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
+                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                        DocumentAnalysisCallbackDTO.class);
+                callbackService.handleDocumentAnalysisCallback(callback);
+            } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
+                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
+                        GlobalMergeCallbackDTO.class);
+                callbackService.handleGlobalMergeCallback(callback);
+            } else {
+                // Default or Legacy
+                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                        AnalysisCallbackDTO.class);
                 callbackService.handleAnalysisCallback(callback);
-                return ApiResponse.ok();
+            }
+
+            return ApiResponse.ok();
+        } catch (Exception e) {
+            log.error("Failed to process AI callback: {}", e.getMessage(), e);
+            return ApiResponse.<Void>builder()
+                    .status(HttpStatus.BAD_REQUEST)
+                    .message("Error: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    /**
+     * Internal endpoint for Job status update
+     */
+    @PostMapping("/internal/ai/jobs/{jobId}/status")
+    public ApiResponse<Void> updateJobStatus(
+            @PathVariable String jobId,
+            @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
+        String status = request.getStatus();
+        String message = request.getMessage();
+
+        log.info("Updating analysis job status: {} -> {}", jobId, status);
+
+        AnalysisJob job = analysisJobRepository.findByJobId(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+
+        try {
+            AnalysisJob.JobStatus newStatus = AnalysisJob.JobStatus.valueOf(status.toUpperCase());
+            job.updateStatus(newStatus, message);
+            analysisJobRepository.save(job);
+            log.info("AnalysisJob {} status updated to {}", jobId, newStatus);
+            return ApiResponse.ok();
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid analysis status: {}", status);
+            return ApiResponse.<Void>builder()
+                    .status(HttpStatus.BAD_REQUEST)
+                    .message("Invalid status: " + status)
+                    .build();
+        }
+    }
+
+    /**
+     * 이미지 생성 작업 상태 업데이트
+     */
+    @PostMapping("/internal/ai/image/jobs/{jobId}/status")
+    public ApiResponse<Void> updateImageJobStatus(
+            @PathVariable String jobId,
+            @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
+        String status = request.getStatus();
+        String message = request.getMessage();
+
+        log.info("Updating image job status: {} -> {}", jobId, status);
+
+        com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
+                .findById(jobId)
+                .orElseThrow(() -> new ResourceNotFoundException("ImageJob", "jobId", jobId));
+
+        try {
+            com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus newStatus = com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus
+                    .valueOf(status.toUpperCase());
+            task.setStatus(newStatus);
+            if (message != null)
+                task.setErrorMessage(message);
+            imageGenerationTaskRepository.save(task);
+            log.info("ImageJob {} status updated to {}", jobId, newStatus);
+            return ApiResponse.ok();
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid image task status: {}", status);
+            return ApiResponse.<Void>builder()
+                    .status(HttpStatus.BAD_REQUEST)
+                    .message("Invalid status: " + status)
+                    .build();
+        }
+    }
+
+    /**
+     * Internal callback endpoint for Image Worker
+     */
+    @PostMapping("/internal/ai/image/callback")
+    public ApiResponse<Void> handleImageCallback(@RequestBody ImageCallbackDTO callback) {
+        log.info("Received image callback for job: {}, character: {}",
+                callback.getJobId(), callback.getCharacterId());
+        callbackService.handleImageCallback(callback);
+        return ApiResponse.ok();
+    }
+
+    /**
+     * Trace ID 생성
+     */
+    private String generateTraceId() {
+        return String.format("trace-%s-%s",
+                LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE),
+                UUID.randomUUID().toString().substring(0, 8));
+    }
+
+    /**
+     * Context 빌드
+     */
+    private AnalysisContext buildContext(Map<String, Object> contextMap) {
+        if (contextMap == null) {
+            return null;
         }
 
-        /**
-         * Internal endpoint for Job status update (FastAPI에서 호출)
-         */
-        @PostMapping("/internal/ai/jobs/{jobId}/status")
-        public ApiResponse<Void> updateJobStatus(
-                        @PathVariable String jobId,
-                        @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
-                String status = request.getStatus();
-                String message = request.getMessage();
+        return AnalysisContext.builder()
+                .chapterNumber(contextMap.get("chapterNumber") != null ? (Integer) contextMap.get("chapterNumber") : null)
+                .totalChapters(contextMap.get("totalChapters") != null ? (Integer) contextMap.get("totalChapters") : null)
+                .worldRulesSummary((String) contextMap.get("worldRulesSummary"))
+                .build();
+    }
 
-                log.info("Updating analysis job status: {} -> {}", jobId, status);
+    /**
+     * Global Merge 수동 트리거
+     */
+    @PostMapping("/project/{projectId}/merge")
+    public ApiResponse<Void> triggerGlobalMerge(
+            @PathVariable UUID projectId,
+            @AuthenticationPrincipal UUID userId) {
 
-                AnalysisJob job = analysisJobRepository.findByJobId(jobId)
-                                .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
+        log.info("Triggering global merge for project: {} (User: {})", projectId, userId);
 
-                try {
-                        AnalysisJob.JobStatus newStatus = AnalysisJob.JobStatus.valueOf(status.toUpperCase());
-                        job.updateStatus(newStatus, message);
-                        analysisJobRepository.save(job);
-                        log.info("AnalysisJob {} status updated to {}", jobId, newStatus);
-                        return ApiResponse.ok();
-                } catch (IllegalArgumentException e) {
-                        log.error("Invalid analysis status: {}", status);
-                        return ApiResponse.<Void>builder()
-                                        .status(HttpStatus.BAD_REQUEST)
-                                        .message("Invalid status: " + status)
-                                        .build();
-                }
-        }
+        String traceId = generateTraceId();
 
-        /**
-         * 이미지 생성 작업 상태 업데이트 (FastAPI에서 호출 - 분리된 엔드포인트)
-         */
-        @PostMapping("/internal/ai/image/jobs/{jobId}/status")
-        public ApiResponse<Void> updateImageJobStatus(
-                        @PathVariable String jobId,
-                        @RequestBody com.stolink.backend.domain.ai.dto.JobStatusUpdateRequest request) {
-                String status = request.getStatus();
-                String message = request.getMessage();
+        GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
+                .projectId(projectId)
+                .callbackUrl(callbackBaseUrl + "/internal/ai/analysis/callback")
+                .traceId(traceId)
+                .build();
 
-                log.info("Updating image job status: {} -> {}", jobId, status);
+        producerService.sendGlobalMergeRequest(request);
 
-                com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
-                                .findById(jobId)
-                                .orElseThrow(() -> new ResourceNotFoundException("ImageJob", "jobId", jobId));
-
-                try {
-                        com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus newStatus = com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus
-                                        .valueOf(status.toUpperCase());
-                        task.setStatus(newStatus);
-                        if (message != null)
-                                task.setErrorMessage(message);
-                        imageGenerationTaskRepository.save(task);
-                        log.info("ImageJob {} status updated to {}", jobId, newStatus);
-                        return ApiResponse.ok();
-                } catch (IllegalArgumentException e) {
-                        log.error("Invalid image task status: {}", status);
-                        return ApiResponse.<Void>builder()
-                                        .status(HttpStatus.BAD_REQUEST)
-                                        .message("Invalid status: " + status)
-                                        .build();
-                }
-        }
-
-        /**
-         * Internal callback endpoint for Image Worker
-         */
-        @PostMapping("/internal/ai/image/callback")
-        public ApiResponse<Void> handleImageCallback(@RequestBody ImageCallbackDTO callback) {
-                log.info("Received image callback for job: {}, character: {}",
-                                callback.getJobId(), callback.getCharacterId());
-                callbackService.handleImageCallback(callback);
-                return ApiResponse.ok();
-        }
-
-        /**
-         * Trace ID 생성 (분산 추적용)
-         */
-        private String generateTraceId() {
-                return String.format("trace-%s-%s",
-                                LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE),
-                                UUID.randomUUID().toString().substring(0, 8));
-        }
-
-        /**
-         * Context 빌드 (요청에서 추출)
-         */
-        @SuppressWarnings("unchecked")
-        private AnalysisContext buildContext(Map<String, Object> request) {
-                Map<String, Object> contextMap = (Map<String, Object>) request.get("context");
-                if (contextMap == null) {
-                        return null;
-                }
-
-                return AnalysisContext.builder()
-                                .chapterNumber((Integer) contextMap.get("chapterNumber"))
-                                .totalChapters((Integer) contextMap.get("totalChapters"))
-                                .worldRulesSummary((String) contextMap.get("worldRulesSummary"))
-                                .build();
-        }
-
-        /**
-         * Global Merge 수동 트리거 (Integration Test Scenario B)
-         */
-        @PostMapping("/project/{projectId}/merge")
-        public ApiResponse<Void> triggerGlobalMerge(
-                        @PathVariable UUID projectId,
-                        @AuthenticationPrincipal UUID userId) {
-
-                log.info("Triggering global merge for project: {} (User: {})", projectId, userId);
-
-                String traceId = generateTraceId();
-                GlobalMergeCallbackDTO.builder().build(); // Just to ensure import if needed, or better just use the DTO
-
-                GlobalMergeRequestDTO request = GlobalMergeRequestDTO.builder()
-                                .projectId(projectId)
-                                .callbackUrl(callbackBaseUrl + "/ai-callback")
-                                .traceId(traceId)
-                                .build();
-
-                producerService.sendGlobalMergeRequest(request);
-
-                return ApiResponse.ok();
-        }
+        return ApiResponse.ok();
+    }
 }

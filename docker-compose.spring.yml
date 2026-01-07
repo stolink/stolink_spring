@@ -11,6 +11,7 @@ version: '3.8'
 
 services:
   backend:
+    env_file: .env
     build:
       context: .
       dockerfile: Dockerfile
@@ -45,20 +46,35 @@ services:
       APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue
       APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
-      # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/ai-callback
-      APP_CALLBACK_BASE_URL: http://stolink-backend:8080
+      # AI Callback URL (base URL - endpoint paths are appended in code)
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api
       # Analysis Settings
       APP_ANALYSIS_MAX_RETRY_COUNT: 3
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
+      # CORS
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      # OAuth2 (Google)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      OAUTH2_REDIRECT_URI: ${OAUTH2_REDIRECT_URI}
+      # Security (JWT)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_COOKIE_DOMAIN: ${JWT_COOKIE_DOMAIN}
     ports:
       - "8080:8080"
     volumes:
       - backend_storage:/app/storage/uploads
+      # Gradle 캐시 바인드 마운트 (빌드 속도 향상)
+      - gradle_cache:/root/.gradle
     networks:
       - ai-backend-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     healthcheck:
       test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
       interval: 30s
@@ -68,10 +84,11 @@ services:
 
 volumes:
   backend_storage:
+  gradle_cache:
 
 
 networks:
   ai-backend-network:
     external: true
-    name: sto-link-ai-backend_stolink-network
+    name: stolink_fastapi_agent_stolink-network
 

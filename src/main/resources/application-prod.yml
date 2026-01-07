@@ -21,6 +21,8 @@ spring:
 
   # Production JPA settings
   jpa:
+    hibernate:
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -75,6 +77,12 @@ app:
       virtual-host: ${RABBITMQ_AGENT_VHOST}
   ai:
     callback-base-url: ${APP_AI_CALLBACK_BASE_URL}
+  callback:
+    base-url: ${APP_AI_CALLBACK_BASE_URL}
+  # Storead API 연동 (Draft 퍼블리시)
+  storead:
+    base-url: ${STOREAD_SPRING_URL}
+    service-key: ${STOREAD_SPRING_SERVICE_KEY}
 
 # Production Logging
 logging:

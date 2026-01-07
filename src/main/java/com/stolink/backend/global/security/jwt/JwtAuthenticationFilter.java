@@ -30,12 +30,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final String AUTHORIZATION_HEADER = "Authorization";
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final JwtTokenProvider jwtTokenProvider;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
             HttpServletResponse response,
             FilterChain filterChain) throws ServletException, IOException {
+        String requestUri = request.getRequestURI();
+        log.debug("JWT Filter processing request: {} {}", request.getMethod(), requestUri);
+
         try {
             String jwt = resolveToken(request);
 
@@ -58,12 +64,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 쿠키에서 Access Token 추출
+     * Authorization 헤더 또는 쿠키에서 토큰 추출
      */
     private String resolveToken(HttpServletRequest request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
+        // 1. Authorization 헤더 확인
+        String bearerToken = request.getHeader(AUTHORIZATION_HEADER);
+        if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(BEARER_PREFIX)) {
+            return bearerToken.substring(BEARER_PREFIX.length());
+        }
+
+        // 2. 쿠키 확인 (CookieUtils 사용 권장하지만, 기존 로직 유지 + Dev 병합)
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
                 if (CookieUtils.ACCESS_TOKEN_COOKIE.equals(cookie.getName())) {
                     return cookie.getValue();
                 }
