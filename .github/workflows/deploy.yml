@@ -3,7 +3,7 @@ name: Deploy
 on:
   push:
     branches:
-      - main # production 환경
+      - release # production 환경
       - dev # develop 환경
 
 concurrency:
@@ -19,7 +19,7 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     # 브랜치에 따라 환경 자동 선택
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
+    environment: ${{ github.ref == 'refs/heads/release' && 'production' || 'develop' }}
     outputs:
       image-tag: ${{ steps.meta.outputs.tags }}
     steps:
@@ -58,8 +58,8 @@ jobs:
         with:
           images: ghcr.io/stolink/stolink-spring
           tags: |
-            type=raw,value=${{ github.ref == 'refs/heads/main' && 'latest' || 'dev-latest' }}
-            type=sha,prefix=${{ github.ref == 'refs/heads/main' && '' || 'dev-' }}
+            type=raw,value=${{ github.ref == 'refs/heads/release' && 'latest' || 'dev-latest' }}
+            type=sha,prefix=${{ github.ref == 'refs/heads/release' && '' || 'dev-' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -76,7 +76,7 @@ jobs:
     needs: [build-and-push]
     runs-on: ubuntu-latest
     # 브랜치에 따라 환경 자동 선택
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'develop' }}
+    environment: ${{ github.ref == 'refs/heads/release' && 'production' || 'develop' }}
     steps:
       - name: Checkout (for docker-compose.yml only)
         uses: actions/checkout@v4
@@ -120,10 +120,10 @@ jobs:
           STOREAD_SPRING_SERVICE_KEY: ${{ secrets.STOREAD_SPRING_SERVICE_KEY }}
           GH_PAT: ${{ secrets.GH_PAT }}
           # 브랜치에 따라 프로파일 및 이미지 태그 결정
-          SPRING_PROFILE: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
-          IMAGE_TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'dev-latest' }}
+          SPRING_PROFILE: ${{ github.ref == 'refs/heads/release' && 'prod' || 'dev' }}
+          IMAGE_TAG: ${{ github.ref == 'refs/heads/release' && 'latest' || 'dev-latest' }}
           # 운영 환경에서는 localhost 제외 (보안 강화)
-          CORS_ORIGINS: ${{ github.ref == 'refs/heads/main' && format('https://{0}', vars.CLOUDFRONT_URL) || format('http://localhost:3000,http://localhost:5173,http://localhost:5174,https://{0}', vars.CLOUDFRONT_URL) }}
+          CORS_ORIGINS: ${{ github.ref == 'refs/heads/release' && format('https://{0}', vars.CLOUDFRONT_URL) || format('http://localhost:3000,http://localhost:5173,http://localhost:5174,https://{0}', vars.CLOUDFRONT_URL) }}
           # JWT 쿠키 도메인 및 OAuth2 리다이렉트 URI
           JWT_COOKIE_DOMAIN: ${{ vars.CLOUDFRONT_URL }}
           OAUTH2_REDIRECT_URI: https://${{ vars.CLOUDFRONT_URL }}/oauth2/callback
@@ -167,8 +167,8 @@ jobs:
           COMPOSE_BASE64=$(echo "$COMPOSE_CONTENT" | base64 -w 0)
 
           # SSM 명령 실행 및 Command ID 캡처
-          # dev 브랜치: dev-stolink-spring 태그, main 브랜치: stolink-spring 태그
-          EC2_TAG=${{ github.ref == 'refs/heads/main' && 'stolink-spring' || 'dev-stolink-spring' }}
+          # dev 브랜치: dev-stolink-spring 태그, release 브랜치: stolink-spring 태그
+          EC2_TAG=${{ github.ref == 'refs/heads/release' && 'stolink-spring' || 'dev-stolink-spring' }}
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
