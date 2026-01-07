@@ -58,8 +58,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5672:5672" # AMQP
-      - "15672:15672" # Management UI
+      - "5673:5672" # AMQP (Image Gen - 5673)
+      - "15673:15672" # Management UI (Image Gen - 15673)
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -80,8 +80,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
     ports:
-      - "5673:5672" # AMQP (외부 포트 5673)
-      - "15673:15672" # Management UI (외부 포트 15673)
+      - "5672:5672" # AMQP (Agent - 5672)
+      - "15672:15672" # Management UI (Agent - 15672)
     volumes:
       - rabbitmq_agent_data:/var/lib/rabbitmq
     networks:

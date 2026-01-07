@@ -66,7 +66,7 @@ app:
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST:localhost}
-      port: ${RABBITMQ_IMAGE_PORT:5672}
+      port: ${RABBITMQ_IMAGE_PORT:5673}
       username: ${RABBITMQ_IMAGE_USERNAME:stolink}
       password: ${RABBITMQ_IMAGE_PASSWORD:stolink123}
       virtual-host: ${RABBITMQ_IMAGE_VHOST:stolink}
@@ -83,6 +83,7 @@ app:
     base-url: ${APP_CALLBACK_BASE_URL:http://localhost:8080}
   analysis:
     max-retry-count: ${APP_ANALYSIS_MAX_RETRY_COUNT:3}
+  image-server-url: ${IMAGE_SERVER_URL:http://host.docker.internal:8001}
 
 logging:
   level:

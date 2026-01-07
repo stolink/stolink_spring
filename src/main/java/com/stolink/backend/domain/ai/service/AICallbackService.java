@@ -967,6 +967,15 @@ public class AICallbackService {
                 callback.getJobId(), callback.getCharacterId());
 
         String jobId = callback.getJobId();
+
+        if (callback.getCharacterId() == null) {
+            log.warn("Received image callback without characterId for job: {}", jobId);
+            // 만약 characterId가 필수라면 여기서 리턴하거나 에러 처리
+            // 하지만 JobId로 Task를 찾을 수 있다면 진행 가능할 수도 있음.
+            // 일단 안전하게 리턴하거나, 아래 로직에서 null 체크를 계속 해야 함.
+            // 여기서는 에러 로깅 후 종료 (데이터 무결성 위해)
+            return;
+        }
         String characterId = callback.getCharacterId().toString();
 
         // URL 수정 (minio -> localhost) - 로컬 환경 호환성

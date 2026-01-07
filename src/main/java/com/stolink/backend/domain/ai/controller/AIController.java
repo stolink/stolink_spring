@@ -38,8 +38,6 @@ import lombok.extern.slf4j.Slf4j;
 import com.stolink.backend.domain.ai.dto.AnalysisRequestDTO;
 import jakarta.validation.Valid;
 
-// ... (existing imports)
-
 @Slf4j
 @RestController
 @RequestMapping("/api")
@@ -141,10 +139,6 @@ public class AIController {
         }
 
         /**
-         * // Legacy /ai-callback endpoint removed - AI server now uses
-         * /internal/ai/analysis/callback
-         * 
-         * /**
          * 이미지 생성 Job 상태 조회 (프론트엔드 폴링용 - 분리된 엔드포인트)
          */
         @GetMapping("/ai/image/jobs/{jobId}")
@@ -209,6 +203,13 @@ public class AIController {
                         return ApiResponse.<Void>builder()
                                         .status(HttpStatus.BAD_REQUEST)
                                         .message("Invalid JSON: " + e.getMessage())
+                                        .build();
+                } catch (RuntimeException e) {
+                        log.error("Error processing callback: {}", e.getMessage(), e);
+                        // 500 대신 500을 명시적으로 리턴하되, JSON 파싱이나 예기치 못한 에러를 잡음
+                        return ApiResponse.<Void>builder()
+                                        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                        .message("Processing error: " + e.getMessage())
                                         .build();
                 }
         }
