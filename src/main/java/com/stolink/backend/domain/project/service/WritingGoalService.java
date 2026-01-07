@@ -1,5 +1,13 @@
 package com.stolink.backend.domain.project.service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.project.dto.CreateWritingGoalRequest;
 import com.stolink.backend.domain.project.dto.WritingGoalResponse;
@@ -12,15 +20,8 @@ import com.stolink.backend.domain.project.repository.WritingGoalRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.temporal.ChronoUnit;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor

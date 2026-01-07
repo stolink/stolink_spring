@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -38,7 +37,6 @@ import com.stolink.backend.global.common.dto.ApiResponse;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import com.stolink.backend.global.sse.SseEmitterService;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -337,8 +335,10 @@ public class AIController {
         }
 
         return AnalysisContext.builder()
-                .chapterNumber(contextMap.get("chapterNumber") != null ? (Integer) contextMap.get("chapterNumber") : null)
-                .totalChapters(contextMap.get("totalChapters") != null ? (Integer) contextMap.get("totalChapters") : null)
+                .chapterNumber(
+                        contextMap.get("chapterNumber") != null ? (Integer) contextMap.get("chapterNumber") : null)
+                .totalChapters(
+                        contextMap.get("totalChapters") != null ? (Integer) contextMap.get("totalChapters") : null)
                 .worldRulesSummary((String) contextMap.get("worldRulesSummary"))
                 .build();
     }

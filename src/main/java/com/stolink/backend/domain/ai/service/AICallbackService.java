@@ -1,6 +1,5 @@
 package com.stolink.backend.domain.ai.service;
 
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -85,7 +84,6 @@ public class AICallbackService {
 
     private final AnalysisJobRepository analysisJobRepository;
     private final SectionRepository sectionRepository;
-    private final DocumentAnalysisPublisher documentAnalysisPublisher;
     private final PlotIntegrationRepository plotIntegrationRepository;
     private final ConsistencyReportRepository consistencyReportRepository;
     private final ValidationResultRepository validationResultRepository;
@@ -425,12 +423,13 @@ public class AICallbackService {
      * 관계 저장 (Neo4j & Postgres)
      *
      * source/target are CHARACTER NAMES, not IDs.
-     * Creates placeholder characters if they don't exist to ensure no relationship data is lost.
+     * Creates placeholder characters if they don't exist to ensure no relationship
+     * data is lost.
      */
     private void saveRelationships(List<RelationshipDTO> relationships, Project project) {
         String projectId = project.getId().toString();
         log.info("Saving {} relationships for project: {}",
-            relationships != null ? relationships.size() : 0, projectId);
+                relationships != null ? relationships.size() : 0, projectId);
 
         if (relationships == null || relationships.isEmpty()) {
             log.debug("No relationships to save");
@@ -487,7 +486,8 @@ public class AICallbackService {
                         bidirectional != null ? bidirectional : false);
                 log.info("Created relationship in Neo4j: {} -[{}]-> {}", sourceName, relationType, targetName);
             } catch (Exception e) {
-                log.error("Failed to create relationship in Neo4j: {} -> {}: {}", sourceName, targetName, e.getMessage());
+                log.error("Failed to create relationship in Neo4j: {} -> {}: {}", sourceName, targetName,
+                        e.getMessage());
             }
 
             // --- PostgreSQL Processing ---
@@ -998,7 +998,8 @@ public class AICallbackService {
                     .jobId(jobId)
                     .overallScore(score)
                     .requiresReextraction(reportData.getRequiresReextraction() != null
-                            ? reportData.getRequiresReextraction() : false)
+                            ? reportData.getRequiresReextraction()
+                            : false)
                     .conflictsJson(toJson(reportData.getConflicts()))
                     .warningsJson(toJson(reportData.getWarnings()))
                     .resolutionSummaryJson(toJson(reportData.getResolutionSummary()))
@@ -1119,8 +1120,8 @@ public class AICallbackService {
                 callback.getProjectId(), callback.getStatus());
 
         if (!callback.isSuccess()) {
-             log.error("Global merge failed: {}", callback.getError());
-             return;
+            log.error("Global merge failed: {}", callback.getError());
+            return;
         }
 
         List<GlobalMergeCallbackDTO.CharacterMergeDTO> merges = callback.getCharacterMerges();
@@ -1129,10 +1130,12 @@ public class AICallbackService {
                 String primaryId = merge.getPrimaryId();
                 List<String> mergedIds = merge.getMergedIds();
 
-                if (primaryId == null || mergedIds == null) continue;
+                if (primaryId == null || mergedIds == null)
+                    continue;
 
                 for (String mergedId : mergedIds) {
-                    if (mergedId.equals(primaryId)) continue;
+                    if (mergedId.equals(primaryId))
+                        continue;
                     try {
                         characterRepository.mergeNodes(primaryId, mergedId);
                         log.info("Merged character {} into {}", mergedId, primaryId);
@@ -1145,8 +1148,9 @@ public class AICallbackService {
 
         // 일관성 리포트나 기타 메타데이터 저장 로직 추가 가능
         if (callback.getConsistencyReport() != null) {
-             log.info("Global consistency report received. Score: {}", callback.getConsistencyReport().get("overall_score"));
-             // TODO: Save global consistency report
+            log.info("Global consistency report received. Score: {}",
+                    callback.getConsistencyReport().get("overall_score"));
+            // TODO: Save global consistency report
         }
     }
 
@@ -1195,7 +1199,8 @@ public class AICallbackService {
     }
 
     private void saveSections(com.stolink.backend.domain.document.entity.Document document, List<SectionDTO> sections) {
-        if (sections == null || sections.isEmpty()) return;
+        if (sections == null || sections.isEmpty())
+            return;
 
         sectionRepository.deleteByDocumentId(document.getId());
 
@@ -1208,7 +1213,8 @@ public class AICallbackService {
                 }
             }
 
-            com.stolink.backend.domain.document.entity.Section section = com.stolink.backend.domain.document.entity.Section.builder()
+            com.stolink.backend.domain.document.entity.Section section = com.stolink.backend.domain.document.entity.Section
+                    .builder()
                     .document(document)
                     .sequenceOrder(secDto.getSequenceOrder())
                     .navTitle(secDto.getNavTitle())
