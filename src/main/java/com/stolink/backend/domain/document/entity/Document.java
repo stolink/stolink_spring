@@ -226,6 +226,8 @@ public class Document extends BaseEntity {
      */
     public void markAsUnpublished() {
         this.isPublished = false;
+    }
+
     // === 분석 잠금 메서드 ===
 
     public void lockForAnalysis() {
