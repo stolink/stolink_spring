@@ -1,7 +1,5 @@
 package com.stolink.backend.domain.ai.service;
 
-import static org.mockito.Mockito.description;
-
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -359,48 +357,7 @@ public class AICallbackService {
                 continue;
             }
 
-            // --- Neo4j Processing ---
-            // Find or create source character
-            Character sourceChar = characterRepository.findByNameAndProjectId(sourceName, projectId)
-                    .orElseGet(() -> {
-                        log.info("Creating placeholder character for source: {} in project: {}", sourceName, projectId);
-                        Character placeholder = Character.builder()
-                                .projectId(projectId)
-                                .name(sourceName)
-                                .role("unknown")
-                                .status("unknown")
-                                .build();
-                        return characterRepository.save(placeholder);
-                    });
-
-            // Find or create target character
-            Character targetChar = characterRepository.findByNameAndProjectId(targetName, projectId)
-                    .orElseGet(() -> {
-                        log.info("Creating placeholder character for target: {} in project: {}", targetName, projectId);
-                        Character placeholder = Character.builder()
-                                .projectId(projectId)
-                                .name(targetName)
-                                .role("unknown")
-                                .status("unknown")
-                                .build();
-                        return characterRepository.save(placeholder);
-                    });
-
-            try {
-                characterRepository.createRelationship(
-                        sourceChar.getId(),
-                        targetChar.getId(),
-                        relationType != null ? relationType.toLowerCase() : "related",
-                        strength,
-                        description,
-                        bidirectional != null ? bidirectional : false);
-                log.info("Created relationship in Neo4j: {} -[{}]-> {}", sourceName, relationType, targetName);
-            } catch (Exception e) {
-                log.error("Failed to create relationship in Neo4j: {} -> {}: {}", sourceName, targetName,
-                        e.getMessage());
-            }
-
-            // --- PostgreSQL Processing ---
+            // --- PostgreSQL Processing only (Neo4j is handled by AI Backend) ---
             saveRelationshipToPostgres(relData, project);
         }
     }
