@@ -1,22 +1,23 @@
 package com.stolink.backend.global.security;
 
-import jakarta.annotation.PostConstruct;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
-import lombok.extern.slf4j.Slf4j;
+import java.io.IOException;
+import java.net.URI;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.Arrays;
-import java.util.Set;
-import java.util.stream.Collectors;
+import jakarta.annotation.PostConstruct;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * CSRF Origin 검증 필터
@@ -46,8 +47,8 @@ public class CsrfOriginFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain filterChain) throws ServletException, IOException {
 
         String method = request.getMethod();
 
@@ -67,7 +68,8 @@ public class CsrfOriginFilter extends OncePerRequestFilter {
 
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.getWriter().write("{\"success\":false,\"error\":\"CSRF validation failed\",\"message\":\"Invalid origin\"}");
+            response.getWriter()
+                    .write("{\"success\":false,\"error\":\"CSRF validation failed\",\"message\":\"Invalid origin\"}");
             return;
         }
 
@@ -76,9 +78,9 @@ public class CsrfOriginFilter extends OncePerRequestFilter {
 
     private boolean isSafeMethod(String method) {
         return "GET".equalsIgnoreCase(method) ||
-               "HEAD".equalsIgnoreCase(method) ||
-               "OPTIONS".equalsIgnoreCase(method) ||
-               "TRACE".equalsIgnoreCase(method);
+                "HEAD".equalsIgnoreCase(method) ||
+                "OPTIONS".equalsIgnoreCase(method) ||
+                "TRACE".equalsIgnoreCase(method);
     }
 
     private boolean isValidOrigin(String origin, String referer) {
@@ -111,6 +113,7 @@ public class CsrfOriginFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
+        log.info("CsrfOriginFilter checking path: {}", path);
 
         // 내부 API는 CSRF 검증 스킵 (서비스 간 통신)
         if (path.startsWith("/api/internal/")) {
@@ -118,7 +121,7 @@ public class CsrfOriginFilter extends OncePerRequestFilter {
         }
 
         // AI 콜백 레거시 엔드포인트 스킵 (FastAPI → Spring 서버 간 통신)
-        if (path.equals("/api/ai-callback")) {
+        if (path.startsWith("/api/ai-callback")) {
             return true;
         }
 

@@ -211,6 +211,17 @@ public class AIController {
     }
 
     private ApiResponse<Void> processPayload(String rawPayload) {
+        // [Debug] Save received payload to file
+        try {
+            java.nio.file.Files.writeString(
+                    java.nio.file.Paths.get("/tmp/callback_data.json"),
+                    rawPayload,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            log.info("Saved AI callback payload to /tmp/callback_data.json");
+        } catch (Exception e) {
+            log.error("Failed to save payload", e);
+        }
+
         try {
             JsonNode root = objectMapper.readTree(rawPayload);
             String messageType = root.path("message_type").asText(null);

@@ -68,6 +68,11 @@ app:
       image: ${APP_RABBITMQ_QUEUES_IMAGE:stolink.image.queue}
       document-analysis: ${APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS:document_analysis_queue}
       global-merge: ${APP_RABBITMQ_QUEUES_GLOBAL_MERGE:global_merge_queue}
+      # Event Consumer Queues
+      analysis-completed: ${APP_RABBITMQ_QUEUES_ANALYSIS_COMPLETED:analysis.completed}
+      analysis-dlq: ${APP_RABBITMQ_QUEUES_ANALYSIS_DLQ:analysis.dlq}
+    exchanges:
+      analysis-events: ${APP_RABBITMQ_EXCHANGES_ANALYSIS_EVENTS:stolink.analysis.events}
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST:localhost}
