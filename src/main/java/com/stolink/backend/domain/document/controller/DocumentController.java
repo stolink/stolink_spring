@@ -167,7 +167,7 @@ public class DocumentController {
         return ApiResponse.accepted(job);
     }
 
-    @GetMapping("/jobs/{jobId}")
+    @GetMapping({"/jobs/{jobId}", "/jobs/{jobId}/status"})
     public ApiResponse<ManuscriptJobResponse> getJobStatus(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID jobId) {

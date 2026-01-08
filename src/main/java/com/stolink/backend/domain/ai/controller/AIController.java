@@ -58,6 +58,16 @@ public class AIController {
     private String callbackBaseUrl;
 
     /**
+     * [DEBUG] 모든 분석 작업 삭제 (무한 폴링 방지용)
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/ai/debug/jobs")
+    public ApiResponse<Void> clearAllJobs() {
+        log.warn("Clearing all analysis jobs via debug endpoint");
+        analysisJobRepository.deleteAll();
+        return ApiResponse.ok();
+    }
+
+    /**
      * 작업별 전용 스트림 (프론트엔드 호환용)
      */
     @GetMapping(value = "/ai/jobs/{jobId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)

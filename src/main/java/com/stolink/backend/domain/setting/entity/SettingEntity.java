@@ -49,7 +49,7 @@ public class SettingEntity extends BaseEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(name = "location_type", length = 50)
+    @Column(name = "location_type", length = 255)
     private String locationType;
 
     @Column(name = "location_name", length = 100)
@@ -64,7 +64,7 @@ public class SettingEntity extends BaseEntity {
     @Column(name = "visual_background", columnDefinition = "TEXT")
     private String visualBackground;
 
-    @Column(name = "time_of_day", length = 50)
+    @Column(name = "time_of_day", length = 255)
     private String timeOfDay;
 
     @Column(name = "lighting_description", columnDefinition = "TEXT")
@@ -73,7 +73,7 @@ public class SettingEntity extends BaseEntity {
     @Column(name = "atmosphere_keywords", columnDefinition = "TEXT")
     private String atmosphereKeywords;
 
-    @Column(name = "weather_condition", length = 50)
+    @Column(name = "weather_condition", length = 255)
     private String weatherCondition;
 
     @Column(name = "art_style", length = 100)

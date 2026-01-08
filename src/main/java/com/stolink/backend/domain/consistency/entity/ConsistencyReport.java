@@ -36,11 +36,23 @@ public class ConsistencyReport extends BaseEntity {
     @Column(name = "overall_score")
     private Integer overallScore;
 
+    @Column(name = "high_severity_count")
+    private Integer highSeverityCount;
+
+    @Column(name = "medium_severity_count")
+    private Integer mediumSeverityCount;
+
+    @Column(name = "auto_fixable_count")
+    private Integer autoFixableCount;
+
+    @Column(name = "requires_human_review_count")
+    private Integer requiresHumanReviewCount;
+
     @Column(name = "requires_reextraction")
     @Builder.Default
     private Boolean requiresReextraction = false;
 
-    // conflicts (JSON array)
+    // conflicts (JSON array) -> Legacy support or if detailed data is still sent
     @Column(name = "conflicts_json", columnDefinition = "TEXT")
     private String conflictsJson;
 

@@ -82,6 +82,7 @@ public class SecurityConfig {
                                                                 "/api/ai-callback/**",
                                                                 "/api/documents/*/analysis-status",
                                                                 "/api/project/*/analysis/reset",
+                                                                "/api/ai/debug/**",
                                                                 "/error")
                                                 .permitAll()
                                                 // 그 외 모든 요청은 인증 필요

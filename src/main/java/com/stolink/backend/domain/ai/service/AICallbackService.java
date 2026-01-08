@@ -40,6 +40,7 @@ import com.stolink.backend.domain.document.repository.SectionRepository;
 import com.stolink.backend.domain.event.entity.EventEntity;
 // Neo4j Event node removed - using PostgreSQL only
 import com.stolink.backend.domain.event.repository.EventJpaRepository;
+import com.stolink.backend.domain.event.service.EventDeduplicationService;
 // EventNeo4jRepository removed - using PostgreSQL only
 import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
@@ -74,6 +75,7 @@ public class AICallbackService {
     private final DocumentRepository documentRepository;
     // EventNeo4jRepository removed - using PostgreSQL only
     private final EventJpaRepository eventJpaRepository;
+    private final EventDeduplicationService eventDeduplicationService;
     private final RelationshipRepository relationshipRepository;
 
     // SettingNeo4jRepository removed - using PostgreSQL only
@@ -437,19 +439,29 @@ public class AICallbackService {
         String eventId = eventData.getEventId();
         String narrativeSummary = eventData.getNarrativeSummary();
 
-        // 중복 안전 조회
-        List<EventEntity> existingEntities = eventJpaRepository.findAllByProjectAndName(project,
-                narrativeSummary != null ? narrativeSummary : "Untitled Event");
+        // Hybrid Deduplication (Chapter + Embedding/Participants)
+        Optional<EventEntity> duplicateCandidate = eventDeduplicationService.findDuplicateEvent(project, eventData);
         EventEntity eventEntity;
-        if (!existingEntities.isEmpty()) {
-            eventEntity = existingEntities.get(0);
+
+        if (duplicateCandidate.isPresent()) {
+            eventEntity = duplicateCandidate.get();
+            log.info("Duplicate event found: {} -> {}", eventId, eventEntity.getEventId());
         } else {
-            eventEntity = EventEntity.builder()
-                    .project(project)
-                    .eventId(eventId)
-                    .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
-                    .documentId(documentId)
-                    .build();
+            // Fallback for backward compatibility (name match)
+            List<EventEntity> existingByName = eventJpaRepository.findAllByProjectAndName(project,
+                    narrativeSummary != null ? narrativeSummary : "Untitled Event");
+
+            if (!existingByName.isEmpty()) {
+                eventEntity = existingByName.get(0);
+                log.info("Event matched by name: {}", narrativeSummary);
+            } else {
+                eventEntity = EventEntity.builder()
+                        .project(project)
+                        .eventId(eventId)
+                        .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
+                        .documentId(documentId)
+                        .build();
+            }
         }
 
         eventEntity.updateDetails(
@@ -575,12 +587,14 @@ public class AICallbackService {
     private void logConsistencyReport(ConsistencyReportDTO consistencyReport) {
         if (consistencyReport != null) {
             Integer score = consistencyReport.getEffectiveScore();
-            Boolean requiresReextraction = consistencyReport.getRequiresReextraction();
-            int conflictCount = consistencyReport.getConflicts() != null ? consistencyReport.getConflicts().size() : 0;
-            int warningCount = consistencyReport.getWarnings() != null ? consistencyReport.getWarnings().size() : 0;
+            Boolean requiresReextraction = consistencyReport.getRequiresReExtraction();
+            Integer highAnalysis = consistencyReport.getHighSeverity();
 
-            log.info("Consistency report - score: {}, requires_reextraction: {}, conflicts: {}, warnings: {}",
-                    score, requiresReextraction, conflictCount, warningCount);
+            // Legacy/Fallback mapping if needed, or just log new fields
+            log.info("Consistency report - score: {}, re-extract: {}, high: {}, medium: {}, auto-fix: {}, human-review: {}",
+                    score, requiresReextraction,
+                    consistencyReport.getHighSeverity(), consistencyReport.getMediumSeverity(),
+                    consistencyReport.getAutoFixable(), consistencyReport.getRequiresHumanReview());
         }
     }
 
@@ -712,8 +726,12 @@ public class AICallbackService {
                     .project(project)
                     .jobId(jobId)
                     .overallScore(score)
-                    .requiresReextraction(reportData.getRequiresReextraction() != null
-                            ? reportData.getRequiresReextraction()
+                    .highSeverityCount(reportData.getHighSeverity())
+                    .mediumSeverityCount(reportData.getMediumSeverity())
+                    .autoFixableCount(reportData.getAutoFixable())
+                    .requiresHumanReviewCount(reportData.getRequiresHumanReview())
+                    .requiresReextraction(reportData.getRequiresReExtraction() != null
+                            ? reportData.getRequiresReExtraction()
                             : false)
                     .conflictsJson(toJson(reportData.getConflicts()))
                     .warningsJson(toJson(reportData.getWarnings()))

@@ -98,6 +98,8 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         Map<String, Object> modifiedAttributes = new java.util.HashMap<>(attributes);
         modifiedAttributes.put("userId", user.getId().toString());
 
+        log.info("OAuth2 user processed. userId={} added to attributes. Email: {}", user.getId(), email);
+
         return new DefaultOAuth2User(
                 Collections.emptyList(),
                 modifiedAttributes,

@@ -14,6 +14,7 @@ public interface EventJpaRepository extends JpaRepository<EventEntity, UUID> {
 
     // 중복 안전 조회
     List<EventEntity> findAllByProjectAndName(Project project, String name);
+    List<EventEntity> findAllByProjectAndChapter(Project project, Integer chapter);
 
     List<EventEntity> findByProject(Project project);
 }
