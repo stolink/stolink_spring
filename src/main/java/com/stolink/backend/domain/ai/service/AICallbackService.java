@@ -130,6 +130,43 @@ public class AICallbackService {
 
         // Job 조회
         AnalysisJob job = analysisJobRepository.findByJobId(callback.getJobId()).orElse(null);
+
+        // [TEMPORARY] Dummy Data Injection Logic
+        if (job == null && callback.getJobId().startsWith("dummy-")) {
+            log.warn("Job not found, but detecting dummy data injection. Creating context for insertion...");
+            try {
+                // Target Project ID
+                UUID targetProjectId = UUID.fromString("e2a08b38-9049-4647-b9f0-1cac7792a2d7");
+                Project project = projectRepository.findById(targetProjectId)
+                        .orElseThrow(() -> new RuntimeException("Target project not found"));
+
+                // Find or Create a Placeholder Document
+                Document doc = documentRepository.findTextDocumentsByProjectId(targetProjectId).stream().findFirst()
+                        .orElseGet(() -> {
+                            Document newDoc = Document.builder()
+                                    .project(project)
+                                    .title("Dummy Data Container")
+                                    .type(Document.DocumentType.TEXT)
+                                    .order(0)
+                                    .content("Content for dummy data holder")
+                                    .build();
+                            return documentRepository.save(newDoc);
+                        });
+
+                job = AnalysisJob.builder()
+                        .jobId(callback.getJobId())
+                        .project(project)
+                        .documentId(doc.getId())
+                        .status(AnalysisJob.JobStatus.PROCESSING)
+                        .startedAt(java.time.LocalDateTime.now())
+                        .build();
+                analysisJobRepository.save(job);
+                log.info("Created temporary job context: {}", job.getJobId());
+            } catch (Exception e) {
+                log.error("Failed to create dummy context: {}", e.getMessage());
+            }
+        }
+
         if (job == null) {
             log.error("Job not found: {}", callback.getJobId());
             return;
@@ -251,10 +288,68 @@ public class AICallbackService {
 
         for (CharacterDTO charData : characters) {
             try {
+                // 1. Save to Postgres
                 saveCharacterToPostgres(charData, project);
+
+                // 2. Save to Neo4j [ADDED FOR DUMMY DATA]
+                saveCharacterToNeo4j(charData, project);
             } catch (Exception e) {
-                log.error("Failed to save character to Postgres: {}", e.getMessage());
+                log.error("Failed to save character: {}", e.getMessage());
             }
+        }
+    }
+
+    private void saveCharacterToNeo4j(CharacterDTO charData, Project project) {
+        try {
+            com.stolink.backend.domain.character.node.Character neoChar = com.stolink.backend.domain.character.node.Character.builder()
+                    .characterId(charData.getId())
+                    .projectId(project.getId().toString())
+                    .name(charData.getProfile() != null ? charData.getProfile().getName() : "Unknown")
+                    .role(charData.getRole())
+                    .status(charData.getStatus())
+                    .imageUrl(charData.getImageUrl()) // Ensure imageUrl is set if present
+                    .build();
+
+            // Map Payload fields to JSON strings
+            if (charData.getProfile() != null) {
+                CharacterDTO.ProfileDTO p = charData.getProfile();
+                neoChar.setAge(p.getAge());
+                neoChar.setGender(p.getGender());
+                neoChar.setRace(p.getRace());
+                neoChar.setMbti(p.getMbti());
+                neoChar.setBackstory(p.getBackstory());
+                if (p.getFaction() != null) neoChar.setFaction(p.getFaction().getName());
+                neoChar.setProfileJson(objectMapper.writeValueAsString(p));
+            }
+            if (charData.getAliases() != null) neoChar.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
+            if (charData.getAppearance() != null) neoChar.setAppearanceJson(objectMapper.writeValueAsString(charData.getAppearance()));
+            if (charData.getRelations() != null) neoChar.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
+            if (charData.getCurrentMood() != null) neoChar.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
+
+            // Find existing by ID or create new
+            java.util.Optional<com.stolink.backend.domain.character.node.Character> existing = characterRepository.findById(charData.getId());
+            if (existing.isPresent()) {
+                com.stolink.backend.domain.character.node.Character e = existing.get();
+                // Update fields
+                e.setName(neoChar.getName());
+                e.setRole(neoChar.getRole());
+                e.setStatus(neoChar.getStatus());
+                e.setProfileJson(neoChar.getProfileJson());
+                e.setAppearanceJson(neoChar.getAppearanceJson());
+                e.setImageUrl(neoChar.getImageUrl());
+                // ... map others as needed
+                characterRepository.save(e);
+            } else {
+                // For new Neo4j nodes, we might want to generate a random UUID for the @Id field
+                // or just let Neo4j handle it if we use a customized save.
+                // But since @Id is String, let's set it if it's null.
+                if (neoChar.getId() == null) neoChar.setId(charData.getId()); // Use logical ID as UUID for simplicity
+                characterRepository.save(neoChar);
+            }
+            log.debug("Saved character to Neo4j: {}", neoChar.getName());
+
+        } catch (Exception e) {
+            log.error("Failed to save character to Neo4j: {}", e.getMessage());
         }
     }
 
@@ -368,15 +463,55 @@ public class AICallbackService {
                 continue;
             }
 
-            // --- PostgreSQL Processing only (Neo4j is handled by AI Backend) ---
+            // --- PostgreSQL Processing ---
             saveRelationshipToPostgres(relData, project);
+
+            // --- Neo4j Processing [ADDED FOR DUMMY DATA] ---
+            saveRelationshipToNeo4j(relData, project);
         }
+    }
+
+    private void saveRelationshipToNeo4j(RelationshipDTO relData, Project project) {
+        // Neo4j relationships use IDs, but DTO might provide Names.
+        // We need to resolve Name -> ID for Neo4j creation if IDs are missing.
+        // Or better: ensure Characters are saved first (they are).
+        // Then find the Character Nodes by (ProjectId, Name).
+
+        String sourceName = relData.getSource();
+        String targetName = relData.getTarget();
+
+        // 1. Find Source Node
+        com.stolink.backend.domain.character.node.Character sourceNode = findCharacterNodeByName(project.getId().toString(), sourceName);
+        // 2. Find Target Node
+        com.stolink.backend.domain.character.node.Character targetNode = findCharacterNodeByName(project.getId().toString(), targetName);
+
+        if (sourceNode != null && targetNode != null) {
+            characterRepository.createRelationship(
+                    sourceNode.getId(),
+                    targetNode.getId(),
+                    relData.getRelationTypes(),
+                    relData.getStrength() != null ? relData.getStrength() : 5,
+                    relData.getDescription(),
+                    relData.getBidirectional() != null ? relData.getBidirectional() : false
+            );
+            log.debug("Saved Neo4j relationship: {} -> {}", sourceName, targetName);
+        } else {
+            log.warn("Could not find nodes for relationship: {} -> {}", sourceName, targetName);
+        }
+    }
+
+    private com.stolink.backend.domain.character.node.Character findCharacterNodeByName(String projectId, String name) {
+        // Naive lookup: fetch all and filter, or add repository method.
+        // For efficiency, we should have a repository method.
+        // Using existing methods:
+       java.util.Optional<com.stolink.backend.domain.character.node.Character> c = characterRepository.findByNameAndProjectId(name, projectId);
+       return c.orElse(null);
     }
 
     private void saveRelationshipToPostgres(RelationshipDTO relData, Project project) {
         String sourceName = relData.getSource();
         String targetName = relData.getTarget();
-        String relationType = relData.getRelationType();
+        List<String> relationTypes = relData.getRelationTypes(); // now List
         Integer strength = relData.getStrength() != null ? relData.getStrength() : 5;
         String description = relData.getDescription();
         Boolean bidirectional = relData.getBidirectional();
@@ -392,13 +527,20 @@ public class AICallbackService {
                 : targetList.get(0);
 
         if (sourceEntity != null && targetEntity != null) {
+            String typesJson = "[]";
+            try {
+                typesJson = objectMapper.writeValueAsString(relationTypes != null ? relationTypes : new ArrayList<>());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize relation types: {}", e.getMessage());
+            }
+
             RelationshipEntity relEntity = RelationshipEntity.builder()
                     .project(project)
                     .sourceCharacter(sourceEntity)
                     .targetCharacter(targetEntity)
                     .sourceName(sourceName)
                     .targetName(targetName)
-                    .relationType(relationType)
+                    .relationTypesJson(typesJson) // Updated builder field
                     .strength(strength)
                     .description(description)
                     .bidirectional(bidirectional != null ? bidirectional : false)
@@ -704,6 +846,14 @@ public class AICallbackService {
             characterEntity.setImageUrl(finalImageUrl);
             characterJpaRepository.save(characterEntity);
             log.info("Updated PostgreSQL character {} with image URL: {}", characterId, finalImageUrl);
+
+            // Setting Prompt Persistence (Side Effect)
+            // Re-fetch task to get latest state including settingId
+            imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
+                if (task.getSettingId() != null) {
+                    updateSettingWithPrompts(task);
+                }
+            });
         });
 
         // 2. Neo4j Character 업데이트 (프론트엔드에서 조회하는 소스)
@@ -721,6 +871,40 @@ public class AICallbackService {
             task.setStatus(ImageGenerationTask.TaskStatus.COMPLETED);
             imageGenerationTaskRepository.save(task);
             log.info("Updated ImageGenerationTask {} to COMPLETED", jobId);
+        });
+    }
+
+    private void updateSettingWithPrompts(ImageGenerationTask task) {
+        if (task.getSettingId() == null) return;
+
+        settingRepository.findById(task.getSettingId()).ifPresent(setting -> {
+            boolean updated = false;
+
+            if (task.getVisualBackground() != null && !task.getVisualBackground().isBlank()) {
+                setting.setVisualBackground(task.getVisualBackground());
+                updated = true;
+            }
+            if (task.getAtmosphere() != null && !task.getAtmosphere().isBlank()) {
+                setting.setAtmosphereKeywords(task.getAtmosphere());
+                updated = true;
+            }
+            if (task.getLighting() != null && !task.getLighting().isBlank()) {
+                setting.setLightingDescription(task.getLighting());
+                updated = true;
+            }
+            if (task.getTimeOfDay() != null && !task.getTimeOfDay().isBlank()) {
+                setting.setTimeOfDay(task.getTimeOfDay());
+                updated = true;
+            }
+            if (task.getArtStyle() != null && !task.getArtStyle().isBlank()) {
+                setting.setArtStyle(task.getArtStyle());
+                updated = true;
+            }
+
+            if (updated) {
+                settingRepository.save(setting);
+                log.info("Updated Setting {} with prompts from ImageGenerationTask {}", setting.getId(), task.getJobId());
+            }
         });
     }
 

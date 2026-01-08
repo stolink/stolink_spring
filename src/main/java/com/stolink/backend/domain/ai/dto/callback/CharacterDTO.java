@@ -22,6 +22,7 @@ public class CharacterDTO {
 
     private String role;
     private String status;
+    private String imageUrl; // Added for dummy data injection
     private ProfileDTO profile;
     private List<String> aliases;
     private AppearanceDTO appearance;

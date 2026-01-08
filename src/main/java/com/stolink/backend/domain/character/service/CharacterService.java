@@ -112,16 +112,16 @@ public class CharacterService {
 
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
-            String type, Integer strength, String description) {
-        createRelationship(userId, sourceId, targetId, type, strength, description, false);
+            List<String> types, Integer strength, String description) {
+        createRelationship(userId, sourceId, targetId, types, strength, description, false);
     }
 
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
-            String type, Integer strength, String description, Boolean bidirectional) {
+            List<String> types, Integer strength, String description, Boolean bidirectional) {
         // For simplicity, just create the relationship
         // In production, verify ownership of both characters
-        characterRepository.createRelationship(sourceId, targetId, type, strength, description, bidirectional);
+        characterRepository.createRelationship(sourceId, targetId, types, strength, description, bidirectional);
         log.info("Relationship created: {} -> {}", sourceId, targetId);
     }
 
@@ -330,6 +330,24 @@ public class CharacterService {
                 .description(fullPrompt) // Save the FULL generated prompt
                 .status(com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus.PENDING)
                 .build();
+
+        // Extract and Store Setting Prompts if available
+        if (setting != null) {
+            String settingIdStr = (String) setting.get("settingId");
+            if (settingIdStr != null) {
+                try {
+                    task.setSettingId(UUID.fromString(settingIdStr));
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid settingId format: {}", settingIdStr);
+                }
+            }
+            task.setVisualBackground((String) setting.get("visual_background"));
+            task.setAtmosphere((String) setting.get("atmosphere"));
+            task.setLighting((String) setting.get("lighting"));
+            task.setTimeOfDay((String) setting.get("time_of_day"));
+            task.setArtStyle((String) setting.get("art_style"));
+        }
+
         imageGenerationTaskRepository.save(task);
 
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행

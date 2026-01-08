@@ -25,6 +25,17 @@ public class ImageGenerationTaskDTO {
     @JsonProperty("character_id")
     private UUID characterId;
 
+    @JsonProperty("setting_id")
+    private UUID settingId;
+
+    @JsonProperty("image_type")
+    @Builder.Default
+    private String imageType = "CHARACTER"; // CHARACTER or SETTING
+
+    @JsonProperty("prompts")
+    private java.util.Map<String, String> prompts;
+
+
     /**
      * FastAPI의 ImageTaskMessage.message에 매핑됨
      * 캐릭터 외형 설명 또는 편집 요청 내용
