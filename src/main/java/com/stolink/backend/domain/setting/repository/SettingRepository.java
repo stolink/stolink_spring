@@ -19,4 +19,6 @@ public interface SettingRepository extends JpaRepository<SettingEntity, UUID> {
     Optional<SettingEntity> findByProjectAndName(Project project, String name);
 
     List<SettingEntity> findByProject(Project project);
+
+    List<SettingEntity> findByProjectAndNameIn(Project project, java.util.Collection<String> names);
 }

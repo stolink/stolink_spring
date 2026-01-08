@@ -46,7 +46,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         private String redirectUri;
 
         @Override
-        @Transactional
+        // Transaction removed to avoid holding DB connection during redirect/IO
         public void onAuthenticationSuccess(HttpServletRequest request,
                         HttpServletResponse response,
                         Authentication authentication) throws IOException {
@@ -102,6 +102,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         /**
          * Google 사용자 조회 또는 생성
          */
+        @Transactional
         private User findOrCreateGoogleUser(String email, String googleId, String name, String picture) {
                 // 1. Google ID로 조회
                 Optional<User> existingUser = userRepository.findByProviderAndProviderId(AuthProvider.GOOGLE, googleId);

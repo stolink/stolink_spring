@@ -1,9 +1,15 @@
 package com.stolink.backend.domain.ai.service;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -412,7 +418,36 @@ public class AICallbackService {
             return;
         }
 
-        for (EventDTO eventData : events) {
+        // Group by Chapter for Batch Processing
+        Map<Integer, List<EventDTO>> eventsByChapter = events.stream()
+                .filter(e -> e.getChapter() != null)
+                .collect(Collectors.groupingBy(EventDTO::getChapter));
+
+        // Handle events with no chapter
+        List<EventDTO> noChapterEvents = events.stream()
+                .filter(e -> e.getChapter() == null)
+                .toList();
+
+        // 1. Process Batch (By Chapter)
+        for (Map.Entry<Integer, List<EventDTO>> entry : eventsByChapter.entrySet()) {
+            Integer chapter = entry.getKey();
+            List<EventDTO> chapterEvents = entry.getValue();
+
+            // Batch Fetch Candidates
+            List<EventEntity> candidates = eventJpaRepository.findAllByProjectAndChapter(project, chapter);
+
+            for (EventDTO eventData : chapterEvents) {
+                processEventWithCandidates(eventData, project, jobDocumentId, candidates);
+            }
+        }
+
+        // 2. Process Remainder (No chapter -> no batch candidates)
+        for (EventDTO eventData : noChapterEvents) {
+            processEventWithCandidates(eventData, project, jobDocumentId, null);
+        }
+    }
+
+    private void processEventWithCandidates(EventDTO eventData, Project project, UUID jobDocumentId, List<EventEntity> candidates) {
             UUID documentId = jobDocumentId;
             if (eventData.getDocumentId() != null) {
                 try {
@@ -431,37 +466,42 @@ public class AICallbackService {
                 }
             }
 
-            saveEventToPostgres(eventData, project, documentId, participantsJson);
-        }
+            saveEventToPostgres(eventData, project, documentId, participantsJson, candidates);
     }
 
-    private void saveEventToPostgres(EventDTO eventData, Project project, UUID documentId, String participantsJsonStr) {
+    private void saveEventToPostgres(EventDTO eventData, Project project, UUID documentId, String participantsJsonStr, List<EventEntity> candidates) {
         String eventId = eventData.getEventId();
         String narrativeSummary = eventData.getNarrativeSummary();
 
-        // Hybrid Deduplication (Chapter + Embedding/Participants)
-        Optional<EventEntity> duplicateCandidate = eventDeduplicationService.findDuplicateEvent(project, eventData);
+        // Hybrid Deduplication
+        Optional<EventEntity> duplicateCandidate;
+
+        if (candidates != null) {
+             duplicateCandidate = eventDeduplicationService.findDuplicateEventInCandidates(candidates, eventData);
+        } else {
+             duplicateCandidate = eventDeduplicationService.findDuplicateEvent(project, eventData);
+        }
+
         EventEntity eventEntity;
 
         if (duplicateCandidate.isPresent()) {
             eventEntity = duplicateCandidate.get();
-            log.info("Duplicate event found: {} -> {}", eventId, eventEntity.getEventId());
+            log.info("Duplicate event found: {}", eventEntity.getEventId());
         } else {
             // Fallback for backward compatibility (name match)
             List<EventEntity> existingByName = eventJpaRepository.findAllByProjectAndName(project,
                     narrativeSummary != null ? narrativeSummary : "Untitled Event");
-
             if (!existingByName.isEmpty()) {
                 eventEntity = existingByName.get(0);
-                log.info("Event matched by name: {}", narrativeSummary);
-            } else {
+                 log.info("Event matched by name: {}", narrativeSummary);
+             } else {
                 eventEntity = EventEntity.builder()
                         .project(project)
                         .eventId(eventId)
                         .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
                         .documentId(documentId)
                         .build();
-            }
+             }
         }
 
         eventEntity.updateDetails(
@@ -480,7 +520,7 @@ public class AICallbackService {
                 narrativeSummary,
                 eventData.getPrevEventId());
 
-        // 추가 필드 저장 (AI 콜백 완전 매핑)
+        // 추가 필드 저장
         try {
             if (eventData.getTimestamp() != null) {
                 eventEntity.setTimestampJson(objectMapper.writeValueAsString(eventData.getTimestamp()));
@@ -511,6 +551,19 @@ public class AICallbackService {
             return;
         }
 
+        // Batch fetch existing settings
+        Set<String> names = settings.stream()
+                .map(SettingDTO::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .collect(Collectors.toSet());
+
+        Map<String, SettingEntity> existingMap = new HashMap<>();
+        if (!names.isEmpty()) {
+            existingMap = settingRepository.findByProjectAndNameIn(project, names)
+                    .stream()
+                    .collect(Collectors.toMap(SettingEntity::getName, s -> s, (s1, s2) -> s1));
+        }
+
         for (SettingDTO settingData : settings) {
             String settingId = settingData.getSettingId();
             String name = settingData.getName();
@@ -530,22 +583,30 @@ public class AICallbackService {
                     log.error("Failed to serialize static_objects: {}", e.getMessage());
                 }
             }
-            saveSettingToPostgres(settingData, project, staticObjectsJson);
+            saveSettingToPostgres(settingData, project, staticObjectsJson, existingMap.get(name));
         }
     }
 
-    private void saveSettingToPostgres(SettingDTO settingData, Project project, String staticObjectsJson) {
+    private void saveSettingToPostgres(SettingDTO settingData, Project project, String staticObjectsJson, SettingEntity preFetchedEntity) {
         String name = settingData.getName();
-        Optional<SettingEntity> existingEntity = settingRepository.findByProjectAndName(project, name);
+
         SettingEntity settingEntity;
-        if (existingEntity.isPresent()) {
-            settingEntity = existingEntity.get();
+        if (preFetchedEntity != null) {
+            settingEntity = preFetchedEntity;
         } else {
-            settingEntity = SettingEntity.builder()
+             // Fallback lookup if not in map (should not happen if batch worked, but for safety)
+             // or if it was not in batch because it's new
+             // Wait, if it's new, preFetchedEntity is null.
+             Optional<SettingEntity> existing = settingRepository.findByProjectAndName(project, name);
+             if (existing.isPresent()) {
+                  settingEntity = existing.get();
+             } else {
+                settingEntity = SettingEntity.builder()
                     .project(project)
                     .settingId(settingData.getSettingId())
                     .name(name)
                     .build();
+             }
         }
 
         settingEntity.updateDetails(
@@ -967,20 +1028,23 @@ public class AICallbackService {
      * AI 콜백 데이터를 로컬 JSON 파일로 저장 (디버깅용)
      */
     private void saveCallbackToJsonFile(String type, String id, Object data) {
-        try {
-            String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now());
-            // Sanitize ID for filename
-            String safeId = id != null ? id.replaceAll("[^a-zA-Z0-9-_]", "_") : "unknown";
-            String fileName = String.format("logs/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
+        // Async execution to avoid I/O blocking
+        CompletableFuture.runAsync(() -> {
+            try {
+                String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now());
+                // Sanitize ID for filename
+                String safeId = id != null ? id.replaceAll("[^a-zA-Z0-9-_]", "_") : "unknown";
+                String fileName = String.format("logs/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
 
-            java.io.File file = new java.io.File(fileName);
-            file.getParentFile().mkdirs();
+                java.io.File file = new java.io.File(fileName);
+                file.getParentFile().mkdirs();
 
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, data);
-            log.info("Saved callback data to file: {}", fileName);
-        } catch (Exception e) {
-            log.error("Failed to save callback data to file: {}", e.getMessage());
-        }
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, data);
+                log.info("Saved callback data to file (Async): {}", fileName);
+            } catch (Exception e) {
+                log.error("Failed to save callback data to file: {}", e.getMessage());
+            }
+        });
     }
 
     // ===================================

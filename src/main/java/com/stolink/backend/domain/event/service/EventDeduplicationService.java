@@ -50,6 +50,16 @@ public class EventDeduplicationService {
 
         List<EventEntity> candidates = eventJpaRepository.findAllByProjectAndChapter(project, newEvent.getChapter());
 
+        return findDuplicateEventInCandidates(candidates, newEvent);
+    }
+
+    /**
+     * Check for duplicates within a provided list of candidates (Batch optimized)
+     */
+    public Optional<EventEntity> findDuplicateEventInCandidates(List<EventEntity> candidates, EventDTO newEvent) {
+        if (candidates == null || candidates.isEmpty()) {
+            return Optional.empty();
+        }
         return candidates.stream()
                 .filter(existing -> isSameEvent(existing, newEvent))
                 .findFirst();
