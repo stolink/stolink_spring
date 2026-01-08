@@ -155,14 +155,26 @@ public class AIController {
     /**
      * Job 상태 조회 (프론트엔드 폴링용)
      */
-    @GetMapping("/ai/jobs/{jobId}")
+    /**
+     * Job 상태 조회 (프론트엔드 폴링용)
+     */
+    @GetMapping({"/ai/jobs/{jobId}", "/ai/jobs/{jobId}/status"})
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {
+        log.debug("Get Job Status request for: {}", jobId);
         AnalysisJob job = analysisJobRepository.findByJobId(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
 
+        String projectId = "";
+        if (job.getProject() != null) {
+            projectId = job.getProject().getId().toString();
+        } else {
+            log.warn("AnalysisJob {} has no associated project", jobId);
+        }
+
         return ApiResponse.ok(Map.of(
                 "jobId", job.getJobId(),
-                "projectId", job.getProject().getId().toString(),
+                "projectId", projectId,
                 "status", job.getStatus().name(),
                 "traceId", job.getTraceId() != null ? job.getTraceId() : "",
                 "documentId", job.getDocumentId() != null ? job.getDocumentId().toString() : "",
@@ -172,7 +184,7 @@ public class AIController {
     /**
      * 이미지 생성 Job 상태 조회
      */
-    @GetMapping("/ai/image/jobs/{jobId}")
+    @GetMapping({"/ai/image/jobs/{jobId}", "/ai/image/jobs/{jobId}/status"})
     public ApiResponse<Map<String, Object>> getImageJobStatus(@PathVariable String jobId) {
         com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
                 .findById(jobId)

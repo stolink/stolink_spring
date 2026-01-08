@@ -110,6 +110,9 @@ public class AICallbackService {
         log.info("Processing analysis callback for job: {}, status: {}",
                 callback.getJobId(), callback.getStatus());
 
+        // Save raw callback data to file
+        saveCallbackToJsonFile("analysis", callback.getJobId(), callback);
+
         // Idempotent check: skip if already processed
         if (callbackLogRepository.existsByJobId(callback.getJobId())) {
             log.warn("Duplicate callback ignored: {}", callback.getJobId());
@@ -203,9 +206,8 @@ public class AICallbackService {
                 .projectId(project.getId())
                 .build());
 
-        // SSE 알림 전송 (프론트엔드 업데이트용)
-        sseEmitterService.sendStatus(job.getProject().getId(), new SseEmitterService.AnalysisStatusEvent(
-                "COMPLETED", 1, 1, "분석이 완료되었습니다."));
+        // SSE 알림 전송 (프론트엔드 업데이트용 - 실시간 진행률)
+        sendProgressUpdate(project.getId());
 
         log.info("Analysis callback processed successfully for job: {}", callback.getJobId());
     }
@@ -490,7 +492,6 @@ public class AICallbackService {
     }
 
     /**
-     * 설정(장소) 저장 (PostgreSQL only - Neo4j는 AI Backend에서 처리)
      */
     private void saveSettings(List<SettingDTO> settings, Project project) {
         if (settings == null || settings.isEmpty()) {
@@ -499,6 +500,16 @@ public class AICallbackService {
         }
 
         for (SettingDTO settingData : settings) {
+            String settingId = settingData.getSettingId();
+            String name = settingData.getName();
+
+            // name이 null이면 저장할 수 없음 (SettingEntity.name은 NOT NULL)
+            if (name == null || name.isBlank()) {
+                log.warn("Skipping setting with null/blank name. settingId: {}", settingId);
+                continue;
+            }
+
+            // static_objects를 JSON 문자열로
             String staticObjectsJson = null;
             if (settingData.getNotableFeatures() != null) {
                 try {
@@ -580,6 +591,9 @@ public class AICallbackService {
     public void handleImageCallback(ImageCallbackDTO callback) {
         log.info("Processing image callback for job: {}, character: {}",
                 callback.getJobId(), callback.getCharacterId());
+
+        // Save raw callback data to file
+        saveCallbackToJsonFile("image", callback.getJobId(), callback);
 
         String jobId = callback.getJobId();
 
@@ -820,6 +834,9 @@ public class AICallbackService {
         log.info("Processing global merge callback for project: {}, status: {}",
                 callback.getProjectId(), callback.getStatus());
 
+        // Save raw callback data to file
+        saveCallbackToJsonFile("global_merge", callback.getProjectId(), callback);
+
         if (!callback.isSuccess()) {
             log.error("Global merge failed: {}", callback.getError());
             return;
@@ -859,6 +876,9 @@ public class AICallbackService {
         log.info("Processing document analysis callback for document: {}, status: {}",
                 callback.getDocumentId(), callback.getStatus());
 
+        // Save raw callback data to file
+        saveCallbackToJsonFile("doc_analysis", callback.getDocumentId(), callback);
+
         UUID documentId = UUID.fromString(callback.getDocumentId());
 
         // 문서 조회
@@ -892,6 +912,9 @@ public class AICallbackService {
         // 3. 임시 관계 저장 (임시 저장용, 나중에 글로벌 병합 시 정제됨)
         // 1차 패스에서는 관계 추출이 제한적일 수 있음.
 
+        // SSE 알림 전송 (실시간 진행률)
+        sendProgressUpdate(project.getId());
+
         log.info("Document analysis callback processed: {}", callback.getDocumentId());
     }
 
@@ -919,6 +942,51 @@ public class AICallbackService {
                     .embedding(embedding)
                     .build();
             sectionRepository.save(section);
+        }
+    }
+
+    /**
+     * AI 콜백 데이터를 로컬 JSON 파일로 저장 (디버깅용)
+     */
+    private void saveCallbackToJsonFile(String type, String id, Object data) {
+        try {
+            String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now());
+            // Sanitize ID for filename
+            String safeId = id != null ? id.replaceAll("[^a-zA-Z0-9-_]", "_") : "unknown";
+            String fileName = String.format("logs/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
+
+            java.io.File file = new java.io.File(fileName);
+            file.getParentFile().mkdirs();
+
+            objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, data);
+            log.info("Saved callback data to file: {}", fileName);
+        } catch (Exception e) {
+            log.error("Failed to save callback data to file: {}", e.getMessage());
+        }
+    }
+
+    // ===================================
+    // SSE Progress Update Helper
+    // ===================================
+    private void sendProgressUpdate(UUID projectId) {
+        if (projectId == null) return;
+
+        try {
+            long total = documentRepository.countTextDocumentsByProjectId(projectId);
+            long completed = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                    projectId,
+                    com.stolink.backend.domain.document.entity.Document.AnalysisStatus.COMPLETED);
+
+            String status = (total > 0 && total <= completed) ? "COMPLETED" : "ANALYZING";
+            String message = (total > 0 && total <= completed)
+                    ? "분석이 완료되었습니다."
+                    : String.format("분석 진행 중: %d/%d", completed, total);
+
+            sseEmitterService.sendStatus(projectId, new SseEmitterService.AnalysisStatusEvent(
+                    status, (int) completed, (int) total, message));
+            log.debug("Sent SSE progress update for project {}: {}/{}", projectId, completed, total);
+        } catch (Exception e) {
+            log.warn("Failed to send SSE progress update: {}", e.getMessage());
         }
     }
 }
