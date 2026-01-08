@@ -43,7 +43,7 @@ public class ImageGenerationTask {
 
     // 이미지 타입 (CHARACTER vs SETTING)
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = true, length = 20)
     @Builder.Default
     private ImageType imageType = ImageType.CHARACTER;
 

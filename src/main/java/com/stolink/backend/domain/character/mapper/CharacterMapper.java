@@ -70,7 +70,7 @@ public class CharacterMapper {
                 .id(relationship.getId() != null ? relationship.getId().toString() : null)
                 .sourceId(sourceId)
                 .targetId(relationship.getTarget() != null ? relationship.getTarget().getId() : null)
-                .type(mapType(relationship.getType()))
+                .types(mapTypes(relationship.getTypes()))
                 .strength(relationship.getStrength())
                 .description(relationship.getDescription())
                 .build();
@@ -88,16 +88,22 @@ public class CharacterMapper {
         }
     }
 
-    private String mapType(String type) {
-        if (type == null)
-            return "neutral";
-        return switch (type.toUpperCase()) {
-            case "ALLY" -> "friendly";
-            case "ENEMY" -> "hostile";
-            case "NO_RELATION" -> "neutral";
-            case "ROMANTIC" -> "romantic";
-            case "FAMILY" -> "family";
-            default -> "neutral";
-        };
+    private List<String> mapTypes(List<String> types) {
+        if (types == null || types.isEmpty())
+            return Collections.singletonList("neutral");
+
+        return types.stream()
+            .map(type -> {
+                if (type == null) return "neutral";
+                return switch (type.toUpperCase()) {
+                    case "ALLY" -> "friendly";
+                    case "ENEMY" -> "hostile";
+                    case "NO_RELATION" -> "neutral";
+                    case "ROMANTIC" -> "romantic";
+                    case "FAMILY" -> "family";
+                    default -> type.toLowerCase();
+                };
+            })
+            .collect(Collectors.toList());
     }
 }

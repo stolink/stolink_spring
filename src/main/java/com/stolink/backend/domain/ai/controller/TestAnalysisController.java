@@ -50,6 +50,7 @@ public class TestAnalysisController {
     private final UserRepository userRepository;
     private final AnalysisJobRepository analysisJobRepository;
     private final RabbitTemplate agentRabbitTemplate;
+    private final com.stolink.backend.domain.character.repository.CharacterRepository characterRepository;
 
     public TestAnalysisController(
             DocumentAnalysisPublisher documentAnalysisPublisher,
@@ -57,13 +58,15 @@ public class TestAnalysisController {
             ProjectRepository projectRepository,
             UserRepository userRepository,
             AnalysisJobRepository analysisJobRepository,
-            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
+            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate,
+            com.stolink.backend.domain.character.repository.CharacterRepository characterRepository) {
         this.documentAnalysisPublisher = documentAnalysisPublisher;
         this.documentRepository = documentRepository;
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
         this.analysisJobRepository = analysisJobRepository;
         this.agentRabbitTemplate = agentRabbitTemplate;
+        this.characterRepository = characterRepository;
     }
 
     @Value("${app.rabbitmq.queues.document-analysis:document_analysis_queue}")
@@ -292,5 +295,18 @@ public class TestAnalysisController {
                 "deleted", true,
                 "count", count,
                 "message", count + "개의 분석 작업이 삭제되었습니다."));
+    }
+
+    @DeleteMapping("/project/{projectId}/neo4j-data")
+    public ApiResponse<Map<String, Object>> deleteProjectNeo4jData(@PathVariable UUID projectId) {
+        try {
+            characterRepository.deleteByProjectId(projectId.toString());
+            return ApiResponse.ok(Map.of("message", "Deleted Neo4j data for project " + projectId));
+        } catch (Exception e) {
+             return ApiResponse.<Map<String, Object>>builder()
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .message("Failed to delete Neo4j data: " + e.getMessage())
+                    .build();
+        }
     }
 }

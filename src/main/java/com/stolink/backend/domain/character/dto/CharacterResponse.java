@@ -54,9 +54,14 @@ public class CharacterResponse {
         private String id;
         private String sourceId;
         private String targetId;
-        private String type;
+        private List<String> types; // Changed from String type
         private Integer strength;
         private String description;
+
+        // Backward compatibility for clients expecting "type"
+        public String getType() {
+            return (types != null && !types.isEmpty()) ? types.get(0) : "neutral";
+        }
     }
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
@@ -101,24 +106,30 @@ public class CharacterResponse {
                         .id(rel.getId() != null ? String.valueOf(rel.getId()) : null)
                         .sourceId(character.getId())
                         .targetId(rel.getTarget() != null ? rel.getTarget().getId() : null)
-                        .type(mapRelationshipType(rel.getType()))
+                        .types(mapRelationshipTypes(rel.getTypes()))
                         .strength(rel.getStrength())
                         .description(rel.getDescription())
                         .build())
                 .collect(Collectors.toList());
     }
 
-    private static String mapRelationshipType(String type) {
-        if (type == null)
-            return null;
-        return switch (type.toUpperCase()) {
-            case "ALLY" -> "friendly";
-            case "ENEMY" -> "hostile";
-            case "FAMILY" -> "family";
-            case "ROMANTIC" -> "romantic";
-            case "NEUTRAL" -> "neutral";
-            default -> type.toLowerCase();
-        };
+    private static List<String> mapRelationshipTypes(List<String> types) {
+        if (types == null || types.isEmpty())
+            return Collections.emptyList();
+
+        return types.stream()
+                .map(type -> {
+                    if (type == null) return null;
+                    return switch (type.toUpperCase()) {
+                        case "ALLY" -> "friendly";
+                        case "ENEMY" -> "hostile";
+                        case "FAMILY" -> "family";
+                        case "ROMANTIC" -> "romantic";
+                        case "NEUTRAL" -> "neutral";
+                        default -> type.toLowerCase();
+                    };
+                })
+                .collect(Collectors.toList());
     }
 
     private static Object safeJsonParseList(String json) {
