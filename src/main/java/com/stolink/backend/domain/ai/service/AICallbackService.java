@@ -78,6 +78,7 @@ public class AICallbackService {
 
     // CharacterRepository (Neo4j) removed - using PostgreSQL only
     private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
+    private final com.stolink.backend.domain.character.repository.CharacterRepository characterRepository; // Neo4j
     private final DocumentRepository documentRepository;
     // EventNeo4jRepository removed - using PostgreSQL only
     private final EventJpaRepository eventJpaRepository;
@@ -702,10 +703,19 @@ public class AICallbackService {
         characterJpaRepository.findByCharacterId(characterId).ifPresent(characterEntity -> {
             characterEntity.setImageUrl(finalImageUrl);
             characterJpaRepository.save(characterEntity);
-            log.info("Updated character {} with image URL: {}", characterId, finalImageUrl);
+            log.info("Updated PostgreSQL character {} with image URL: {}", characterId, finalImageUrl);
         });
 
-        // 2. ImageGenerationTask 상태 업데이트 (COMPLETED)
+        // 2. Neo4j Character 업데이트 (프론트엔드에서 조회하는 소스)
+        try {
+            UUID charUuid = callback.getCharacterId();
+            characterRepository.updateImageUrl(charUuid.toString(), finalImageUrl);
+            log.info("Updated Neo4j character {} with image URL: {}", charUuid, finalImageUrl);
+        } catch (Exception e) {
+            log.warn("Failed to update Neo4j character image URL: {}", e.getMessage());
+        }
+
+        // 3. ImageGenerationTask 상태 업데이트 (COMPLETED)
         imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
             task.setImageUrl(finalImageUrl);
             task.setStatus(ImageGenerationTask.TaskStatus.COMPLETED);
