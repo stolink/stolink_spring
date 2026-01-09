@@ -153,7 +153,8 @@ public class AICallbackService {
                         .orElseThrow(() -> new RuntimeException("Target project not found: " + finalTargetProjectId));
 
                 // Find or Create a Placeholder Document
-                Document doc = documentRepository.findTextDocumentsByProjectId(finalTargetProjectId).stream().findFirst()
+                Document doc = documentRepository.findTextDocumentsByProjectId(finalTargetProjectId).stream()
+                        .findFirst()
                         .orElseGet(() -> {
                             Document newDoc = Document.builder()
                                     .project(project)
@@ -322,111 +323,117 @@ public class AICallbackService {
 
     private void saveCharacterToNeo4j(CharacterDTO charData, Project project) {
         try {
-        String name = charData.getProfile() != null ? charData.getProfile().getName() : "Unknown";
-        String projectId = project.getId().toString();
+            String name = charData.getProfile() != null ? charData.getProfile().getName() : "Unknown";
+            String projectId = project.getId().toString();
 
-        // Find existing by Name and Project as ID (UUID) might mismatch
-        List<com.stolink.backend.domain.character.node.Character> existing = characterRepository.findAllByNameAndProjectId(name, projectId);
+            // Find existing by Name and Project as ID (UUID) might mismatch
+            List<com.stolink.backend.domain.character.node.Character> existing = characterRepository
+                    .findAllByNameAndProjectId(name, projectId);
 
-        com.stolink.backend.domain.character.node.Character neoChar;
-        if (!existing.isEmpty()) {
-            neoChar = existing.get(0);
-            log.debug("Updating existing Neo4j character: {}", name);
-        } else {
-            neoChar = new com.stolink.backend.domain.character.node.Character();
-            neoChar.setProjectId(projectId);
-            neoChar.setName(name);
-            log.debug("Creating new Neo4j character: {}", name);
+            com.stolink.backend.domain.character.node.Character neoChar;
+            if (!existing.isEmpty()) {
+                neoChar = existing.get(0);
+                log.debug("Updating existing Neo4j character: {}", name);
+            } else {
+                neoChar = new com.stolink.backend.domain.character.node.Character();
+                neoChar.setProjectId(projectId);
+                neoChar.setName(name);
+                log.debug("Creating new Neo4j character: {}", name);
+            }
+
+            // Fill data
+            neoChar.setCharacterId(charData.getId());
+            neoChar.setRole(charData.getRole());
+            neoChar.setStatus(charData.getStatus());
+            neoChar.setImageUrl(charData.getImageUrl());
+
+            if (charData.getProfile() != null) {
+                CharacterDTO.ProfileDTO p = charData.getProfile();
+                neoChar.setAge(p.getAge());
+                neoChar.setGender(p.getGender());
+                neoChar.setRace(p.getRace());
+                neoChar.setMbti(p.getMbti());
+                neoChar.setBackstory(p.getBackstory());
+                if (p.getFaction() != null)
+                    neoChar.setFaction(p.getFaction().getName());
+                neoChar.setProfileJson(objectMapper.writeValueAsString(p));
+            }
+
+            if (charData.getAliases() != null)
+                neoChar.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
+            if (charData.getAppearance() != null)
+                neoChar.setAppearanceJson(objectMapper.writeValueAsString(charData.getAppearance()));
+            if (charData.getRelations() != null)
+                neoChar.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
+            if (charData.getCurrentMood() != null)
+                neoChar.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
+
+            characterRepository.save(neoChar);
+            log.debug("Saved Neo4j character: {}", name);
+
+        } catch (Exception e) {
+            log.error("Failed to save character to Neo4j: {}", e.getMessage());
         }
-
-        // Fill data
-        neoChar.setCharacterId(charData.getId());
-        neoChar.setRole(charData.getRole());
-        neoChar.setStatus(charData.getStatus());
-        neoChar.setImageUrl(charData.getImageUrl());
-
-        if (charData.getProfile() != null) {
-            CharacterDTO.ProfileDTO p = charData.getProfile();
-            neoChar.setAge(p.getAge());
-            neoChar.setGender(p.getGender());
-            neoChar.setRace(p.getRace());
-            neoChar.setMbti(p.getMbti());
-            neoChar.setBackstory(p.getBackstory());
-            if (p.getFaction() != null) neoChar.setFaction(p.getFaction().getName());
-            neoChar.setProfileJson(objectMapper.writeValueAsString(p));
-        }
-
-        if (charData.getAliases() != null) neoChar.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
-        if (charData.getAppearance() != null) neoChar.setAppearanceJson(objectMapper.writeValueAsString(charData.getAppearance()));
-        if (charData.getRelations() != null) neoChar.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
-        if (charData.getCurrentMood() != null) neoChar.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
-
-        characterRepository.save(neoChar);
-        log.debug("Saved Neo4j character: {}", name);
-
-    } catch (Exception e) {
-        log.error("Failed to save character to Neo4j: {}", e.getMessage());
     }
-}
 
     private void saveCharacterToPostgres(CharacterDTO charData, Project project) {
         String name = charData.getProfile() != null ? charData.getProfile().getName() : "Unknown";
 
-    // 중복 캐릭터가 있어도 첫 번째 결과만 사용 (안전한 조회)
-    java.util.List<com.stolink.backend.domain.character.entity.CharacterEntity> existingEntities = characterJpaRepository
-            .findAllByProjectAndName(project, name);
-    com.stolink.backend.domain.character.entity.CharacterEntity entity;
-    if (!existingEntities.isEmpty()) {
-        entity = existingEntities.get(0);
-        log.debug("Updating existing PostgreSQL character: {}", name);
-    } else {
-        entity = com.stolink.backend.domain.character.entity.CharacterEntity.builder()
-                .id(UUID.randomUUID())
-                .project(project)
-                .name(name)
-                .build();
-        log.debug("Creating new PostgreSQL character: {}", name);
-    }
-
-    // Basic fields
-    entity.setCharacterId(charData.getId());
-    entity.setRole(charData.getRole());
-    entity.setStatus(charData.getStatus());
-    entity.setImageUrl(charData.getImageUrl());
-
-    // Profile fields
-    if (charData.getProfile() != null) {
-        CharacterDTO.ProfileDTO profile = charData.getProfile();
-        entity.setAge(profile.getAge());
-        entity.setGender(profile.getGender());
-        entity.setRace(profile.getRace());
-        entity.setMbti(profile.getMbti());
-        entity.setBackstory(profile.getBackstory());
-        if (profile.getFaction() != null) {
-            entity.setFaction(profile.getFaction().getName());
-        }
-    }
-
-    try {
-        // Aliases
-        if (charData.getAliases() != null)
-            entity.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
-
-        // Profile full JSON
-        if (charData.getProfile() != null)
-            entity.setProfileJson(objectMapper.writeValueAsString(charData.getProfile()));
-
-        // Image URL mapping
-        if (charData.getImageUrl() != null) {
-             entity.setImageUrl(charData.getImageUrl());
+        // 중복 캐릭터가 있어도 첫 번째 결과만 사용 (안전한 조회)
+        java.util.List<com.stolink.backend.domain.character.entity.CharacterEntity> existingEntities = characterJpaRepository
+                .findAllByProjectAndName(project, name);
+        com.stolink.backend.domain.character.entity.CharacterEntity entity;
+        if (!existingEntities.isEmpty()) {
+            entity = existingEntities.get(0);
+            log.debug("Updating existing PostgreSQL character: {}", name);
+        } else {
+            entity = com.stolink.backend.domain.character.entity.CharacterEntity.builder()
+                    .id(UUID.randomUUID())
+                    .project(project)
+                    .name(name)
+                    .build();
+            log.debug("Creating new PostgreSQL character: {}", name);
         }
 
-        // Appearance
-        if (charData.getAppearance() != null) {
-            String appearanceJson = objectMapper.writeValueAsString(charData.getAppearance());
-            entity.setAppearanceJson(appearanceJson);
-            entity.setVisualJson(appearanceJson); // legacy fallback
+        // Basic fields
+        entity.setCharacterId(charData.getId());
+        entity.setRole(charData.getRole());
+        entity.setStatus(charData.getStatus());
+        entity.setImageUrl(charData.getImageUrl());
+
+        // Profile fields
+        if (charData.getProfile() != null) {
+            CharacterDTO.ProfileDTO profile = charData.getProfile();
+            entity.setAge(profile.getAge());
+            entity.setGender(profile.getGender());
+            entity.setRace(profile.getRace());
+            entity.setMbti(profile.getMbti());
+            entity.setBackstory(profile.getBackstory());
+            if (profile.getFaction() != null) {
+                entity.setFaction(profile.getFaction().getName());
+            }
         }
+
+        try {
+            // Aliases
+            if (charData.getAliases() != null)
+                entity.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
+
+            // Profile full JSON
+            if (charData.getProfile() != null)
+                entity.setProfileJson(objectMapper.writeValueAsString(charData.getProfile()));
+
+            // Image URL mapping
+            if (charData.getImageUrl() != null) {
+                entity.setImageUrl(charData.getImageUrl());
+            }
+
+            // Appearance
+            if (charData.getAppearance() != null) {
+                String appearanceJson = objectMapper.writeValueAsString(charData.getAppearance());
+                entity.setAppearanceJson(appearanceJson);
+                entity.setVisualJson(appearanceJson); // legacy fallback
+            }
 
             // Personality
             if (charData.getProfile() != null && charData.getProfile().getPersonality() != null) {
@@ -501,9 +508,11 @@ public class AICallbackService {
         String targetName = relData.getTarget();
 
         // 1. Find Source Node
-        com.stolink.backend.domain.character.node.Character sourceNode = findCharacterNodeByName(project.getId().toString(), sourceName);
+        com.stolink.backend.domain.character.node.Character sourceNode = findCharacterNodeByName(
+                project.getId().toString(), sourceName);
         // 2. Find Target Node
-        com.stolink.backend.domain.character.node.Character targetNode = findCharacterNodeByName(project.getId().toString(), targetName);
+        com.stolink.backend.domain.character.node.Character targetNode = findCharacterNodeByName(
+                project.getId().toString(), targetName);
 
         if (sourceNode != null && targetNode != null) {
             characterRepository.createRelationship(
@@ -512,8 +521,7 @@ public class AICallbackService {
                     relData.getRelationTypes(),
                     relData.getStrength() != null ? relData.getStrength() : 5,
                     relData.getDescription(),
-                    relData.getBidirectional() != null ? relData.getBidirectional() : false
-            );
+                    relData.getBidirectional() != null ? relData.getBidirectional() : false);
             log.debug("Saved Neo4j relationship: {} -> {}", sourceName, targetName);
         } else {
             log.warn("Could not find nodes for relationship: {} -> {}", sourceName, targetName);
@@ -521,10 +529,12 @@ public class AICallbackService {
     }
 
     private com.stolink.backend.domain.character.node.Character findCharacterNodeByName(String projectId, String name) {
-    // Return the first match if multiple exist to avoid "Expected single result" errors.
-    List<com.stolink.backend.domain.character.node.Character> matches = characterRepository.findAllByNameAndProjectId(name, projectId);
-    return matches.isEmpty() ? null : matches.get(0);
-}
+        // Return the first match if multiple exist to avoid "Expected single result"
+        // errors.
+        List<com.stolink.backend.domain.character.node.Character> matches = characterRepository
+                .findAllByNameAndProjectId(name, projectId);
+        return matches.isEmpty() ? null : matches.get(0);
+    }
 
     private void saveRelationshipToPostgres(RelationshipDTO relData, Project project) {
         String sourceName = relData.getSource();
@@ -608,29 +618,31 @@ public class AICallbackService {
         }
     }
 
-    private void processEventWithCandidates(EventDTO eventData, Project project, UUID jobDocumentId, List<EventEntity> candidates) {
-            UUID documentId = jobDocumentId;
-            if (eventData.getDocumentId() != null) {
-                try {
-                    documentId = UUID.fromString(eventData.getDocumentId());
-                } catch (IllegalArgumentException e) {
-                    documentId = jobDocumentId;
-                }
+    private void processEventWithCandidates(EventDTO eventData, Project project, UUID jobDocumentId,
+            List<EventEntity> candidates) {
+        UUID documentId = jobDocumentId;
+        if (eventData.getDocumentId() != null) {
+            try {
+                documentId = UUID.fromString(eventData.getDocumentId());
+            } catch (IllegalArgumentException e) {
+                documentId = jobDocumentId;
             }
+        }
 
-            String participantsJson = null;
-            if (eventData.getParticipants() != null) {
-                try {
-                    participantsJson = objectMapper.writeValueAsString(eventData.getParticipants());
-                } catch (JsonProcessingException e) {
-                    log.error("Failed to serialize participants: {}", e.getMessage());
-                }
+        String participantsJson = null;
+        if (eventData.getParticipants() != null) {
+            try {
+                participantsJson = objectMapper.writeValueAsString(eventData.getParticipants());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize participants: {}", e.getMessage());
             }
+        }
 
-            saveEventToPostgres(eventData, project, documentId, participantsJson, candidates);
+        saveEventToPostgres(eventData, project, documentId, participantsJson, candidates);
     }
 
-    private void saveEventToPostgres(EventDTO eventData, Project project, UUID documentId, String participantsJsonStr, List<EventEntity> candidates) {
+    private void saveEventToPostgres(EventDTO eventData, Project project, UUID documentId, String participantsJsonStr,
+            List<EventEntity> candidates) {
         String eventId = eventData.getEventId();
         String narrativeSummary = eventData.getNarrativeSummary();
 
@@ -638,9 +650,9 @@ public class AICallbackService {
         Optional<EventEntity> duplicateCandidate;
 
         if (candidates != null) {
-             duplicateCandidate = eventDeduplicationService.findDuplicateEventInCandidates(candidates, eventData);
+            duplicateCandidate = eventDeduplicationService.findDuplicateEventInCandidates(candidates, eventData);
         } else {
-             duplicateCandidate = eventDeduplicationService.findDuplicateEvent(project, eventData);
+            duplicateCandidate = eventDeduplicationService.findDuplicateEvent(project, eventData);
         }
 
         EventEntity eventEntity;
@@ -654,15 +666,15 @@ public class AICallbackService {
                     narrativeSummary != null ? narrativeSummary : "Untitled Event");
             if (!existingByName.isEmpty()) {
                 eventEntity = existingByName.get(0);
-                 log.info("Event matched by name: {}", narrativeSummary);
-             } else {
+                log.info("Event matched by name: {}", narrativeSummary);
+            } else {
                 eventEntity = EventEntity.builder()
                         .project(project)
                         .eventId(eventId)
                         .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
                         .documentId(documentId)
                         .build();
-             }
+            }
         }
 
         eventEntity.updateDetails(
@@ -748,26 +760,28 @@ public class AICallbackService {
         }
     }
 
-    private void saveSettingToPostgres(SettingDTO settingData, Project project, String staticObjectsJson, SettingEntity preFetchedEntity) {
+    private void saveSettingToPostgres(SettingDTO settingData, Project project, String staticObjectsJson,
+            SettingEntity preFetchedEntity) {
         String name = settingData.getName();
 
         SettingEntity settingEntity;
         if (preFetchedEntity != null) {
             settingEntity = preFetchedEntity;
         } else {
-             // Fallback lookup if not in map (should not happen if batch worked, but for safety)
-             // or if it was not in batch because it's new
-             // Wait, if it's new, preFetchedEntity is null.
-             Optional<SettingEntity> existing = settingRepository.findByProjectAndName(project, name);
-             if (existing.isPresent()) {
-                  settingEntity = existing.get();
-             } else {
+            // Fallback lookup if not in map (should not happen if batch worked, but for
+            // safety)
+            // or if it was not in batch because it's new
+            // Wait, if it's new, preFetchedEntity is null.
+            Optional<SettingEntity> existing = settingRepository.findByProjectAndName(project, name);
+            if (existing.isPresent()) {
+                settingEntity = existing.get();
+            } else {
                 settingEntity = SettingEntity.builder()
-                    .project(project)
-                    .settingId(settingData.getSettingId())
-                    .name(name)
-                    .build();
-             }
+                        .project(project)
+                        .settingId(settingData.getSettingId())
+                        .name(name)
+                        .build();
+            }
         }
 
         settingEntity.updateDetails(
@@ -813,7 +827,8 @@ public class AICallbackService {
             Integer highAnalysis = consistencyReport.getHighSeverity();
 
             // Legacy/Fallback mapping if needed, or just log new fields
-            log.info("Consistency report - score: {}, re-extract: {}, high: {}, medium: {}, auto-fix: {}, human-review: {}",
+            log.info(
+                    "Consistency report - score: {}, re-extract: {}, high: {}, medium: {}, auto-fix: {}, human-review: {}",
                     score, requiresReextraction,
                     consistencyReport.getHighSeverity(), consistencyReport.getMediumSeverity(),
                     consistencyReport.getAutoFixable(), consistencyReport.getRequiresHumanReview());
@@ -893,7 +908,8 @@ public class AICallbackService {
     }
 
     private void updateSettingWithPrompts(ImageGenerationTask task) {
-        if (task.getSettingId() == null) return;
+        if (task.getSettingId() == null)
+            return;
 
         settingRepository.findById(task.getSettingId()).ifPresent(setting -> {
             boolean updated = false;
@@ -921,7 +937,8 @@ public class AICallbackService {
 
             if (updated) {
                 settingRepository.save(setting);
-                log.info("Updated Setting {} with prompts from ImageGenerationTask {}", setting.getId(), task.getJobId());
+                log.info("Updated Setting {} with prompts from ImageGenerationTask {}", setting.getId(),
+                        task.getJobId());
             }
         });
     }
@@ -1243,7 +1260,8 @@ public class AICallbackService {
         // Async execution to avoid I/O blocking
         CompletableFuture.runAsync(() -> {
             try {
-                String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(java.time.LocalDateTime.now());
+                String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+                        .format(java.time.LocalDateTime.now());
                 // Sanitize ID for filename
                 String safeId = id != null ? id.replaceAll("[^a-zA-Z0-9-_]", "_") : "unknown";
                 String fileName = String.format("logs/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
@@ -1263,7 +1281,8 @@ public class AICallbackService {
     // SSE Progress Update Helper
     // ===================================
     private void sendProgressUpdate(UUID projectId) {
-        if (projectId == null) return;
+        if (projectId == null)
+            return;
 
         try {
             long total = documentRepository.countTextDocumentsByProjectId(projectId);

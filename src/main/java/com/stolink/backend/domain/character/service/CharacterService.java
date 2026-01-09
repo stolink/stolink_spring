@@ -61,6 +61,30 @@ public class CharacterService {
         return characterRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
+    public List<com.stolink.backend.domain.character.dto.RelationshipResponse> getRelationshipsByProjectId(
+            UUID userId, UUID projectId) {
+        List<Character> characters = getCharactersWithRelationships(userId, projectId);
+        List<com.stolink.backend.domain.character.dto.RelationshipResponse> responses = new java.util.ArrayList<>();
+
+        for (Character c : characters) {
+            if (c.getRelationships() != null) {
+                for (var r : c.getRelationships()) {
+                    responses.add(com.stolink.backend.domain.character.dto.RelationshipResponse.builder()
+                            .id(r.getId() != null ? r.getId().toString() : java.util.UUID.randomUUID().toString())
+                            .sourceId(c.getId())
+                            .targetId(r.getTargetId())
+                            .types(r.getTypes())
+                            .strength(r.getStrength())
+                            .description(r.getDescription())
+                            .bidirectional(r.getBidirectional())
+                            .build());
+                }
+            }
+        }
+        return responses;
+    }
+
     public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
