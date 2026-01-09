@@ -194,10 +194,12 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --targets "Key=tag:tag,Values=${EC2_TAG}" \
             --parameters "commands=[
-              \"sudo -i -u ubuntu bash -c 'mkdir -p /home/ubuntu/stolink-project'\",
-              \"sudo rm -f /home/ubuntu/stolink-project/.env && echo '${ENV_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-project/.env > /dev/null\",
-              \"sudo rm -f /home/ubuntu/stolink-project/docker-compose.yml && echo '${COMPOSE_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-project/docker-compose.yml > /dev/null\",
-              \"sudo -i -u ubuntu bash -c 'cd /home/ubuntu/stolink-project && sudo docker compose down --remove-orphans && sudo docker compose up -d --pull always && sudo docker image prune -f'\"
+              \"sudo -i -u ubuntu bash -c 'mkdir -p /home/ubuntu/stolink-spring'\",
+              \"sudo rm -f /home/ubuntu/stolink-spring/.env && echo '${ENV_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-spring/.env > /dev/null\",
+              \"sudo rm -f /home/ubuntu/stolink-spring/docker-compose.yml && echo '${COMPOSE_BASE64}' | base64 -d | sudo -u ubuntu tee /home/ubuntu/stolink-spring/docker-compose.yml > /dev/null\",
+              \"aws ecr get-login-password --region ${{ vars.AWS_REGION }} | sudo docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com\",
+              \"sudo docker rm -f stolink-backend || true\",
+              \"sudo -i -u ubuntu bash -c 'cd /home/ubuntu/stolink-spring && sudo docker compose down --remove-orphans && sudo docker compose up -d --pull always && sudo docker image prune -f'\"
             ]" \
             --timeout-seconds 300 \
             --max-concurrency "50%" \
