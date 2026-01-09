@@ -59,7 +59,7 @@ jobs:
           images: ghcr.io/stolink/stolink-spring
           tags: |
             type=raw,value=${{ github.ref == 'refs/heads/release' && 'latest' || 'dev-latest' }}
-            type=sha,prefix=${{ github.ref == 'refs/heads/release' && '' || 'dev-' }}
+            type=sha,prefix=${{ github.ref == 'refs/heads/release' && 'sha-' || 'dev-sha-' }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
