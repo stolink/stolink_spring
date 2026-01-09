@@ -65,11 +65,11 @@ public class CharacterDataInitializer implements CommandLineRunner {
                 helper = characterRepository.save(helper);
 
                 // Create Relationships
-                characterRepository.createRelationship(protagonist.getId(), helper.getId(), "ally", 5,
+                characterRepository.createRelationship(protagonist.getId(), helper.getId(), java.util.List.of("ally"), 5,
                                 "Trusted companion", false);
-                characterRepository.createRelationship(protagonist.getId(), antagonist.getId(), "enemy", -5,
+                characterRepository.createRelationship(protagonist.getId(), antagonist.getId(), java.util.List.of("enemy"), -5,
                                 "Destined rival", false);
-                characterRepository.createRelationship(antagonist.getId(), protagonist.getId(), "enemy", -5,
+                characterRepository.createRelationship(antagonist.getId(), protagonist.getId(), java.util.List.of("enemy"), -5,
                                 "Obstacle to power", false);
 
                 log.info("Dummy character data initialized successfully.");

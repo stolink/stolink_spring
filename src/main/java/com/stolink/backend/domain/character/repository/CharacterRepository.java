@@ -35,15 +35,15 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         @Query("MATCH (source:Character {id: $sourceId}), (target:Character {id: $targetId}) " +
                         "MERGE (source)-[r:RELATED_TO]->(target) " +
-                        "ON CREATE SET r.id = randomUUID(), r.type = $type, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
+                        "ON CREATE SET r.id = randomUUID(), r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
                         +
-                        "ON MATCH SET r.type = $type, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
+                        "ON MATCH SET r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
                         +
                         "RETURN r")
         void createRelationship(
                         @Param("sourceId") String sourceId,
                         @Param("targetId") String targetId,
-                        @Param("type") String type,
+                        @Param("types") List<String> types,
                         @Param("strength") Integer strength,
                         @Param("description") String description,
                         @Param("bidirectional") Boolean bidirectional);

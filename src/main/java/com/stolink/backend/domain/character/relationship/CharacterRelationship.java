@@ -22,7 +22,7 @@ public class CharacterRelationship {
 
     private String source;
 
-    private String type; // friend, lover, enemy, ally
+    private java.util.List<String> types; // friend, lover, enemy, ally
     private Integer strength; // 1-10
 
     @com.fasterxml.jackson.annotation.JsonProperty("label")

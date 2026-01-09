@@ -59,7 +59,7 @@ class CharacterResponseTest {
 
         CharacterRelationship relationship = CharacterRelationship.builder()
                 .target(target)
-                .type("ALLY")
+                .types(List.of("ALLY"))
                 .description("Friend")
                 .build();
 
@@ -81,7 +81,7 @@ class CharacterResponseTest {
         assertThat(relResp.getTargetId()).isEqualTo("target-1");
 
         // Verify type mapping: ALLY -> friendly
-        assertThat(relResp.getType()).isEqualTo("friendly");
+        assertThat(relResp.getTypes()).containsExactly("friendly");
     }
 
     @Test
@@ -89,8 +89,8 @@ class CharacterResponseTest {
     void shouldMapOtherTypes() {
         // Given
         Character target = Character.builder().id("t2").build();
-        CharacterRelationship enemyRel = CharacterRelationship.builder().target(target).type("ENEMY").build();
-        CharacterRelationship familyRel = CharacterRelationship.builder().target(target).type("FAMILY").build();
+        CharacterRelationship enemyRel = CharacterRelationship.builder().target(target).types(List.of("ENEMY")).build();
+        CharacterRelationship familyRel = CharacterRelationship.builder().target(target).types(List.of("FAMILY")).build();
 
         Character character = Character.builder()
                 .id("s1")
@@ -102,8 +102,8 @@ class CharacterResponseTest {
 
         // Then
         assertThat(response.getRelationships()).hasSize(2);
-        assertThat(response.getRelationships().get(0).getType()).isEqualTo("hostile"); // ENEMY -> hostile
-        assertThat(response.getRelationships().get(1).getType()).isEqualTo("family"); // FAMILY -> family
+        assertThat(response.getRelationships().get(0).getTypes()).containsExactly("hostile"); // ENEMY -> hostile
+        assertThat(response.getRelationships().get(1).getTypes()).containsExactly("family"); // FAMILY -> family
     }
 
     @Test

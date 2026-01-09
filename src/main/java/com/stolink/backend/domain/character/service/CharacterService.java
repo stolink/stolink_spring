@@ -8,6 +8,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -58,6 +59,30 @@ public class CharacterService {
 
     public List<Character> getAllCharacters() {
         return characterRepository.findAll();
+    }
+
+    @Transactional(readOnly = true)
+    public List<com.stolink.backend.domain.character.dto.RelationshipResponse> getRelationshipsByProjectId(
+            UUID userId, UUID projectId) {
+        List<Character> characters = getCharactersWithRelationships(userId, projectId);
+        List<com.stolink.backend.domain.character.dto.RelationshipResponse> responses = new java.util.ArrayList<>();
+
+        for (Character c : characters) {
+            if (c.getRelationships() != null) {
+                for (var r : c.getRelationships()) {
+                    responses.add(com.stolink.backend.domain.character.dto.RelationshipResponse.builder()
+                            .id(r.getId() != null ? r.getId().toString() : java.util.UUID.randomUUID().toString())
+                            .sourceId(c.getId())
+                            .targetId(r.getTargetId())
+                            .types(r.getTypes())
+                            .strength(r.getStrength())
+                            .description(r.getDescription())
+                            .bidirectional(r.getBidirectional())
+                            .build());
+                }
+            }
+        }
+        return responses;
     }
 
     public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
@@ -111,16 +136,16 @@ public class CharacterService {
 
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
-            String type, Integer strength, String description) {
-        createRelationship(userId, sourceId, targetId, type, strength, description, false);
+            List<String> types, Integer strength, String description) {
+        createRelationship(userId, sourceId, targetId, types, strength, description, false);
     }
 
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
-            String type, Integer strength, String description, Boolean bidirectional) {
+            List<String> types, Integer strength, String description, Boolean bidirectional) {
         // For simplicity, just create the relationship
         // In production, verify ownership of both characters
-        characterRepository.createRelationship(sourceId, targetId, type, strength, description, bidirectional);
+        characterRepository.createRelationship(sourceId, targetId, types, strength, description, bidirectional);
         log.info("Relationship created: {} -> {}", sourceId, targetId);
     }
 
@@ -329,6 +354,24 @@ public class CharacterService {
                 .description(fullPrompt) // Save the FULL generated prompt
                 .status(com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus.PENDING)
                 .build();
+
+        // Extract and Store Setting Prompts if available
+        if (setting != null) {
+            String settingIdStr = (String) setting.get("settingId");
+            if (settingIdStr != null) {
+                try {
+                    task.setSettingId(UUID.fromString(settingIdStr));
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid settingId format: {}", settingIdStr);
+                }
+            }
+            task.setVisualBackground((String) setting.get("visual_background"));
+            task.setAtmosphere((String) setting.get("atmosphere"));
+            task.setLighting((String) setting.get("lighting"));
+            task.setTimeOfDay((String) setting.get("time_of_day"));
+            task.setArtStyle((String) setting.get("art_style"));
+        }
+
         imageGenerationTaskRepository.save(task);
 
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
@@ -345,6 +388,7 @@ public class CharacterService {
     // 트랜잭션 커밋 후 RabbitMQ 이미지 생성 태스크 전송
     // @TransactionalEventListener(phase = AFTER_COMMIT): 트랜잭션이 성공적으로 커밋된 후에만 실행됨
     // 실패 시 ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
         try {

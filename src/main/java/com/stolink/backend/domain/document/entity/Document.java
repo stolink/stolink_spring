@@ -94,8 +94,7 @@ public class Document extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    // 커뮤니티(Storead) 게시 완료 여부
-    // Storead에서 최종 게시 완료 시 true로 업데이트됨
+    // 커뮤니티(Storead) 게시 완료 여부 - Storead에서 최종 게시 완료 시 true로 업데이트됨
     @Column(name = "is_published", nullable = false)
     private Boolean isPublished = false;
 
@@ -157,7 +156,7 @@ public class Document extends BaseEntity {
 
     /**
      * 문서의 부모를 변경합니다 (폴더 이동)
-     * 
+     *
      * @param newParent 새로운 부모 문서 (null이면 루트로 이동)
      * @param newOrder  새 부모 아래에서의 순서
      */

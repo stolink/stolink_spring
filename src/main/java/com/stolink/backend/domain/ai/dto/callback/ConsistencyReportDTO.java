@@ -19,37 +19,42 @@ public class ConsistencyReportDTO {
 
     /**
      * Overall consistency score (0-100)
-     * Python sends "score", also supports "overall_score" for backward compatibility
      */
     private Integer score;
 
+    @JsonProperty("high_severity")
+    private Integer highSeverity;
+
+    @JsonProperty("medium_severity")
+    private Integer mediumSeverity;
+
+    @JsonProperty("auto_fixable")
+    private Integer autoFixable;
+
+    @JsonProperty("requires_human_review")
+    private Integer requiresHumanReview;
+
+    @JsonProperty("requires_re_extraction")
+    private Boolean requiresReExtraction;
+
+    /**
+     * Legacy/Optional fields (kept just in case, or remove if confirmed unused)
+     */
     @JsonProperty("overall_score")
     private Integer overallScore;
 
-    /**
-     * List of detected conflicts
-     */
     private List<ConflictDTO> conflicts;
-
-    /**
-     * List of warnings
-     */
     private List<Object> warnings;
-
-    @JsonProperty("requires_reextraction")
-    private Boolean requiresReextraction;
-
     @JsonProperty("resolution_summary")
     private Map<String, Object> resolutionSummary;
-
     @JsonProperty("neo4j_validation")
     private Map<String, Object> neo4jValidation;
 
     /**
-     * Get the effective score (prefers 'score' field, falls back to 'overall_score')
+     * Get the effective score
      */
     public Integer getEffectiveScore() {
-        return score != null ? score : overallScore;
+        return score != null ? score : (overallScore != null ? overallScore : 0);
     }
 
     /**

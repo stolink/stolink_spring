@@ -18,8 +18,9 @@ public class RelationshipDTO {
 
     private String target;
 
-    @JsonProperty("relation_type")
-    private String relationType;
+    @Builder.Default
+    @JsonProperty("relation_types")
+    private java.util.List<String> relationTypes = java.util.Collections.emptyList();
 
     private Integer strength;
 

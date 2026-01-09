@@ -54,8 +54,10 @@ public class RelationshipEntity extends BaseEntity {
     @Column(name = "target_name", nullable = false)
     private String targetName;
 
-    @Column(name = "relation_type", length = 50)
-    private String relationType;
+    // List<String> -> JSON String transformation will be handled by Service/Converter.
+    // Ideally we use a Converter but to keep it simple we store as "relation_types_json" TEXT for now.
+    @Column(name = "relation_types_json", columnDefinition = "TEXT")
+    private String relationTypesJson;
 
     @Column
     private Integer strength;

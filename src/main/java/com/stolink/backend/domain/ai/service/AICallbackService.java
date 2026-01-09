@@ -1,9 +1,15 @@
 package com.stolink.backend.domain.ai.service;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -40,6 +46,7 @@ import com.stolink.backend.domain.document.repository.SectionRepository;
 import com.stolink.backend.domain.event.entity.EventEntity;
 // Neo4j Event node removed - using PostgreSQL only
 import com.stolink.backend.domain.event.repository.EventJpaRepository;
+import com.stolink.backend.domain.event.service.EventDeduplicationService;
 // EventNeo4jRepository removed - using PostgreSQL only
 import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
@@ -71,9 +78,11 @@ public class AICallbackService {
 
     // CharacterRepository (Neo4j) removed - using PostgreSQL only
     private final com.stolink.backend.domain.character.repository.CharacterJpaRepository characterJpaRepository;
+    private final com.stolink.backend.domain.character.repository.CharacterRepository characterRepository; // Neo4j
     private final DocumentRepository documentRepository;
     // EventNeo4jRepository removed - using PostgreSQL only
     private final EventJpaRepository eventJpaRepository;
+    private final EventDeduplicationService eventDeduplicationService;
     private final RelationshipRepository relationshipRepository;
 
     // SettingNeo4jRepository removed - using PostgreSQL only
@@ -104,11 +113,14 @@ public class AICallbackService {
      */
 
     public void handleAnalysisCallback(AnalysisCallbackDTO callback) {
+        log.info("Processing analysis callback for job: {}, status: {}",
+                callback.getJobId(), callback.getStatus());
+
         // Clear JPA L1 cache to ensure fresh reads of AI-written data
         entityManager.clear();
 
-        log.info("Processing analysis callback for job: {}, status: {}",
-                callback.getJobId(), callback.getStatus());
+        // Save raw callback data to file
+        saveCallbackToJsonFile("analysis", callback.getJobId(), callback);
 
         // Idempotent check: skip if already processed
         if (callbackLogRepository.existsByJobId(callback.getJobId())) {
@@ -118,6 +130,65 @@ public class AICallbackService {
 
         // Job 조회
         AnalysisJob job = analysisJobRepository.findByJobId(callback.getJobId()).orElse(null);
+
+        // [TEMPORARY] Dummy Data Injection Logic
+        if (job == null && callback.getJobId().startsWith("dummy")) {
+            log.warn("Job not found, but detecting dummy data injection. Creating context for insertion...");
+            try {
+                UUID tempProjectId = null;
+                String[] jobIdParts = callback.getJobId().split("::");
+                if (jobIdParts.length >= 2) {
+                    try {
+                        tempProjectId = UUID.fromString(jobIdParts[1]);
+                    } catch (IllegalArgumentException e) {
+                        tempProjectId = UUID.fromString("e2a08b38-9049-4647-b9f0-1cac7792a2d7");
+                    }
+                } else {
+                    tempProjectId = UUID.fromString("e2a08b38-9049-4647-b9f0-1cac7792a2d7");
+                }
+
+                final UUID finalTargetProjectId = tempProjectId;
+                log.info("Dummy injection target project: {}", finalTargetProjectId);
+                Project project = projectRepository.findById(finalTargetProjectId)
+                        .orElseThrow(() -> new RuntimeException("Target project not found: " + finalTargetProjectId));
+
+                // Find or Create a Placeholder Document
+                Document doc = documentRepository.findTextDocumentsByProjectId(finalTargetProjectId).stream()
+                        .findFirst()
+                        .orElseGet(() -> {
+                            Document newDoc = Document.builder()
+                                    .project(project)
+                                    .title("Dummy Data Container")
+                                    .type(Document.DocumentType.TEXT)
+                                    .order(0)
+                                    .content("Content for dummy data holder")
+                                    .build();
+                            return documentRepository.save(newDoc);
+                        });
+
+                job = AnalysisJob.builder()
+                        .jobId(callback.getJobId())
+                        .project(project)
+                        .documentId(doc.getId())
+                        .status(AnalysisJob.JobStatus.PROCESSING)
+                        .startedAt(java.time.LocalDateTime.now())
+                        .build();
+                analysisJobRepository.save(job);
+                log.info("Created temporary job context: {}", job.getJobId());
+
+                // Cleanup existing characters and relationships for this project
+                transactionTemplate.execute(status -> {
+                    relationshipRepository.deleteByProjectId(finalTargetProjectId);
+                    characterJpaRepository.deleteAllByProject(project);
+                    characterRepository.deleteByProjectId(finalTargetProjectId.toString());
+                    log.info("Cleaned up existing data for project: {}", finalTargetProjectId);
+                    return null;
+                });
+            } catch (Exception e) {
+                log.error("Failed to create dummy context or cleanup: {}", e.getMessage());
+            }
+        }
+
         if (job == null) {
             log.error("Job not found: {}", callback.getJobId());
             return;
@@ -203,9 +274,8 @@ public class AICallbackService {
                 .projectId(project.getId())
                 .build());
 
-        // SSE 알림 전송 (프론트엔드 업데이트용)
-        sseEmitterService.sendStatus(job.getProject().getId(), new SseEmitterService.AnalysisStatusEvent(
-                "COMPLETED", 1, 1, "분석이 완료되었습니다."));
+        // SSE 알림 전송 (프론트엔드 업데이트용 - 실시간 진행률)
+        sendProgressUpdate(project.getId());
 
         log.info("Analysis callback processed successfully for job: {}", callback.getJobId());
     }
@@ -240,37 +310,96 @@ public class AICallbackService {
 
         for (CharacterDTO charData : characters) {
             try {
+                // 1. Save to Postgres
                 saveCharacterToPostgres(charData, project);
+
+                // 2. Save to Neo4j [ADDED FOR DUMMY DATA]
+                saveCharacterToNeo4j(charData, project);
             } catch (Exception e) {
-                log.error("Failed to save character to Postgres: {}", e.getMessage());
+                log.error("Failed to save character: {}", e.getMessage());
             }
         }
     }
 
-    private void saveCharacterToPostgres(CharacterDTO charData, Project project) {
-        String name = null;
-        if (charData.getProfile() != null) {
-            name = charData.getProfile().getName();
-        }
+    private void saveCharacterToNeo4j(CharacterDTO charData, Project project) {
+        try {
+            String name = charData.getProfile() != null ? charData.getProfile().getName() : "Unknown";
+            String projectId = project.getId().toString();
 
-        if (name == null) {
-            log.error("Cannot save character to Postgres: Name is missing");
-            return;
+            // Find existing by Name and Project as ID (UUID) might mismatch
+            List<com.stolink.backend.domain.character.node.Character> existing = characterRepository
+                    .findAllByNameAndProjectId(name, projectId);
+
+            com.stolink.backend.domain.character.node.Character neoChar;
+            if (!existing.isEmpty()) {
+                neoChar = existing.get(0);
+                log.debug("Updating existing Neo4j character: {}", name);
+            } else {
+                neoChar = new com.stolink.backend.domain.character.node.Character();
+                neoChar.setProjectId(projectId);
+                neoChar.setName(name);
+                log.debug("Creating new Neo4j character: {}", name);
+            }
+
+            // Fill data
+            neoChar.setCharacterId(charData.getId());
+            neoChar.setRole(charData.getRole());
+            neoChar.setStatus(charData.getStatus());
+            neoChar.setImageUrl(charData.getImageUrl());
+
+            if (charData.getProfile() != null) {
+                CharacterDTO.ProfileDTO p = charData.getProfile();
+                neoChar.setAge(p.getAge());
+                neoChar.setGender(p.getGender());
+                neoChar.setRace(p.getRace());
+                neoChar.setMbti(p.getMbti());
+                neoChar.setBackstory(p.getBackstory());
+                if (p.getFaction() != null)
+                    neoChar.setFaction(p.getFaction().getName());
+                neoChar.setProfileJson(objectMapper.writeValueAsString(p));
+            }
+
+            if (charData.getAliases() != null)
+                neoChar.setAliasesJson(objectMapper.writeValueAsString(charData.getAliases()));
+            if (charData.getAppearance() != null)
+                neoChar.setAppearanceJson(objectMapper.writeValueAsString(charData.getAppearance()));
+            if (charData.getRelations() != null)
+                neoChar.setRelationsJson(objectMapper.writeValueAsString(charData.getRelations()));
+            if (charData.getCurrentMood() != null)
+                neoChar.setCurrentMoodJson(objectMapper.writeValueAsString(charData.getCurrentMood()));
+
+            characterRepository.save(neoChar);
+            log.debug("Saved Neo4j character: {}", name);
+
+        } catch (Exception e) {
+            log.error("Failed to save character to Neo4j: {}", e.getMessage());
         }
+    }
+
+    private void saveCharacterToPostgres(CharacterDTO charData, Project project) {
+        String name = charData.getProfile() != null ? charData.getProfile().getName() : "Unknown";
+
         // 중복 캐릭터가 있어도 첫 번째 결과만 사용 (안전한 조회)
         java.util.List<com.stolink.backend.domain.character.entity.CharacterEntity> existingEntities = characterJpaRepository
                 .findAllByProjectAndName(project, name);
-        com.stolink.backend.domain.character.entity.CharacterEntity entity = existingEntities.isEmpty()
-                ? com.stolink.backend.domain.character.entity.CharacterEntity.builder()
-                        .project(project)
-                        .name(name)
-                        .build()
-                : existingEntities.get(0);
+        com.stolink.backend.domain.character.entity.CharacterEntity entity;
+        if (!existingEntities.isEmpty()) {
+            entity = existingEntities.get(0);
+            log.debug("Updating existing PostgreSQL character: {}", name);
+        } else {
+            entity = com.stolink.backend.domain.character.entity.CharacterEntity.builder()
+                    .id(UUID.randomUUID())
+                    .project(project)
+                    .name(name)
+                    .build();
+            log.debug("Creating new PostgreSQL character: {}", name);
+        }
 
         // Basic fields
         entity.setCharacterId(charData.getId());
         entity.setRole(charData.getRole());
         entity.setStatus(charData.getStatus());
+        entity.setImageUrl(charData.getImageUrl());
 
         // Profile fields
         if (charData.getProfile() != null) {
@@ -294,12 +423,16 @@ public class AICallbackService {
             if (charData.getProfile() != null)
                 entity.setProfileJson(objectMapper.writeValueAsString(charData.getProfile()));
 
+            // Image URL mapping
+            if (charData.getImageUrl() != null) {
+                entity.setImageUrl(charData.getImageUrl());
+            }
+
             // Appearance
             if (charData.getAppearance() != null) {
                 String appearanceJson = objectMapper.writeValueAsString(charData.getAppearance());
                 entity.setAppearanceJson(appearanceJson);
-                // Visual (legacy) fallback
-                entity.setVisualJson(appearanceJson);
+                entity.setVisualJson(appearanceJson); // legacy fallback
             }
 
             // Personality
@@ -357,15 +490,56 @@ public class AICallbackService {
                 continue;
             }
 
-            // --- PostgreSQL Processing only (Neo4j is handled by AI Backend) ---
+            // --- PostgreSQL Processing ---
             saveRelationshipToPostgres(relData, project);
+
+            // --- Neo4j Processing [ADDED FOR DUMMY DATA] ---
+            saveRelationshipToNeo4j(relData, project);
         }
+    }
+
+    private void saveRelationshipToNeo4j(RelationshipDTO relData, Project project) {
+        // Neo4j relationships use IDs, but DTO might provide Names.
+        // We need to resolve Name -> ID for Neo4j creation if IDs are missing.
+        // Or better: ensure Characters are saved first (they are).
+        // Then find the Character Nodes by (ProjectId, Name).
+
+        String sourceName = relData.getSource();
+        String targetName = relData.getTarget();
+
+        // 1. Find Source Node
+        com.stolink.backend.domain.character.node.Character sourceNode = findCharacterNodeByName(
+                project.getId().toString(), sourceName);
+        // 2. Find Target Node
+        com.stolink.backend.domain.character.node.Character targetNode = findCharacterNodeByName(
+                project.getId().toString(), targetName);
+
+        if (sourceNode != null && targetNode != null) {
+            characterRepository.createRelationship(
+                    sourceNode.getId(),
+                    targetNode.getId(),
+                    relData.getRelationTypes(),
+                    relData.getStrength() != null ? relData.getStrength() : 5,
+                    relData.getDescription(),
+                    relData.getBidirectional() != null ? relData.getBidirectional() : false);
+            log.debug("Saved Neo4j relationship: {} -> {}", sourceName, targetName);
+        } else {
+            log.warn("Could not find nodes for relationship: {} -> {}", sourceName, targetName);
+        }
+    }
+
+    private com.stolink.backend.domain.character.node.Character findCharacterNodeByName(String projectId, String name) {
+        // Return the first match if multiple exist to avoid "Expected single result"
+        // errors.
+        List<com.stolink.backend.domain.character.node.Character> matches = characterRepository
+                .findAllByNameAndProjectId(name, projectId);
+        return matches.isEmpty() ? null : matches.get(0);
     }
 
     private void saveRelationshipToPostgres(RelationshipDTO relData, Project project) {
         String sourceName = relData.getSource();
         String targetName = relData.getTarget();
-        String relationType = relData.getRelationType();
+        List<String> relationTypes = relData.getRelationTypes(); // now List
         Integer strength = relData.getStrength() != null ? relData.getStrength() : 5;
         String description = relData.getDescription();
         Boolean bidirectional = relData.getBidirectional();
@@ -381,13 +555,20 @@ public class AICallbackService {
                 : targetList.get(0);
 
         if (sourceEntity != null && targetEntity != null) {
+            String typesJson = "[]";
+            try {
+                typesJson = objectMapper.writeValueAsString(relationTypes != null ? relationTypes : new ArrayList<>());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize relation types: {}", e.getMessage());
+            }
+
             RelationshipEntity relEntity = RelationshipEntity.builder()
                     .project(project)
                     .sourceCharacter(sourceEntity)
                     .targetCharacter(targetEntity)
                     .sourceName(sourceName)
                     .targetName(targetName)
-                    .relationType(relationType)
+                    .relationTypesJson(typesJson) // Updated builder field
                     .strength(strength)
                     .description(description)
                     .bidirectional(bidirectional != null ? bidirectional : false)
@@ -408,46 +589,92 @@ public class AICallbackService {
             return;
         }
 
-        for (EventDTO eventData : events) {
-            UUID documentId = jobDocumentId;
-            if (eventData.getDocumentId() != null) {
-                try {
-                    documentId = UUID.fromString(eventData.getDocumentId());
-                } catch (IllegalArgumentException e) {
-                    documentId = jobDocumentId;
-                }
-            }
+        // Group by Chapter for Batch Processing
+        Map<Integer, List<EventDTO>> eventsByChapter = events.stream()
+                .filter(e -> e.getChapter() != null)
+                .collect(Collectors.groupingBy(EventDTO::getChapter));
 
-            String participantsJson = null;
-            if (eventData.getParticipants() != null) {
-                try {
-                    participantsJson = objectMapper.writeValueAsString(eventData.getParticipants());
-                } catch (JsonProcessingException e) {
-                    log.error("Failed to serialize participants: {}", e.getMessage());
-                }
-            }
+        // Handle events with no chapter
+        List<EventDTO> noChapterEvents = events.stream()
+                .filter(e -> e.getChapter() == null)
+                .toList();
 
-            saveEventToPostgres(eventData, project, documentId, participantsJson);
+        // 1. Process Batch (By Chapter)
+        for (Map.Entry<Integer, List<EventDTO>> entry : eventsByChapter.entrySet()) {
+            Integer chapter = entry.getKey();
+            List<EventDTO> chapterEvents = entry.getValue();
+
+            // Batch Fetch Candidates
+            List<EventEntity> candidates = eventJpaRepository.findAllByProjectAndChapter(project, chapter);
+
+            for (EventDTO eventData : chapterEvents) {
+                processEventWithCandidates(eventData, project, jobDocumentId, candidates);
+            }
+        }
+
+        // 2. Process Remainder (No chapter -> no batch candidates)
+        for (EventDTO eventData : noChapterEvents) {
+            processEventWithCandidates(eventData, project, jobDocumentId, null);
         }
     }
 
-    private void saveEventToPostgres(EventDTO eventData, Project project, UUID documentId, String participantsJsonStr) {
+    private void processEventWithCandidates(EventDTO eventData, Project project, UUID jobDocumentId,
+            List<EventEntity> candidates) {
+        UUID documentId = jobDocumentId;
+        if (eventData.getDocumentId() != null) {
+            try {
+                documentId = UUID.fromString(eventData.getDocumentId());
+            } catch (IllegalArgumentException e) {
+                documentId = jobDocumentId;
+            }
+        }
+
+        String participantsJson = null;
+        if (eventData.getParticipants() != null) {
+            try {
+                participantsJson = objectMapper.writeValueAsString(eventData.getParticipants());
+            } catch (JsonProcessingException e) {
+                log.error("Failed to serialize participants: {}", e.getMessage());
+            }
+        }
+
+        saveEventToPostgres(eventData, project, documentId, participantsJson, candidates);
+    }
+
+    private void saveEventToPostgres(EventDTO eventData, Project project, UUID documentId, String participantsJsonStr,
+            List<EventEntity> candidates) {
         String eventId = eventData.getEventId();
         String narrativeSummary = eventData.getNarrativeSummary();
 
-        // 중복 안전 조회
-        List<EventEntity> existingEntities = eventJpaRepository.findAllByProjectAndName(project,
-                narrativeSummary != null ? narrativeSummary : "Untitled Event");
-        EventEntity eventEntity;
-        if (!existingEntities.isEmpty()) {
-            eventEntity = existingEntities.get(0);
+        // Hybrid Deduplication
+        Optional<EventEntity> duplicateCandidate;
+
+        if (candidates != null) {
+            duplicateCandidate = eventDeduplicationService.findDuplicateEventInCandidates(candidates, eventData);
         } else {
-            eventEntity = EventEntity.builder()
-                    .project(project)
-                    .eventId(eventId)
-                    .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
-                    .documentId(documentId)
-                    .build();
+            duplicateCandidate = eventDeduplicationService.findDuplicateEvent(project, eventData);
+        }
+
+        EventEntity eventEntity;
+
+        if (duplicateCandidate.isPresent()) {
+            eventEntity = duplicateCandidate.get();
+            log.info("Duplicate event found: {}", eventEntity.getEventId());
+        } else {
+            // Fallback for backward compatibility (name match)
+            List<EventEntity> existingByName = eventJpaRepository.findAllByProjectAndName(project,
+                    narrativeSummary != null ? narrativeSummary : "Untitled Event");
+            if (!existingByName.isEmpty()) {
+                eventEntity = existingByName.get(0);
+                log.info("Event matched by name: {}", narrativeSummary);
+            } else {
+                eventEntity = EventEntity.builder()
+                        .project(project)
+                        .eventId(eventId)
+                        .name(narrativeSummary != null ? narrativeSummary : "Untitled Event")
+                        .documentId(documentId)
+                        .build();
+            }
         }
 
         eventEntity.updateDetails(
@@ -466,7 +693,7 @@ public class AICallbackService {
                 narrativeSummary,
                 eventData.getPrevEventId());
 
-        // 추가 필드 저장 (AI 콜백 완전 매핑)
+        // 추가 필드 저장
         try {
             if (eventData.getTimestamp() != null) {
                 eventEntity.setTimestampJson(objectMapper.writeValueAsString(eventData.getTimestamp()));
@@ -490,7 +717,6 @@ public class AICallbackService {
     }
 
     /**
-     * 설정(장소) 저장 (PostgreSQL only - Neo4j는 AI Backend에서 처리)
      */
     private void saveSettings(List<SettingDTO> settings, Project project) {
         if (settings == null || settings.isEmpty()) {
@@ -498,7 +724,30 @@ public class AICallbackService {
             return;
         }
 
+        // Batch fetch existing settings
+        Set<String> names = settings.stream()
+                .map(SettingDTO::getName)
+                .filter(name -> name != null && !name.isBlank())
+                .collect(Collectors.toSet());
+
+        Map<String, SettingEntity> existingMap = new HashMap<>();
+        if (!names.isEmpty()) {
+            existingMap = settingRepository.findByProjectAndNameIn(project, names)
+                    .stream()
+                    .collect(Collectors.toMap(SettingEntity::getName, s -> s, (s1, s2) -> s1));
+        }
+
         for (SettingDTO settingData : settings) {
+            String settingId = settingData.getSettingId();
+            String name = settingData.getName();
+
+            // name이 null이면 저장할 수 없음 (SettingEntity.name은 NOT NULL)
+            if (name == null || name.isBlank()) {
+                log.warn("Skipping setting with null/blank name. settingId: {}", settingId);
+                continue;
+            }
+
+            // static_objects를 JSON 문자열로
             String staticObjectsJson = null;
             if (settingData.getNotableFeatures() != null) {
                 try {
@@ -507,22 +756,32 @@ public class AICallbackService {
                     log.error("Failed to serialize static_objects: {}", e.getMessage());
                 }
             }
-            saveSettingToPostgres(settingData, project, staticObjectsJson);
+            saveSettingToPostgres(settingData, project, staticObjectsJson, existingMap.get(name));
         }
     }
 
-    private void saveSettingToPostgres(SettingDTO settingData, Project project, String staticObjectsJson) {
+    private void saveSettingToPostgres(SettingDTO settingData, Project project, String staticObjectsJson,
+            SettingEntity preFetchedEntity) {
         String name = settingData.getName();
-        Optional<SettingEntity> existingEntity = settingRepository.findByProjectAndName(project, name);
+
         SettingEntity settingEntity;
-        if (existingEntity.isPresent()) {
-            settingEntity = existingEntity.get();
+        if (preFetchedEntity != null) {
+            settingEntity = preFetchedEntity;
         } else {
-            settingEntity = SettingEntity.builder()
-                    .project(project)
-                    .settingId(settingData.getSettingId())
-                    .name(name)
-                    .build();
+            // Fallback lookup if not in map (should not happen if batch worked, but for
+            // safety)
+            // or if it was not in batch because it's new
+            // Wait, if it's new, preFetchedEntity is null.
+            Optional<SettingEntity> existing = settingRepository.findByProjectAndName(project, name);
+            if (existing.isPresent()) {
+                settingEntity = existing.get();
+            } else {
+                settingEntity = SettingEntity.builder()
+                        .project(project)
+                        .settingId(settingData.getSettingId())
+                        .name(name)
+                        .build();
+            }
         }
 
         settingEntity.updateDetails(
@@ -564,12 +823,15 @@ public class AICallbackService {
     private void logConsistencyReport(ConsistencyReportDTO consistencyReport) {
         if (consistencyReport != null) {
             Integer score = consistencyReport.getEffectiveScore();
-            Boolean requiresReextraction = consistencyReport.getRequiresReextraction();
-            int conflictCount = consistencyReport.getConflicts() != null ? consistencyReport.getConflicts().size() : 0;
-            int warningCount = consistencyReport.getWarnings() != null ? consistencyReport.getWarnings().size() : 0;
+            Boolean requiresReextraction = consistencyReport.getRequiresReExtraction();
+            Integer highAnalysis = consistencyReport.getHighSeverity();
 
-            log.info("Consistency report - score: {}, requires_reextraction: {}, conflicts: {}, warnings: {}",
-                    score, requiresReextraction, conflictCount, warningCount);
+            // Legacy/Fallback mapping if needed, or just log new fields
+            log.info(
+                    "Consistency report - score: {}, re-extract: {}, high: {}, medium: {}, auto-fix: {}, human-review: {}",
+                    score, requiresReextraction,
+                    consistencyReport.getHighSeverity(), consistencyReport.getMediumSeverity(),
+                    consistencyReport.getAutoFixable(), consistencyReport.getRequiresHumanReview());
         }
     }
 
@@ -580,6 +842,9 @@ public class AICallbackService {
     public void handleImageCallback(ImageCallbackDTO callback) {
         log.info("Processing image callback for job: {}, character: {}",
                 callback.getJobId(), callback.getCharacterId());
+
+        // Save raw callback data to file
+        saveCallbackToJsonFile("image", callback.getJobId(), callback);
 
         String jobId = callback.getJobId();
 
@@ -613,15 +878,68 @@ public class AICallbackService {
         characterJpaRepository.findByCharacterId(characterId).ifPresent(characterEntity -> {
             characterEntity.setImageUrl(finalImageUrl);
             characterJpaRepository.save(characterEntity);
-            log.info("Updated character {} with image URL: {}", characterId, finalImageUrl);
+            log.info("Updated PostgreSQL character {} with image URL: {}", characterId, finalImageUrl);
+
+            // Setting Prompt Persistence (Side Effect)
+            // Re-fetch task to get latest state including settingId
+            imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
+                if (task.getSettingId() != null) {
+                    updateSettingWithPrompts(task);
+                }
+            });
         });
 
-        // 2. ImageGenerationTask 상태 업데이트 (COMPLETED)
+        // 2. Neo4j Character 업데이트 (프론트엔드에서 조회하는 소스)
+        try {
+            UUID charUuid = callback.getCharacterId();
+            characterRepository.updateImageUrl(charUuid.toString(), finalImageUrl);
+            log.info("Updated Neo4j character {} with image URL: {}", charUuid, finalImageUrl);
+        } catch (Exception e) {
+            log.warn("Failed to update Neo4j character image URL: {}", e.getMessage());
+        }
+
+        // 3. ImageGenerationTask 상태 업데이트 (COMPLETED)
         imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
             task.setImageUrl(finalImageUrl);
             task.setStatus(ImageGenerationTask.TaskStatus.COMPLETED);
             imageGenerationTaskRepository.save(task);
             log.info("Updated ImageGenerationTask {} to COMPLETED", jobId);
+        });
+    }
+
+    private void updateSettingWithPrompts(ImageGenerationTask task) {
+        if (task.getSettingId() == null)
+            return;
+
+        settingRepository.findById(task.getSettingId()).ifPresent(setting -> {
+            boolean updated = false;
+
+            if (task.getVisualBackground() != null && !task.getVisualBackground().isBlank()) {
+                setting.setVisualBackground(task.getVisualBackground());
+                updated = true;
+            }
+            if (task.getAtmosphere() != null && !task.getAtmosphere().isBlank()) {
+                setting.setAtmosphereKeywords(task.getAtmosphere());
+                updated = true;
+            }
+            if (task.getLighting() != null && !task.getLighting().isBlank()) {
+                setting.setLightingDescription(task.getLighting());
+                updated = true;
+            }
+            if (task.getTimeOfDay() != null && !task.getTimeOfDay().isBlank()) {
+                setting.setTimeOfDay(task.getTimeOfDay());
+                updated = true;
+            }
+            if (task.getArtStyle() != null && !task.getArtStyle().isBlank()) {
+                setting.setArtStyle(task.getArtStyle());
+                updated = true;
+            }
+
+            if (updated) {
+                settingRepository.save(setting);
+                log.info("Updated Setting {} with prompts from ImageGenerationTask {}", setting.getId(),
+                        task.getJobId());
+            }
         });
     }
 
@@ -698,8 +1016,12 @@ public class AICallbackService {
                     .project(project)
                     .jobId(jobId)
                     .overallScore(score)
-                    .requiresReextraction(reportData.getRequiresReextraction() != null
-                            ? reportData.getRequiresReextraction()
+                    .highSeverityCount(reportData.getHighSeverity())
+                    .mediumSeverityCount(reportData.getMediumSeverity())
+                    .autoFixableCount(reportData.getAutoFixable())
+                    .requiresHumanReviewCount(reportData.getRequiresHumanReview())
+                    .requiresReextraction(reportData.getRequiresReExtraction() != null
+                            ? reportData.getRequiresReExtraction()
                             : false)
                     .conflictsJson(toJson(reportData.getConflicts()))
                     .warningsJson(toJson(reportData.getWarnings()))
@@ -820,6 +1142,9 @@ public class AICallbackService {
         log.info("Processing global merge callback for project: {}, status: {}",
                 callback.getProjectId(), callback.getStatus());
 
+        // Save raw callback data to file
+        saveCallbackToJsonFile("global_merge", callback.getProjectId(), callback);
+
         if (!callback.isSuccess()) {
             log.error("Global merge failed: {}", callback.getError());
             return;
@@ -859,6 +1184,9 @@ public class AICallbackService {
         log.info("Processing document analysis callback for document: {}, status: {}",
                 callback.getDocumentId(), callback.getStatus());
 
+        // Save raw callback data to file
+        saveCallbackToJsonFile("doc_analysis", callback.getDocumentId(), callback);
+
         UUID documentId = UUID.fromString(callback.getDocumentId());
 
         // 문서 조회
@@ -892,6 +1220,9 @@ public class AICallbackService {
         // 3. 임시 관계 저장 (임시 저장용, 나중에 글로벌 병합 시 정제됨)
         // 1차 패스에서는 관계 추출이 제한적일 수 있음.
 
+        // SSE 알림 전송 (실시간 진행률)
+        sendProgressUpdate(project.getId());
+
         log.info("Document analysis callback processed: {}", callback.getDocumentId());
     }
 
@@ -919,6 +1250,56 @@ public class AICallbackService {
                     .embedding(embedding)
                     .build();
             sectionRepository.save(section);
+        }
+    }
+
+    /**
+     * AI 콜백 데이터를 로컬 JSON 파일로 저장 (디버깅용)
+     */
+    private void saveCallbackToJsonFile(String type, String id, Object data) {
+        // Async execution to avoid I/O blocking
+        CompletableFuture.runAsync(() -> {
+            try {
+                String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
+                        .format(java.time.LocalDateTime.now());
+                // Sanitize ID for filename
+                String safeId = id != null ? id.replaceAll("[^a-zA-Z0-9-_]", "_") : "unknown";
+                String fileName = String.format("logs/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
+
+                java.io.File file = new java.io.File(fileName);
+                file.getParentFile().mkdirs();
+
+                objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, data);
+                log.info("Saved callback data to file (Async): {}", fileName);
+            } catch (Exception e) {
+                log.error("Failed to save callback data to file: {}", e.getMessage());
+            }
+        });
+    }
+
+    // ===================================
+    // SSE Progress Update Helper
+    // ===================================
+    private void sendProgressUpdate(UUID projectId) {
+        if (projectId == null)
+            return;
+
+        try {
+            long total = documentRepository.countTextDocumentsByProjectId(projectId);
+            long completed = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
+                    projectId,
+                    com.stolink.backend.domain.document.entity.Document.AnalysisStatus.COMPLETED);
+
+            String status = (total > 0 && total <= completed) ? "COMPLETED" : "ANALYZING";
+            String message = (total > 0 && total <= completed)
+                    ? "분석이 완료되었습니다."
+                    : String.format("분석 진행 중: %d/%d", completed, total);
+
+            sseEmitterService.sendStatus(projectId, new SseEmitterService.AnalysisStatusEvent(
+                    status, (int) completed, (int) total, message));
+            log.debug("Sent SSE progress update for project {}: {}/{}", projectId, completed, total);
+        } catch (Exception e) {
+            log.warn("Failed to send SSE progress update: {}", e.getMessage());
         }
     }
 }

@@ -69,9 +69,10 @@ public class CharacterController {
                 userId,
                 (String) body.get("sourceId"),
                 (String) body.get("targetId"),
-                (String) body.get("type"),
+                (List<String>) body.get("types"),
                 (Integer) body.get("strength"),
-                (String) body.get("description"));
+                (String) body.get("description"),
+                (Boolean) body.getOrDefault("bidirectional", false));
         return ApiResponse.created(null);
     }
 
