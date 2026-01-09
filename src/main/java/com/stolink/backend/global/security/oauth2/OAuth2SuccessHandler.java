@@ -56,10 +56,6 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 authService.saveRefreshToken(userId, refreshToken);
                 log.debug("Refresh token saved for user: {}", userId);
 
-                // Refresh Token을 RDB에 저장
-                authService.saveRefreshToken(userId, refreshToken);
-                log.debug("Refresh token saved for user: {}", userId);
-
                 // Access Token, Refresh Token을 HttpOnly 쿠키로 설정
                 ResponseCookie accessCookie = cookieUtils.createAccessTokenCookie(accessToken);
                 ResponseCookie refreshCookie = cookieUtils.createRefreshTokenCookie(refreshToken);
