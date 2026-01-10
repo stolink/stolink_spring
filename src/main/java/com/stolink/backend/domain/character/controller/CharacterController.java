@@ -1,20 +1,30 @@
 package com.stolink.backend.domain.character.controller;
 
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.stolink.backend.domain.character.dto.CharacterResponse;
 import com.stolink.backend.domain.character.dto.ImageGenerationRequest;
 import com.stolink.backend.domain.character.node.Character;
 import com.stolink.backend.domain.character.service.CharacterService;
 import com.stolink.backend.global.common.dto.ApiResponse;
+
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -69,11 +79,19 @@ public class CharacterController {
                 userId,
                 (String) body.get("sourceId"),
                 (String) body.get("targetId"),
-                (List<String>) body.get("types"),
+                extractStringList(body.get("types")),
                 (Integer) body.get("strength"),
                 (String) body.get("description"),
                 (Boolean) body.getOrDefault("bidirectional", false));
         return ApiResponse.created(null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> extractStringList(Object obj) {
+        if (obj instanceof List<?>) {
+            return (List<String>) obj;
+        }
+        return List.of();
     }
 
     @PostMapping("/characters/seed")

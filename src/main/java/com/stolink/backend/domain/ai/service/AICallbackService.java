@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -141,14 +142,8 @@ public class AICallbackService {
                 analysisJobRepository.save(job);
                 log.info("Created temporary job context: {}", job.getJobId());
 
-                // Cleanup existing characters and relationships for this project
-                transactionTemplate.execute(status -> {
-                    relationshipRepository.deleteByProjectId(finalTargetProjectId);
-                    characterJpaRepository.deleteAllByProject(project);
-                    characterRepository.deleteByProjectId(finalTargetProjectId.toString());
-                    log.info("Cleaned up existing data for project: {}", finalTargetProjectId);
-                    return null;
-                });
+                // Note: Character and Relationship cleanup is handled by AI Backend in Neo4j
+                // Spring Backend does not manage this data
             } catch (Exception e) {
                 log.error("Failed to create dummy context or cleanup: {}", e.getMessage());
             }
@@ -451,7 +446,7 @@ public class AICallbackService {
                     .jobId(jobId)
                     .overallScore(reportData.getEffectiveScore())
                     .requiresReextraction(
-                            reportData.getRequiresReextraction() != null ? reportData.getRequiresReextraction() : false)
+                            reportData.getRequiresReExtraction() != null ? reportData.getRequiresReExtraction() : false)
                     .conflictsJson(toJson(reportData.getConflicts()))
                     .warningsJson(toJson(reportData.getWarnings()))
                     .resolutionSummaryJson(toJson(reportData.getResolutionSummary()))
