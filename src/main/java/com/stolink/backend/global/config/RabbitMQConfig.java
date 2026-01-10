@@ -78,10 +78,13 @@ public class RabbitMQConfig {
 
     /**
      * 글로벌 병합 큐 (2차 Pass)
+     * 우선순위 큐 설정 (x-max-priority: 10)
      */
     @Bean
     public Queue globalMergeQueue() {
-        return new Queue(globalMergeQueue, true);
+        return org.springframework.amqp.core.QueueBuilder.durable(globalMergeQueue)
+                .withArgument("x-max-priority", 10)
+                .build();
     }
 
     /**
@@ -145,6 +148,18 @@ public class RabbitMQConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(messageConverter());
         return template;
+    }
+
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin imageRabbitAdmin(
+            @Qualifier("imageConnectionFactory") ConnectionFactory connectionFactory) {
+        return new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
+    }
+
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin agentRabbitAdmin(
+            @Qualifier("agentConnectionFactory") ConnectionFactory connectionFactory) {
+        return new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
     }
 
     // ============================================================

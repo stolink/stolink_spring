@@ -1,11 +1,10 @@
 package com.stolink.backend.domain.document.entity;
 
+import java.sql.Timestamp;
 import java.util.UUID;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
-import com.stolink.backend.global.common.entity.BaseEntity;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -13,92 +12,69 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
- * Section 엔티티 - 의미적 분할 단위
+ * 문서 섹션 엔티티 (RAG용)
  * 
- * AI Backend에서 Semantic Chunking으로 생성된 Section을 저장합니다.
- * Document(TEXT)와 1:N 관계를 가집니다.
+ * 문서를 청크 단위로 분할하여 벡터 임베딩과 함께 저장합니다.
  */
 @Entity
 @Table(name = "sections", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "document_id", "sequence_order" })
+                @UniqueConstraint(columnNames = { "document_id", "sequence_order" })
+}, indexes = {
+                @Index(name = "idx_sections_document_id", columnList = "document_id")
 })
 @Getter
+@Setter
+@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class Section extends BaseEntity {
+@AllArgsConstructor
+public class Section {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.UUID)
+        private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "document_id", nullable = false)
-    private Document document;
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(name = "document_id", nullable = false)
+        private Document document;
 
-    @Column(nullable = false)
-    private Integer sequenceOrder;
+        @Column(name = "sequence_order", nullable = false)
+        private Integer sequenceOrder;
 
-    @Column(length = 200)
-    private String navTitle;
+        @Column(name = "nav_title", length = 200)
+        private String navTitle;
 
-    @Column(columnDefinition = "TEXT", nullable = false)
-    private String content;
+        @Column(nullable = false, columnDefinition = "TEXT")
+        private String content;
 
-    @Column(columnDefinition = "vector(3072)")
-    @JdbcTypeCode(SqlTypes.VECTOR)
-    private float[] embedding;
+        @Column(name = "content_hash", length = 16)
+        private String contentHash;
 
-    /**
-     * 관련 캐릭터 이름 목록
-     */
-    @Column(columnDefinition = "TEXT")
-    private String relatedCharactersJson;
+        // embedding field omitted - managed externally or via native query
 
-    /**
-     * 관련 이벤트 ID 목록
-     */
-    @Column(columnDefinition = "TEXT")
-    private String relatedEventsJson;
+        @Column(name = "related_characters_json", columnDefinition = "TEXT")
+        private String relatedCharactersJson;
 
-    @Builder
-    public Section(UUID id, Document document, Integer sequenceOrder, String navTitle,
-            String content, float[] embedding, String relatedCharactersJson, String relatedEventsJson) {
-        this.id = id;
-        this.document = document;
-        this.sequenceOrder = sequenceOrder;
-        this.navTitle = navTitle;
-        this.content = content;
-        this.embedding = embedding;
-        this.relatedCharactersJson = relatedCharactersJson;
-        this.relatedEventsJson = relatedEventsJson;
-    }
+        @Column(name = "related_events_json", columnDefinition = "TEXT")
+        private String relatedEventsJson;
 
-    public void updateContent(String content) {
-        this.content = content;
-    }
+        @CreationTimestamp
+        @Column(name = "created_at", nullable = false, updatable = false)
+        private Timestamp createdAt;
 
-    public void updateNavTitle(String navTitle) {
-        this.navTitle = navTitle;
-    }
-
-    public void updateEmbedding(float[] embedding) {
-        this.embedding = embedding;
-    }
-
-    public void updateRelatedCharacters(String relatedCharactersJson) {
-        this.relatedCharactersJson = relatedCharactersJson;
-    }
-
-    public void updateRelatedEvents(String relatedEventsJson) {
-        this.relatedEventsJson = relatedEventsJson;
-    }
+        @UpdateTimestamp
+        @Column(name = "updated_at")
+        private Timestamp updatedAt;
 }

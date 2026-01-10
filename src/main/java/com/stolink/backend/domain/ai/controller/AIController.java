@@ -236,10 +236,10 @@ public class AIController {
         // [Debug] Save received payload to file
         try {
             java.nio.file.Files.writeString(
-                    java.nio.file.Paths.get("/tmp/callback_data.json"),
+                    java.nio.file.Paths.get("/tmp/callback_result.json"),
                     rawPayload,
                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
-            log.info("Saved AI callback payload to /tmp/callback_data.json");
+            log.info("Saved AI callback payload to /tmp/callback_result.json");
         } catch (Exception e) {
             log.error("Failed to save payload", e);
         }

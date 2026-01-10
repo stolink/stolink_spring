@@ -1,5 +1,9 @@
 # Local Development Profile
 spring:
+  # Datasource Initialization
+  sql:
+    init:
+      mode: always
   # PostgreSQL Configuration
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/stolink}
@@ -15,6 +19,7 @@ spring:
 
   # JPA Configuration
   jpa:
+    defer-datasource-initialization: true
     hibernate:
       ddl-auto: update
     properties:
