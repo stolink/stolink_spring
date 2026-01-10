@@ -192,9 +192,12 @@ public class DocumentService {
     public Document updateDocumentContent(UUID userId, UUID documentId, String content) {
         Document document = getDocument(userId, documentId);
         document.updateContent(content);
-        log.info("Document content updated: {}", documentId);
+        document = documentRepository.save(document);  // 명시적 저장 (dirty checking 의존 제거)
+        documentRepository.flush();  // 즉시 DB에 반영하여 에러 조기 감지
+        log.info("Document content updated and flushed: {}", documentId);
         return document;
     }
+
 
     @Transactional
     public Document updateDocument(UUID userId, UUID documentId, UpdateDocumentRequest request) {
