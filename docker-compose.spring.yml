@@ -30,17 +30,17 @@ services:
       # RabbitMQ
       # RabbitMQ Configuration for Custom Config
       # Image RabbitMQ (application-local.yml 환경변수명과 일치)
-      RABBITMQ_IMAGE_HOST: stolink-rabbitmq
-      RABBITMQ_IMAGE_PORT: 5672
-      RABBITMQ_IMAGE_USERNAME: stolink
-      RABBITMQ_IMAGE_PASSWORD: stolink123
-      RABBITMQ_IMAGE_VHOST: stolink
+      RABBITMQ_HOST: stolink-rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: stolink
+      RABBITMQ_PASSWORD: stolink123
+      RABBITMQ_VHOST: /
       # Agent RabbitMQ (AI 분석용) - application-local.yml 환경변수명과 일치
       SPRING_RABBITMQ_HOST: stolink-rabbitmq
       SPRING_RABBITMQ_PORT: 5672
       SPRING_RABBITMQ_USERNAME: stolink
       SPRING_RABBITMQ_PASSWORD: stolink123
-      SPRING_RABBITMQ_VIRTUAL_HOST: stolink
+      SPRING_RABBITMQ_VIRTUAL_HOST: /
       # RabbitMQ Queue Names
       APP_RABBITMQ_QUEUES_ANALYSIS: stolink.analysis.queue
       APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue

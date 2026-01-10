@@ -1,5 +1,7 @@
 package com.stolink.backend.domain.event.node;
 
+import java.util.List;
+
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
@@ -13,7 +15,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * AI 분석으로 추출된 이벤트/장면 노드 (Neo4j)
+ * Event Node Entity - 사건 (Neo4j Graph)
+ * 
+ * AI 분석 결과(callback JSON)를 기반으로 1:1 매핑된 사건 노드입니다.
+ * JSON 필드 구조를 그대로 따릅니다.
  */
 @Node("Event")
 @Getter
@@ -35,7 +40,7 @@ public class Event {
     private String eventId;
 
     @Property("eventType")
-    private String eventType;
+    private String eventType; // action, etc.
 
     @Property("narrativeSummary")
     private String narrativeSummary;
@@ -43,29 +48,26 @@ public class Event {
     @Property("description")
     private String description;
 
+    // JSON 배열을 Neo4j List<String>으로 저장
+    @Property("participants")
+    private List<String> participants;
+
     @Property("locationRef")
     private String locationRef;
 
     @Property("prevEventId")
-    private String prevEventId;
+    private String prevEventId; // nullable
 
-    @Property("visualScene")
-    private String visualScene;
-
-    @Property("cameraAngle")
-    private String cameraAngle;
+    @Property("timestamp")
+    private String timestamp; // JSON object or string (nullable)
 
     @Property("importance")
     private Integer importance;
 
-    @Property("isForeshadowing")
-    @Builder.Default
-    private Boolean isForeshadowing = false;
+    // JSON 배열 [f1, f2, ...] -> Neo4j List<Double>
+    @Property("embedding")
+    private List<Double> embedding;
 
-    @Property("chapterRef")
-    private Integer chapterRef;
-
-    // New fields from callback_result.json
     @Property("chapter")
     private Integer chapter;
 
@@ -74,17 +76,4 @@ public class Event {
 
     @Property("documentId")
     private String documentId;
-
-    // JSON fields
-    @Property("participantsJson")
-    private String participantsJson; // JSON array of character names
-
-    @Property("timestampJson")
-    private String timestampJson; // { relative, absolute, chapter, sequence_order }
-
-    @Property("changesJson")
-    private String changesJson; // changes_made field
-
-    @Property("embeddingJson")
-    private String embeddingJson; // 3072-dim vector
 }

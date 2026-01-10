@@ -15,12 +15,12 @@ import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
-import com.stolink.backend.domain.character.repository.CharacterJpaRepository;
+// CharacterJpaRepository import removed
 import com.stolink.backend.domain.consistency.repository.ConsistencyReportRepository;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
-import com.stolink.backend.domain.plot.repository.PlotIntegrationRepository;
+// PlotIntegrationRepository import removed
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.validation.repository.ValidationResultRepository;
@@ -48,11 +48,11 @@ public class AIAnalysisService {
     // Repositories for data cleanup
     private final AnalysisJobRepository analysisJobRepository;
 
-    private final PlotIntegrationRepository plotIntegrationRepository;
+    // PlotIntegrationRepository removed
     private final ConsistencyReportRepository consistencyReportRepository;
     private final ValidationResultRepository validationResultRepository;
     private final ForeshadowingRepository foreshadowingRepository;
-    private final CharacterJpaRepository characterJpaRepository; // Postgres
+    // CharacterJpaRepository removed
 
     @Value("${app.ai.callback-base-url}")
     private String callbackBaseUrl;
@@ -111,19 +111,21 @@ public class AIAnalysisService {
 
         // 1. PostgreSQL 데이터 삭제
         analysisJobRepository.deleteAllByProject(project);
-        plotIntegrationRepository.deleteAllByProject(project);
+        // plotIntegrationRepository.deleteAllByProject(project); // Removed
         consistencyReportRepository.deleteAllByProject(project);
-        validationResultRepository.deleteAllByProject(project);
+        // validationResultRepository.deleteAllByProject(project); // Removed:
+        // document_id reference
         foreshadowingRepository.deleteAllByProject(project);
-        characterJpaRepository.deleteAllByProject(project);
+        // characterJpaRepository.deleteAllByProject(project); // Removed
 
         // 2. Neo4j 데이터 삭제 - AI Backend에서 처리 (제거됨)
         log.debug("Neo4j cleanup skipped - handled by AI Backend");
 
-        // 3. 문서 상태 초기화
+        // 3. 문서 상태 초기화 및 관련 검증 결과 삭제
         List<Document> documents = documentRepository.findTextDocumentsByProjectId(projectId);
         for (Document doc : documents) {
             doc.updateAnalysisStatus(Document.AnalysisStatus.NONE);
+            validationResultRepository.deleteAllByDocumentId(doc.getId());
         }
         documentRepository.saveAll(documents);
 
