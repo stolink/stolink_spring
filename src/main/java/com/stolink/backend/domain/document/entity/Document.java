@@ -2,9 +2,6 @@ package com.stolink.backend.domain.document.entity;
 
 import java.util.UUID;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.global.common.entity.BaseEntity;
 
@@ -237,42 +234,4 @@ public class Document extends BaseEntity {
         this.analysisLocked = false;
     }
 
-    @Column(name = "plot_integration_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String plotIntegrationJson;
-
-    @Column(name = "consistency_report_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String consistencyReportJson;
-
-    @Column(name = "validation_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String validationJson;
-
-    // ... existing builder ...
-    // Note: Builder update omitted to keep it concise, Lombok @Builder on class
-    // handles
-    // all fields if we don't manually override.
-    // However, since there is a manual constructor, let's just add setters for
-    // these fields
-    // or rely on the field-level access if needed.
-    // Given the existing manual constructor, it's safer to just rely on setters for
-    // these new fields
-    // to avoid breaking existing constructor calls, OR update the constructor.
-    // Let's add setters via Lombok @Setter on class (already present? No, let's
-    // check).
-    // The class has @Getter but no @Setter. Let's add setters for these new fields
-    // manually.
-
-    public void setPlotIntegrationJson(String plotIntegrationJson) {
-        this.plotIntegrationJson = plotIntegrationJson;
-    }
-
-    public void setConsistencyReportJson(String consistencyReportJson) {
-        this.consistencyReportJson = consistencyReportJson;
-    }
-
-    public void setValidationJson(String validationJson) {
-        this.validationJson = validationJson;
-    }
 }

@@ -38,6 +38,7 @@ PROJECT*.md
 SPRING*.md
 *.txt
 e2e*.py
+*.sh
 
 smart-commit-md.md
 

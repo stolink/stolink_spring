@@ -1,12 +1,13 @@
 package com.stolink.backend.domain.ai.repository;
 
-import com.stolink.backend.domain.ai.entity.AnalysisJob;
-import com.stolink.backend.domain.project.entity.Project;
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import com.stolink.backend.domain.ai.entity.AnalysisJob;
+import com.stolink.backend.domain.project.entity.Project;
 
 @Repository
 public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, String> {
@@ -19,7 +20,10 @@ public interface AnalysisJobRepository extends JpaRepository<AnalysisJob, String
 
     List<AnalysisJob> findByStatus(AnalysisJob.JobStatus status);
 
-    List<AnalysisJob> findByDocumentIdAndTraceIdAndStatus(java.util.UUID documentId, String traceId, AnalysisJob.JobStatus status);
+    List<AnalysisJob> findByDocumentIdAndTraceIdAndStatus(java.util.UUID documentId, String traceId,
+            AnalysisJob.JobStatus status);
+
+    Optional<AnalysisJob> findByTraceId(String traceId);
 
     void deleteAllByProject(Project project);
 }

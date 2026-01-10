@@ -147,6 +147,18 @@ public class RabbitMQConfig {
         return template;
     }
 
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin imageRabbitAdmin(
+            @Qualifier("imageConnectionFactory") ConnectionFactory connectionFactory) {
+        return new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
+    }
+
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin agentRabbitAdmin(
+            @Qualifier("agentConnectionFactory") ConnectionFactory connectionFactory) {
+        return new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
+    }
+
     // ============================================================
     // Event Consumer Configuration (Analysis Event Sourcing)
     // ============================================================
