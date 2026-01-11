@@ -2,6 +2,22 @@
 -- Spring Boot 시작 시 자동으로 실행되어 vector 타입을 사용할 수 있게 합니다.
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- ==========================================
+-- CLEANUP: Drop legacy tables from JPA entities
+-- These entities were migrated to Neo4j
+-- ==========================================
+
+-- Drop tables created by deleted JPA entities
+DROP TABLE IF EXISTS character_relationships CASCADE;
+
+DROP TABLE IF EXISTS plot_integrations CASCADE;
+
+DROP TABLE IF EXISTS characters CASCADE;
+
+DROP TABLE IF EXISTS events CASCADE;
+
+DROP TABLE IF EXISTS settings CASCADE;
+
 -- Create sections table based on Section entity
 CREATE TABLE IF NOT EXISTS sections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
@@ -21,5 +37,10 @@ CREATE TABLE IF NOT EXISTS sections (
 
 -- Index for FK lookup
 CREATE INDEX IF NOT EXISTS idx_sections_document_id ON sections (document_id);
+
+-- Ensure embedding column exists even if table was created by Hibernate (JPA)
+-- This runs after JPA initialization due to defer-datasource-initialization: true
+ALTER TABLE sections ADD COLUMN IF NOT EXISTS embedding vector (3072);
+
 -- Index for vector similarity search (Optional - HNSW or IVFFlat)
 -- CREATE INDEX ON sections USING hnsw (embedding vector_cosine_ops);

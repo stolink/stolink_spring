@@ -71,6 +71,7 @@ public class DocumentAnalysisController {
                 documentAnalysisPublisher.publishAnalysisForDocument(document, analysisType);
 
                 return ResponseEntity.ok(Map.of(
+                                "jobId", jobId,
                                 "documentId", id,
                                 "message", "문서 분석 요청이 대기열에 등록되었습니다.",
                                 "status", Document.AnalysisStatus.PENDING));
