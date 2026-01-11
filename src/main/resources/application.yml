@@ -9,11 +9,17 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    defer-datasource-initialization: true
     show-sql: true
     properties:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # SQL Script Execution
+  sql:
+    init:
+      mode: always
 
   # Multipart file upload
   servlet:

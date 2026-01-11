@@ -39,6 +39,8 @@ SPRING*.md
 *.txt
 e2e*.py
 *.sh
+baseline*
+TEST_SCENARIOS*
 
 smart-commit-md.md
 

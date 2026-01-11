@@ -3,8 +3,11 @@ package com.stolink.backend.domain.document.entity;
 import java.sql.Timestamp;
 import java.util.UUID;
 
+import org.hibernate.annotations.Array;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -62,7 +65,10 @@ public class Section {
         @Column(name = "content_hash", length = 16)
         private String contentHash;
 
-        // embedding field omitted - managed externally or via native query
+        @Column(name = "embedding")
+        @JdbcTypeCode(SqlTypes.VECTOR)
+        @Array(length = 3072)
+        private float[] embedding;
 
         @Column(name = "related_characters_json", columnDefinition = "TEXT")
         private String relatedCharactersJson;
