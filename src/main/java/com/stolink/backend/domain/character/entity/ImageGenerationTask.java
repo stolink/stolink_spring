@@ -63,7 +63,6 @@ public class ImageGenerationTask {
     @Column(length = 100)
     private String artStyle;
 
-
     // 캐릭터 설명 (프롬프트)
     @Column(columnDefinition = "TEXT")
     private String description;
@@ -102,11 +101,11 @@ public class ImageGenerationTask {
 
     // 작업 상태 열거형
     public enum TaskStatus {
-        PENDING,      // 생성됨, 전송 대기
-        SENT,         // RabbitMQ 전송 완료
-        PROCESSING,   // FastAPI 처리 중
-        COMPLETED,    // 완료
-        FAILED        // 실패
+        PENDING, // 생성됨, 전송 대기
+        SENT, // RabbitMQ 전송 완료
+        PROCESSING, // FastAPI 처리 중
+        COMPLETED, // 완료
+        FAILED // 실패
     }
 
     public enum ImageType {
@@ -117,7 +116,7 @@ public class ImageGenerationTask {
     // 재시도 가능 여부 확인
     public boolean canRetry() {
         return retryCount < MAX_RETRY_COUNT &&
-               (status == TaskStatus.PENDING || status == TaskStatus.FAILED);
+                (status == TaskStatus.PENDING || status == TaskStatus.FAILED);
     }
 
     // 재시도 횟수 증가

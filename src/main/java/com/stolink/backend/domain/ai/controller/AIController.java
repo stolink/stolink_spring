@@ -2,7 +2,9 @@ package com.stolink.backend.domain.ai.controller;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +33,7 @@ import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.ai.service.AICallbackService;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
+import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.global.common.dto.ApiResponse;
@@ -51,6 +54,7 @@ public class AIController {
     private final AnalysisJobRepository analysisJobRepository;
     private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
     private final ProjectRepository projectRepository;
+    private final DocumentRepository documentRepository;
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
 
@@ -75,7 +79,13 @@ public class AIController {
         log.info("SSE stream requested for job: {}", jobId);
         AnalysisJob job = analysisJobRepository.findByJobId(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
-        return sseEmitterService.createEmitter(job.getProject().getId());
+
+        SseEmitter emitter = sseEmitterService.createEmitter(job.getProject().getId());
+
+        // 연결 즉시 현재 진행 상태 전송 (새로고침 시 상태 동기화)
+        callbackService.sendProgressUpdate(job.getProject().getId());
+
+        return emitter;
     }
 
     @PostMapping("/ai/analyze")
@@ -133,6 +143,14 @@ public class AIController {
                     .build();
             analysisJobRepository.save(job);
 
+            // Document 상태 업데이트 (QUEUED) 및 저장
+            UUID finalDocumentId = documentId;
+            documentRepository.findById(finalDocumentId).ifPresent(doc -> {
+                doc.updateAnalysisStatus(com.stolink.backend.domain.document.entity.Document.AnalysisStatus.QUEUED);
+                documentRepository.save(doc);
+                log.info("Reset document {} analysis status to QUEUED for jobId: {}", finalDocumentId, jobId);
+            });
+
             AnalysisTaskDTO task = AnalysisTaskDTO.builder()
                     .jobId(jobId)
                     .projectId(projectId)
@@ -168,7 +186,7 @@ public class AIController {
     /**
      * Job 상태 조회 (프론트엔드 폴링용)
      */
-    @GetMapping({"/ai/jobs/{jobId}", "/ai/jobs/{jobId}/status"})
+    @GetMapping({ "/ai/jobs/{jobId}", "/ai/jobs/{jobId}/status" })
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {
         log.debug("Get Job Status request for: {}", jobId);
@@ -194,7 +212,7 @@ public class AIController {
     /**
      * 이미지 생성 Job 상태 조회
      */
-    @GetMapping({"/ai/image/jobs/{jobId}", "/ai/image/jobs/{jobId}/status"})
+    @GetMapping({ "/ai/image/jobs/{jobId}", "/ai/image/jobs/{jobId}/status" })
     public ApiResponse<Map<String, Object>> getImageJobStatus(@PathVariable String jobId) {
         com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
                 .findById(jobId)
@@ -233,6 +251,15 @@ public class AIController {
     }
 
     private ApiResponse<Void> processPayload(String rawPayload) {
+        // Null check for payload
+        if (rawPayload == null || rawPayload.isBlank()) {
+            log.error("Received null or empty AI callback payload");
+            return ApiResponse.<Void>builder()
+                    .status(HttpStatus.BAD_REQUEST)
+                    .message("Payload is null or empty")
+                    .build();
+        }
+
         // [Debug] Save received payload to file
         try {
             java.nio.file.Files.writeString(

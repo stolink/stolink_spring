@@ -93,17 +93,18 @@ public class CharacterMapper {
             return Collections.singletonList("neutral");
 
         return types.stream()
-            .map(type -> {
-                if (type == null) return "neutral";
-                return switch (type.toUpperCase()) {
-                    case "ALLY" -> "friendly";
-                    case "ENEMY" -> "hostile";
-                    case "NO_RELATION" -> "neutral";
-                    case "ROMANTIC" -> "romantic";
-                    case "FAMILY" -> "family";
-                    default -> type.toLowerCase();
-                };
-            })
-            .collect(Collectors.toList());
+                .map(type -> {
+                    if (type == null)
+                        return "neutral";
+                    return switch (type.toUpperCase()) {
+                        case "ALLY" -> "friendly";
+                        case "ENEMY" -> "hostile";
+                        case "NO_RELATION" -> "neutral";
+                        case "ROMANTIC" -> "romantic";
+                        case "FAMILY" -> "family";
+                        default -> type.toLowerCase();
+                    };
+                })
+                .collect(Collectors.toList());
     }
 }

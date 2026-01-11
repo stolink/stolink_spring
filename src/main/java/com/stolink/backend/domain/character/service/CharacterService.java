@@ -89,8 +89,13 @@ public class CharacterService {
         User user = getUserOrThrow(userId);
         Project project = getProjectOrThrow(projectId, user);
 
+        // Automatically fix missing UUIDs if any
+        characterRepository.assignUuidToCharacters(project.getId().toString());
+
         List<Character> characters = characterRepository
                 .findAllWithRelationshipsByProjectId(project.getId().toString());
+
+        log.info("Fetching characters for projectId: {}. Found {} characters.", project.getId(), characters.size());
 
         // Populate source ID for each relationship to help frontend graph mapping
         for (Character character : characters) {
@@ -391,6 +396,7 @@ public class CharacterService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
+        log.info("onImageGenerationRequested triggered for jobId: {}", event.jobId());
         try {
             // 헬스체크: 이미지 서버가 정상이 아니면 예외 발생
             imageServerHealthChecker.checkHealthOrThrow();
@@ -415,7 +421,7 @@ public class CharacterService {
             });
 
             log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // 트랜잭션은 이미 커밋됨 - throw해도 롤백 불가
             // ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
             log.error("Failed to send image generation task: jobId={}, error={}",

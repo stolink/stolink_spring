@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.ai.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,7 +21,7 @@ public class ImageCallbackDTO {
     @JsonAlias("job_id")
     private String jobId;
 
-    @JsonAlias("character_id")
+    @JsonProperty("character_id")
     private UUID characterId;
 
     private String status; // "SUCCESS" or "FAILED"
