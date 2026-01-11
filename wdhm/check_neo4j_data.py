@@ -3,7 +3,7 @@ import urllib.request
 
 NEO4J_URL = "http://localhost:7474/db/neo4j/tx/commit"
 NEO4J_AUTH = ("neo4j", "stolink123")
-PROJECT_ID = "cd250a32-e05d-4752-9795-8364674e7859"
+PROJECT_ID = "6e686700-34cf-4b23-ae2d-f673743dc4ce"
 
 def run_cypher(statement, params={}):
     payload = {

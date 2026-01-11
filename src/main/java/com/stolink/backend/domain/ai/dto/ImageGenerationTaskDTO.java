@@ -35,7 +35,6 @@ public class ImageGenerationTaskDTO {
     @JsonProperty("prompts")
     private java.util.Map<String, String> prompts;
 
-
     /**
      * FastAPI의 ImageTaskMessage.message에 매핑됨
      * 캐릭터 외형 설명 또는 편집 요청 내용

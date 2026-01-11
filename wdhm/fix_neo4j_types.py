@@ -3,7 +3,7 @@ import urllib.request
 
 NEO4J_URL = "http://localhost:7474/db/neo4j/tx/commit"
 NEO4J_AUTH = ("neo4j", "stolink123")
-PROJECT_ID = "cd250a32-e05d-4752-9795-8364674e7859"
+PROJECT_ID = "6e686700-34cf-4b23-ae2d-f673743dc4ce"
 
 def run_cypher(statement, params={}):
     payload = {
@@ -26,28 +26,31 @@ def run_cypher(statement, params={}):
             result = json.loads(response.read().decode("utf-8"))
             if result.get("errors"):
                 print(f"Error executing Cypher: {result['errors']}")
-                return None
-            return result
+            else:
+                print("Update successful")
+                print(json.dumps(result, indent=2))
     except Exception as e:
         print(f"HTTP Error: {e}")
-        return None
 
-def check_data():
-    print(f"Checking data for project {PROJECT_ID}...")
+def fix_types():
+    print("Fixing MASTER -> MENTOR...")
+    # Update types list where it contains MASTER
+    cypher = """
+    MATCH ()-[r:RELATED_TO]->()
+    WHERE 'MASTER' IN r.types
+    SET r.types = [x IN r.types | CASE WHEN x='MASTER' THEN 'MENTOR' ELSE x END]
+    RETURN count(r)
+    """
+    run_cypher(cypher)
 
-    # Count Characters
-    res = run_cypher("MATCH (n:Character {projectId: $projectId}) RETURN count(n) as count", {"projectId": PROJECT_ID})
-    count = res['results'][0]['data'][0]['row'][0]
-    print(f"Characters: {count}")
-
-    # Count Relationships
-    res = run_cypher("MATCH (a:Character {projectId: $projectId})-[r:RELATED_TO]->(b:Character) RETURN count(r) as count", {"projectId": PROJECT_ID})
-    rel_count = res['results'][0]['data'][0]['row'][0]
-    print(f"Relationships: {rel_count}")
-
-    # Check link between Javert and Yoon Seo-jun
-    res = run_cypher("MATCH (a:Character {name: '자베르'})-[r]-(b:Character {name: '윤서준'}) RETURN r")
-    print("Link Javert-Yoon:", res)
+    print("Fixing SERVANT -> APPRENTICE...")
+    cypher = """
+    MATCH ()-[r:RELATED_TO]->()
+    WHERE 'SERVANT' IN r.types
+    SET r.types = [x IN r.types | CASE WHEN x='SERVANT' THEN 'APPRENTICE' ELSE x END]
+    RETURN count(r)
+    """
+    run_cypher(cypher)
 
 if __name__ == "__main__":
-    check_data()
+    fix_types()

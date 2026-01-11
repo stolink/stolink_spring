@@ -30,11 +30,11 @@ services:
       # RabbitMQ
       # RabbitMQ Configuration for Custom Config
       # Image RabbitMQ (application-local.yml 환경변수명과 일치)
-      RABBITMQ_HOST: stolink-rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USER: stolink
-      RABBITMQ_PASSWORD: stolink123
-      RABBITMQ_VHOST: /
+      RABBITMQ_IMAGE_HOST: stolink-rabbitmq
+      RABBITMQ_IMAGE_PORT: 5672
+      RABBITMQ_IMAGE_USERNAME: stolink
+      RABBITMQ_IMAGE_PASSWORD: stolink123
+      RABBITMQ_IMAGE_VHOST: /
       # Agent RabbitMQ (AI 분석용) - application-local.yml 환경변수명과 일치
       SPRING_RABBITMQ_HOST: stolink-rabbitmq
       SPRING_RABBITMQ_PORT: 5672
@@ -50,6 +50,8 @@ services:
       APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080
       # Analysis Settings
       APP_ANALYSIS_MAX_RETRY_COUNT: 3
+      # Image Server URL (Internal Docker Network)
+      IMAGE_SERVER_URL: http://stolink-image-worker-local:8000
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
       # CORS
@@ -69,6 +71,7 @@ services:
       - gradle_cache:/root/.gradle
     networks:
       - ai-backend-network
+      - shared-network
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -90,4 +93,7 @@ volumes:
 networks:
   ai-backend-network:
     external: true
-    name: sto-link-ai-backend_stolink-network
+    name: stolink_fastapi_agent_stolink-network
+  shared-network:
+    external: true
+    name: stolink-shared-network

@@ -85,34 +85,48 @@ public class AICallbackService {
         // Clear JPA L1 cache to ensure fresh reads
         entityManager.clear();
 
+        String jobId = callback.getJobId();
         log.info("Processing analysis callback for job: {}, status: {}",
-                callback.getJobId(), callback.getStatus());
+                jobId, callback.getStatus());
+
+        // Null check for jobId
+        if (jobId == null || jobId.isBlank()) {
+            log.error("Job ID is missing in analysis callback. Callback dump: {}", callback);
+            return;
+        }
 
         // Idempotent check
-        if (callback.getJobId() != null && callbackLogRepository.existsByJobId(callback.getJobId())) {
-            log.warn("Duplicate callback ignored: {}", callback.getJobId());
+        if (callbackLogRepository.existsByJobId(jobId)) {
+            log.warn("Duplicate callback ignored: {}", jobId);
             return;
         }
 
         // Job 조회
-        AnalysisJob job = analysisJobRepository.findByJobId(callback.getJobId()).orElse(null);
+        AnalysisJob job = analysisJobRepository.findByJobId(jobId).orElse(null);
 
         // [TEMPORARY] Dummy Data Injection Logic
-        if (job == null && callback.getJobId().startsWith("dummy")) {
+        if (job == null && jobId.startsWith("dummy")) {
             log.warn("Job not found, but detecting dummy data injection. Creating context for insertion...");
+            UUID tempProjectId = null;
             try {
-                UUID tempProjectId = null;
                 String[] jobIdParts = callback.getJobId().split("::");
                 if (jobIdParts.length >= 2) {
                     try {
                         tempProjectId = UUID.fromString(jobIdParts[1]);
                     } catch (IllegalArgumentException e) {
-                        tempProjectId = UUID.fromString("e2a08b38-9049-4647-b9f0-1cac7792a2d7");
+                        log.error("Invalid project ID in dummy jobId: {}", jobIdParts[1]);
                     }
-                } else {
-                    tempProjectId = UUID.fromString("e2a08b38-9049-4647-b9f0-1cac7792a2d7");
                 }
+            } catch (Exception e) {
+                log.error("Failed to parse dummy project ID from jobId: {}", callback.getJobId());
+            }
 
+            if (tempProjectId == null) {
+                log.error("Cannot proceed with dummy injection: Project ID is missing or invalid");
+                return;
+            }
+
+            try {
                 final UUID finalTargetProjectId = tempProjectId;
                 log.info("Dummy injection target project: {}", finalTargetProjectId);
                 Project project = projectRepository.findById(finalTargetProjectId)
@@ -149,7 +163,9 @@ public class AICallbackService {
             }
         }
 
-        if (job == null) {
+        if (job == null)
+
+        {
             log.error("Job not found: {}", callback.getJobId());
             return;
         }
@@ -165,6 +181,12 @@ public class AICallbackService {
         entityManager.clear();
 
         String traceId = callback.getTraceId();
+
+        if (traceId == null) {
+            log.error("Trace ID is missing in document analysis callback. callback dump: {}", callback);
+            return;
+        }
+
         log.info("Processing document analysis callback, traceId: {}, status: {}", traceId, callback.getStatus());
 
         // Find Job by Trace ID since JobID is missing in DTO
@@ -265,31 +287,35 @@ public class AICallbackService {
 
         // 5. Character Timelines 저장 (PostgreSQL - character_timeline 테이블)
         if (callback.getCharacterTimelines() != null && !callback.getCharacterTimelines().isEmpty()) {
-            UUID projectId = job.getProject().getId();
-            UUID documentId = job.getDocumentId();
-            for (CharacterTimelineDTO timelineDTO : callback.getCharacterTimelines()) {
-                try {
-                    // Upsert: 기존 데이터가 있으면 업데이트, 없으면 생성
-                    CharacterTimeline timeline = characterTimelineRepository
-                            .findByProjectIdAndCharacterNameAndChapter(projectId, timelineDTO.getCharacterName(),
-                                    timelineDTO.getChapter())
-                            .orElse(CharacterTimeline.builder()
-                                    .projectId(projectId)
-                                    .characterName(timelineDTO.getCharacterName())
-                                    .chapter(timelineDTO.getChapter())
-                                    .build());
+            if (job.getProject() == null) {
+                log.error("Project is null for job {}, cannot save character timelines", job.getJobId());
+            } else {
+                UUID projectId = job.getProject().getId();
+                UUID documentId = job.getDocumentId();
+                for (CharacterTimelineDTO timelineDTO : callback.getCharacterTimelines()) {
+                    try {
+                        // Upsert: 기존 데이터가 있으면 업데이트, 없으면 생성
+                        CharacterTimeline timeline = characterTimelineRepository
+                                .findByProjectIdAndCharacterNameAndChapter(projectId, timelineDTO.getCharacterName(),
+                                        timelineDTO.getChapter())
+                                .orElse(CharacterTimeline.builder()
+                                        .projectId(projectId)
+                                        .characterName(timelineDTO.getCharacterName())
+                                        .chapter(timelineDTO.getChapter())
+                                        .build());
 
-                    timeline.setDocumentId(documentId);
-                    timeline.setHealthStatus(timelineDTO.getHealthStatus());
-                    timeline.setEmotionalState(timelineDTO.getEmotionalState());
-                    timeline.setCurrentLocation(timelineDTO.getCurrentLocation());
-                    timeline.setStateChanges(timelineDTO.getStateChanges());
+                        timeline.setDocumentId(documentId);
+                        timeline.setHealthStatus(timelineDTO.getHealthStatus());
+                        timeline.setEmotionalState(timelineDTO.getEmotionalState());
+                        timeline.setCurrentLocation(timelineDTO.getCurrentLocation());
+                        timeline.setStateChanges(timelineDTO.getStateChanges());
 
-                    characterTimelineRepository.save(timeline);
-                    log.info("Saved character_timeline for {} chapter {}", timelineDTO.getCharacterName(),
-                            timelineDTO.getChapter());
-                } catch (Exception e) {
-                    log.error("Failed to save character_timeline for {}", timelineDTO.getCharacterName(), e);
+                        characterTimelineRepository.save(timeline);
+                        log.info("Saved character_timeline for {} chapter {}", timelineDTO.getCharacterName(),
+                                timelineDTO.getChapter());
+                    } catch (Exception e) {
+                        log.error("Failed to save character_timeline for {}", timelineDTO.getCharacterName(), e);
+                    }
                 }
             }
         }
@@ -403,13 +429,19 @@ public class AICallbackService {
 
     @Transactional
     public void handleImageCallback(ImageCallbackDTO callback) {
+        String jobId = callback.getJobId();
         log.info("Processing image callback for job: {}, character: {}",
-                callback.getJobId(), callback.getCharacterId());
+                jobId, callback.getCharacterId());
+
+        // Null check for jobId
+        if (jobId == null || jobId.isBlank()) {
+            log.error("Job ID is missing in image callback. Callback dump: {}", callback);
+            return;
+        }
 
         // Save raw callback data to file
-        saveCallbackToJsonFile("image", callback.getJobId(), callback);
+        saveCallbackToJsonFile("image", jobId, callback);
 
-        String jobId = callback.getJobId();
         String tempImageUrl = callback.getImageUrl();
         if (tempImageUrl != null && tempImageUrl.contains("minio:9000")) {
             tempImageUrl = tempImageUrl.replace("minio:9000", "localhost:9000");
@@ -532,19 +564,38 @@ public class AICallbackService {
 
     /**
      * AI 콜백 데이터를 로컬 JSON 파일로 저장 (디버깅용)
+     * Docker 환경에서 안전하게 동작하도록 /tmp 디렉토리 사용
      */
     private void saveCallbackToJsonFile(String type, String id, Object data) {
+        // Null check for required parameters
+        if (type == null || data == null) {
+            log.warn("Cannot save callback to file: type or data is null");
+            return;
+        }
+
         // Async execution to avoid I/O blocking
         CompletableFuture.runAsync(() -> {
             try {
                 String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")
                         .format(java.time.LocalDateTime.now());
-                // Sanitize ID for filename
-                String safeId = id != null ? id.replaceAll("[^a-zA-Z0-9-_]", "_") : "unknown";
-                String fileName = String.format("logs/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
+                // Sanitize ID for filename (null-safe)
+                String safeId = (id != null && !id.isBlank())
+                        ? id.replaceAll("[^a-zA-Z0-9-_]", "_")
+                        : "unknown";
+                // Use /tmp directory for Docker compatibility
+                String fileName = String.format("/tmp/ai-callbacks/%s_%s_%s.json", type, safeId, timestamp);
 
                 java.io.File file = new java.io.File(fileName);
-                file.getParentFile().mkdirs();
+                java.io.File parentDir = file.getParentFile();
+
+                // Ensure directory exists with explicit error handling
+                if (parentDir != null && !parentDir.exists()) {
+                    boolean created = parentDir.mkdirs();
+                    if (!created && !parentDir.exists()) {
+                        log.warn("Failed to create directory: {}", parentDir.getAbsolutePath());
+                        return;
+                    }
+                }
 
                 objectMapper.writerWithDefaultPrettyPrinter().writeValue(file, data);
                 log.info("Saved callback data to file (Async): {}", fileName);
@@ -557,7 +608,7 @@ public class AICallbackService {
     // ===================================
     // SSE Progress Update Helper
     // ===================================
-    private void sendProgressUpdate(UUID projectId) {
+    public void sendProgressUpdate(UUID projectId) {
         if (projectId == null)
             return;
 

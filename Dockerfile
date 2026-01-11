@@ -7,7 +7,8 @@ RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
 # Copy pre-built jar file from CI
-COPY build/libs/*.jar app.jar
+# Copy pre-built jar file from CI
+COPY build/libs/sto-link-backend-0.0.1-SNAPSHOT.jar app.jar
 
 # Expose port
 EXPOSE 8080

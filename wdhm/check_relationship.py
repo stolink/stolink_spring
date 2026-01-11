@@ -1,9 +1,10 @@
+
 import json
 import urllib.request
 
+# Configuration
 NEO4J_URL = "http://localhost:7474/db/neo4j/tx/commit"
 NEO4J_AUTH = ("neo4j", "stolink123")
-PROJECT_ID = "cd250a32-e05d-4752-9795-8364674e7859"
 
 def run_cypher(statement, params={}):
     payload = {
@@ -32,22 +33,25 @@ def run_cypher(statement, params={}):
         print(f"HTTP Error: {e}")
         return None
 
-def check_data():
-    print(f"Checking data for project {PROJECT_ID}...")
+def check_relationship():
+    cypher = """
+    MATCH (a:Character)-[r:RELATED_TO]-(b:Character)
+    WHERE a.name = '유비' AND b.name = '제갈량'
+    RETURN r.types AS types, r.description AS description, r.strength AS strength
+    """
 
-    # Count Characters
-    res = run_cypher("MATCH (n:Character {projectId: $projectId}) RETURN count(n) as count", {"projectId": PROJECT_ID})
-    count = res['results'][0]['data'][0]['row'][0]
-    print(f"Characters: {count}")
+    result = run_cypher(cypher)
 
-    # Count Relationships
-    res = run_cypher("MATCH (a:Character {projectId: $projectId})-[r:RELATED_TO]->(b:Character) RETURN count(r) as count", {"projectId": PROJECT_ID})
-    rel_count = res['results'][0]['data'][0]['row'][0]
-    print(f"Relationships: {rel_count}")
-
-    # Check link between Javert and Yoon Seo-jun
-    res = run_cypher("MATCH (a:Character {name: '자베르'})-[r]-(b:Character {name: '윤서준'}) RETURN r")
-    print("Link Javert-Yoon:", res)
+    if result and result.get("results"):
+        data = result["results"][0].get("data")
+        if data:
+            print(f"Relationship Found: {len(data)} path(s)")
+            for row in data:
+                print(f"Row: {row['row']}")
+        else:
+            print("No relationship found between 유비 and 제갈량")
+    else:
+        print("Query returned no results")
 
 if __name__ == "__main__":
-    check_data()
+    check_relationship()

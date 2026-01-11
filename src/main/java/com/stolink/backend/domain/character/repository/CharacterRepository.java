@@ -16,12 +16,12 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         List<Character> findAll();
 
-        @Query("MATCH (c:Character {projectId: $projectId}) " +
+        @Query("MATCH (c:Character {project_id: $projectId}) " +
                         "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
                         "RETURN c, collect(r), collect(other)")
         List<Character> findAllWithRelationshipsByProjectId(@Param("projectId") String projectId);
 
-        @Query("MATCH (c:Character {id: $characterId, projectId: $projectId}) " +
+        @Query("MATCH (c:Character {id: $characterId, project_id: $projectId}) " +
                         "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
                         "RETURN c, collect(r), collect(other)")
         Character findByIdAndProjectIdWithRelationships(
@@ -75,4 +75,7 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         @Param("characterId") String characterId,
                         @Param("positionX") Double positionX,
                         @Param("positionY") Double positionY);
+
+        @Query("MATCH (c:Character {project_id: $projectId}) WHERE c.id IS NULL SET c.id = randomUUID()")
+        void assignUuidToCharacters(@Param("projectId") String projectId);
 }
