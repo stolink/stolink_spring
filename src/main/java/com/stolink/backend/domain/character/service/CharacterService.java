@@ -162,7 +162,6 @@ public class CharacterService {
                         }
 
                         CharacterRelationship charRel = CharacterRelationship.builder()
-                                .id(rel.id())
                                 .source(character.getId())
                                 .target(targetChar)
                                 .types(typesList)
