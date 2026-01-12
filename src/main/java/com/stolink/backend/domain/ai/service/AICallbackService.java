@@ -58,6 +58,7 @@ public class AICallbackService {
 
     private final DocumentRepository documentRepository;
     private final ImageGenerationTaskRepository imageGenerationTaskRepository;
+    private final com.stolink.backend.domain.character.service.CharacterService characterService;
 
     private final AnalysisJobRepository analysisJobRepository;
     private final ConsistencyReportRepository consistencyReportRepository;
@@ -443,8 +444,17 @@ public class AICallbackService {
         saveCallbackToJsonFile("image", jobId, callback);
 
         String tempImageUrl = callback.getImageUrl();
-        if (tempImageUrl != null && tempImageUrl.contains("minio:9000")) {
-            tempImageUrl = tempImageUrl.replace("minio:9000", "localhost:9000");
+        if (tempImageUrl != null) {
+            if (tempImageUrl.contains("minio:9000")) {
+                tempImageUrl = tempImageUrl.replace("minio:9000", "localhost:9000");
+            }
+            // [HotFix] Docker 환경 MinIO URL 보정 (전역 적용)
+            if (tempImageUrl.startsWith("http://localhost:9000/media/")) {
+                String fixedUrl = tempImageUrl.replace("http://localhost:9000/media/",
+                        "http://localhost:9000/stolink-test/media/");
+                log.warn("Patching MinIO URL in Callback: {} -> {}", tempImageUrl, fixedUrl);
+                tempImageUrl = fixedUrl;
+            }
         }
         String imageUrl = tempImageUrl;
 
@@ -458,8 +468,14 @@ public class AICallbackService {
             return;
         }
 
-        // Character Update (JPA) removed - assuming handled externally or not needed in
-        // Postgres.
+        // Update Character Entity (Postgres & Neo4j via Service)
+        if (callback.getCharacterId() != null) {
+            try {
+                characterService.updateCharacterImageUrl(callback.getCharacterId(), imageUrl);
+            } catch (Exception e) {
+                log.error("Failed to update character image URL: {}", e.getMessage());
+            }
+        }
 
         imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
             task.setImageUrl(imageUrl);

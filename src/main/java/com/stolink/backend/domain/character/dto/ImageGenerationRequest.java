@@ -8,9 +8,11 @@ import jakarta.validation.constraints.NotBlank;
  * @param description 캐릭터 외형 설명 (FastAPI message 필드로 매핑)
  */
 public record ImageGenerationRequest(
-                @NotBlank(message = "description은 필수입니다") String description,
+        @NotBlank(message = "description은 필수입니다") String description,
 
-                String action,
+        String action,
 
-                java.util.Map<String, Object> setting) {
+        java.util.Map<String, Object> appearance,
+
+        java.util.Map<String, Object> setting) {
 }

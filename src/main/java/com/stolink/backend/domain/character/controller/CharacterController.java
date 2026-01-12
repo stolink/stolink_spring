@@ -26,6 +26,9 @@ import com.stolink.backend.global.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -119,10 +122,44 @@ public class CharacterController {
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
             @PathVariable UUID characterId,
-            @Valid @RequestBody ImageGenerationRequest request) {
+            @RequestBody Map<String, Object> requestBody) {
+
+        log.info("Received Image Generation Request Body: {}", requestBody);
+
+        String description = (String) requestBody.get("description");
+        String action = (String) requestBody.get("action");
+        Map<String, Object> setting = (Map<String, Object>) requestBody.get("setting");
+
+        // Extract appearance: It might be under "appearance", "attributes", or mixed in
+        // the root
+        Map<String, Object> appearance = new java.util.HashMap<>();
+
+        // 1. Try "appearance" key
+        if (requestBody.containsKey("appearance") && requestBody.get("appearance") instanceof Map) {
+            appearance.putAll((Map<String, Object>) requestBody.get("appearance"));
+        }
+        // 2. Try "attributes" key
+        else if (requestBody.containsKey("attributes") && requestBody.get("attributes") instanceof Map) {
+            appearance.putAll((Map<String, Object>) requestBody.get("attributes"));
+        }
+        // 3. Fallback: Treat root fields as appearance if they match known keys
+        else {
+            // Known appearance keys
+            List<String> knownKeys = List.of("physique", "skin_tone", "eyes", "nose", "mouth",
+                    "hair_style", "hair_color", "attire", "expression",
+                    "scars_tattoos", "style_context");
+            for (String key : knownKeys) {
+                if (requestBody.containsKey(key)) {
+                    appearance.put(key, requestBody.get(key));
+                }
+            }
+        }
+
+        // If still empty but we have a description, maybe we don't need appearance
+        // update or it's just description based.
 
         String jobId = characterService.triggerImageGeneration(
-                userId, projectId, characterId, request.description(), request.action(), request.setting());
+                userId, projectId, characterId, description, action, appearance, setting);
 
         return ApiResponse.accepted(Map.of("jobId", jobId));
     }
@@ -135,8 +172,8 @@ public class CharacterController {
             @AuthenticationPrincipal UUID userId,
             @PathVariable String characterId,
             @RequestBody com.stolink.backend.domain.character.dto.CharacterUpdateRequest request) {
-        Character updated = characterService.updateCharacterPosition(
-                userId, characterId, request.getPositionX(), request.getPositionY());
+        Character updated = characterService.updateCharacterAttributes(
+                userId, characterId, request);
         return ApiResponse.ok(characterMapper.toResponse(updated));
     }
 }

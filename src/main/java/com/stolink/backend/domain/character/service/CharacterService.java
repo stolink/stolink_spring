@@ -315,6 +315,7 @@ public class CharacterService {
             UUID characterId,
             String description,
             String action,
+            Map<String, Object> appearanceMap,
             Map<String, Object> setting) {
         // userId로 Project 소유권 검증 (경합 조건 방지)
         User user = getUserOrThrow(userId);
@@ -324,6 +325,21 @@ public class CharacterService {
         Character character = characterRepository.findById(characterId.toString())
                 .filter(c -> c.getProjectId().equals(project.getId().toString()))
                 .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
+
+        // [Update] Update appearance if provided (Sync with Frontend)
+        if (appearanceMap != null && !appearanceMap.isEmpty()) {
+            try {
+                String newAppearanceJson = objectMapper.writeValueAsString(appearanceMap);
+                // Only update if changed
+                if (!newAppearanceJson.equals(character.getAppearanceJson())) {
+                    character.setAppearanceJson(newAppearanceJson);
+                    character = characterRepository.save(character);
+                    log.info("Updated character appearance for generation: {}", characterId);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to update character appearance json: {}", e.getMessage());
+            }
+        }
 
         String jobId = UUID.randomUUID().toString();
         String safeAction = (action == null || action.isBlank()) ? "create" : action;
@@ -448,6 +464,15 @@ public class CharacterService {
      */
     @Transactional
     public void updateCharacterImageUrl(UUID characterId, String imageUrl) {
+        // [HotFix] Docker 환경 MinIO URL 보정
+        // 워커가 bucket 이름을 누락하고 localhost:9000으로 반환하는 문제 해결
+        if (imageUrl != null && imageUrl.startsWith("http://localhost:9000/media/")) {
+            String fixedUrl = imageUrl.replace("http://localhost:9000/media/",
+                    "http://localhost:9000/stolink-test/media/");
+            log.warn("Fixing MinIO URL: {} -> {}", imageUrl, fixedUrl);
+            imageUrl = fixedUrl;
+        }
+
         Character updatedCharacter = characterRepository.updateImageUrl(
                 characterId.toString(), imageUrl);
 
@@ -469,18 +494,70 @@ public class CharacterService {
      * @return 업데이트된 캐릭터
      */
     @Transactional
-    public Character updateCharacterPosition(UUID userId, String characterId, Double positionX, Double positionY) {
+    public Character updateCharacterAttributes(UUID userId, String characterId,
+            com.stolink.backend.domain.character.dto.CharacterUpdateRequest request) {
         // Verify user existence
         getUserOrThrow(userId);
 
-        Character updated = characterRepository.updatePosition(characterId, positionX, positionY);
-        if (updated == null) {
-            throw new ResourceNotFoundException("Character", "id", characterId);
+        Character character = characterRepository.findById(characterId)
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
+
+        // Update basic fields if present
+        if (request.getName() != null)
+            character.setName(request.getName());
+        if (request.getRole() != null)
+            character.setRole(request.getRole());
+        if (request.getStatus() != null)
+            character.setStatus(request.getStatus());
+        if (request.getAge() != null)
+            character.setAge(request.getAge());
+        if (request.getGender() != null)
+            character.setGender(request.getGender());
+        if (request.getRace() != null)
+            character.setRace(request.getRace());
+        if (request.getMbti() != null)
+            character.setMbti(request.getMbti());
+        if (request.getBackstory() != null)
+            character.setBackstory(request.getBackstory());
+
+        // Update Position if present
+        if (request.getPositionX() != null)
+            character.setPositionX(request.getPositionX());
+        if (request.getPositionY() != null)
+            character.setPositionY(request.getPositionY());
+
+        // Update JSON fields
+        try {
+            if (request.getAppearance() != null)
+                character.setAppearanceJson(objectMapper.writeValueAsString(request.getAppearance()));
+            if (request.getPersonality() != null)
+                character.setPersonalityJson(objectMapper.writeValueAsString(request.getPersonality()));
+            if (request.getAliases() != null)
+                character.setAliasesJson(objectMapper.writeValueAsString(request.getAliases()));
+            if (request.getProfile() != null)
+                character.setProfileJson(objectMapper.writeValueAsString(request.getProfile()));
+            if (request.getRelations() != null)
+                character.setRelationsJson(objectMapper.writeValueAsString(request.getRelations()));
+            if (request.getInventory() != null)
+                character.setInventoryJson(objectMapper.writeValueAsString(request.getInventory()));
+        } catch (Exception e) {
+            log.error("Failed to serialize character update fields", e);
+            throw new RuntimeException("Invalid JSON format in update request");
         }
 
-        log.info("Character position updated: characterId={}, positionX={}, positionY={}", characterId, positionX,
-                positionY);
+        Character updated = characterRepository.save(character);
+        log.info("Character updated: {}", characterId);
         return updated;
+    }
+
+    /**
+     * 캐릭터 위치 업데이트 (Legacy)
+     */
+    @Transactional
+    public Character updateCharacterPosition(UUID userId, String characterId, Double positionX, Double positionY) {
+        return updateCharacterAttributes(userId, characterId,
+                new com.stolink.backend.domain.character.dto.CharacterUpdateRequest(positionX, positionY, null, null,
+                        null, null, null, null, null, null, null, null, null, null, null, null));
     }
 
     private String generatePrompt(Character character, Map<String, Object> appearance, Map<String, Object> setting,
