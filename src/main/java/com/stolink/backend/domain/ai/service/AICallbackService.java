@@ -25,6 +25,7 @@ import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.ai.repository.CallbackLogRepository;
 import com.stolink.backend.domain.ai.repository.CharacterTimelineRepository;
 import com.stolink.backend.domain.character.entity.ImageGenerationTask;
+import com.stolink.backend.domain.character.repository.CharacterRepository;
 import com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository;
 import com.stolink.backend.domain.consistency.entity.ConsistencyReport;
 import com.stolink.backend.domain.consistency.repository.ConsistencyReportRepository;
@@ -58,6 +59,7 @@ public class AICallbackService {
 
     private final DocumentRepository documentRepository;
     private final ImageGenerationTaskRepository imageGenerationTaskRepository;
+    private final CharacterRepository characterRepository;
 
     private final AnalysisJobRepository analysisJobRepository;
     private final ConsistencyReportRepository consistencyReportRepository;
@@ -353,6 +355,13 @@ public class AICallbackService {
                 .orElseThrow(() -> new RuntimeException("Project not found: " + projectProxy.getId()));
 
         // --- Character, Event, Setting, Relationship 저장 로직 제거됨 (AI Backend가 Neo4j 처리)
+        // [FIX] Ensure All entities use 'projectId' instead of 'project_id'
+        try {
+            characterRepository.normalizeAllEntities(project.getId().toString());
+            log.info("Normalized property names for project: {}", project.getId());
+        } catch (Exception e) {
+            log.warn("Failed to normalize properties: {}", e.getMessage());
+        }
         // ---
 
         // 1. 플롯 저장 (PostgreSQL)

@@ -26,7 +26,31 @@ public class RelationshipController {
     public ApiResponse<List<RelationshipResponse>> getRelationships(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId) {
-        List<RelationshipResponse> relationships = characterService.getRelationshipsByProjectId(userId, projectId);
+
+        // Use the robust method we fixed in CharacterService
+        List<com.stolink.backend.domain.character.node.Character> characters = characterService
+                .getCharactersWithRelationships(userId, projectId);
+
+        // Flatten relationships from all characters
+        List<RelationshipResponse> relationships = characters.stream()
+                .flatMap(c -> {
+                    if (c.getRelationships() == null)
+                        return java.util.stream.Stream.empty();
+                    return c.getRelationships().stream()
+                            .map(r -> RelationshipResponse.builder()
+                                    .id(String.valueOf(r.getId()))
+                                    .sourceId(c.getId())
+                                    // Handle potential null target safely (though our fix ensures it shouldn't be
+                                    // null)
+                                    .targetId(r.getTarget() != null ? r.getTarget().getId() : null)
+                                    .types(r.getTypes())
+                                    .strength(r.getStrength())
+                                    .description(r.getDescription())
+                                    .bidirectional(r.getBidirectional())
+                                    .build());
+                })
+                .collect(java.util.stream.Collectors.toList());
+
         return ApiResponse.ok(relationships);
     }
 }

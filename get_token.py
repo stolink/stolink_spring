@@ -7,8 +7,8 @@ API_BASE = "http://localhost:8080/api"
 def login():
     url = f"{API_BASE}/auth/login"
     data = {
-        "email": "test@example.com",
-        "password": "ansqhrl3037"
+        "email": "dongha@example.com",
+        "password": "password"
     }
 
     req = urllib.request.Request(

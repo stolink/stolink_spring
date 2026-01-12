@@ -1,17 +1,22 @@
 package com.stolink.backend.domain.character.node;
 
-import lombok.*;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
+import org.springframework.data.neo4j.core.schema.Property;
+import org.springframework.data.neo4j.core.schema.Relationship;
 import org.springframework.data.neo4j.core.support.UUIDStringGenerator;
 
 import com.stolink.backend.domain.character.relationship.CharacterRelationship;
-import org.springframework.data.neo4j.core.schema.Relationship;
 
-import java.util.ArrayList;
-import java.util.List;
-import org.springframework.data.neo4j.core.schema.Property;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Node("Character")
 @Getter
@@ -25,7 +30,7 @@ public class Character {
     @GeneratedValue(generatorClass = UUIDStringGenerator.class)
     private String id;
 
-    @Property("project_id")
+    @Property("projectId")
     private String projectId;
 
     // AI 생성 ID (예: char-세라-001)
