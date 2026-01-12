@@ -56,7 +56,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 String userIdStr = (String) oAuth2User.getAttributes().get("userId");
                 UUID userId;
 
-                if (userIdStr != null) {
+                if (userIdStr != null && !userIdStr.isEmpty()) {
                         // CustomOAuth2UserService에서 설정한 userId 사용
                         userId = UUID.fromString(userIdStr);
                         log.info("OAuth2 login: userId found in attributes: {}", userId);
