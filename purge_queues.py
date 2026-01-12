@@ -16,8 +16,8 @@ def purge_queue(host, port, username, password, vhost, queue_name):
 
         # Check if queue exists passively (raises exception if not) or just try to purge
         try:
-            method_frame = channel.queue_purge(queue_name)
-            print(f"Purged {method_frame.message_count} messages from {queue_name} on {host}:{port}")
+            channel.queue_purge(queue_name)
+            print(f"Purged {queue_name} on {host}:{port}")
         except pika.exceptions.ChannelClosedByBroker as e:
             if e.reply_code == 404:
                 print(f"Queue {queue_name} does not exist on {host}:{port}")
@@ -37,7 +37,7 @@ queues_config = [
         "port": 5672,
         "user": "stolink",
         "pass": "stolink123",
-        "vhost": "stolink",
+        "vhost": "/",
         "queues": [
             "stolink.analysis.queue",
             "document_analysis_queue",
@@ -52,7 +52,7 @@ queues_config = [
         "port": 5673,
         "user": "stolink",
         "pass": "stolink123",
-        "vhost": "stolink",
+        "vhost": "/",
         "queues": [
             "stolink.image.queue"
         ]

@@ -1,5 +1,11 @@
 package com.stolink.backend.domain.character.dto;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.character.node.Character;
@@ -8,15 +14,11 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 @Slf4j
 @Getter
 @Builder
 public class CharacterResponse {
+    @JsonProperty("_id")
     private String id;
     private String projectId;
     private String characterId;
@@ -53,20 +55,56 @@ public class CharacterResponse {
     public static class CharacterRelationshipResponse {
         private String id;
         private String sourceId;
+        @JsonProperty("target")
         private String targetId;
-        private List<String> types; // Changed from String type
+        private List<String> types;
         private Integer strength;
         private String description;
 
-        // Backward compatibility for clients expecting "type"
         public String getType() {
-            return (types != null && !types.isEmpty()) ? types.get(0) : "neutral";
+            return (types != null && !types.isEmpty()) ? types.get(0) : "NEUTRAL";
         }
     }
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    @SuppressWarnings("unchecked")
     public static CharacterResponse from(Character character) {
+        List<CharacterRelationshipResponse> baseRelationships = mapRelationships(character);
+        Object relationsObj = safeJsonParseMap(character.getRelationsJson());
+
+        // Enrichment for Option A: Ensure relations.graph includes Neo4j relationships
+        if (baseRelationships != null && !baseRelationships.isEmpty()) {
+            Map<String, Object> relationsMap;
+            if (relationsObj instanceof Map) {
+                relationsMap = new java.util.HashMap<>((Map<String, Object>) relationsObj);
+            } else {
+                relationsMap = new java.util.HashMap<>();
+            }
+
+            List<Map<String, Object>> graph = (List<Map<String, Object>>) relationsMap.get("graph");
+            if (graph == null) {
+                graph = new java.util.ArrayList<>();
+            } else {
+                graph = new java.util.ArrayList<>(graph);
+            }
+
+            for (CharacterRelationshipResponse rel : baseRelationships) {
+                boolean exists = graph.stream()
+                        .anyMatch(g -> String.valueOf(g.get("target")).equals(rel.getTargetId()));
+                if (!exists) {
+                    Map<String, Object> gRel = new java.util.HashMap<>();
+                    gRel.put("target", rel.getTargetId());
+                    gRel.put("type", rel.getType());
+                    gRel.put("strength", rel.getStrength());
+                    gRel.put("description", rel.getDescription());
+                    graph.add(gRel);
+                }
+            }
+            relationsMap.put("graph", graph);
+            relationsObj = relationsMap;
+        }
+
         return CharacterResponse.builder()
                 .id(character.getId())
                 .characterId(character.getCharacterId())
@@ -84,7 +122,7 @@ public class CharacterResponse {
                 .profile(safeJsonParseMap(character.getProfileJson()))
                 .appearance(safeJsonParseMap(character.getAppearanceJson()))
                 .personality(safeJsonParseMap(character.getPersonalityJson()))
-                .relations(safeJsonParseMap(character.getRelationsJson()))
+                .relations(relationsObj)
                 .currentMood(safeJsonParseMap(character.getCurrentMoodJson()))
                 .meta(safeJsonParseMap(character.getMetaJson()))
                 .embedding(safeJsonParseList(character.getEmbeddingJson()))
@@ -93,7 +131,7 @@ public class CharacterResponse {
                 .motivation(character.getMotivation())
                 .firstAppearance(character.getFirstAppearance())
                 .extras(safeJsonParseMap(character.getExtrasJson()))
-                .relationships(mapRelationships(character))
+                .relationships(baseRelationships)
                 .build();
     }
 
@@ -119,14 +157,16 @@ public class CharacterResponse {
 
         return types.stream()
                 .map(type -> {
-                    if (type == null) return null;
-                    return switch (type.toUpperCase()) {
-                        case "ALLY" -> "friendly";
-                        case "ENEMY" -> "hostile";
-                        case "FAMILY" -> "family";
-                        case "ROMANTIC" -> "romantic";
-                        case "NEUTRAL" -> "neutral";
-                        default -> type.toLowerCase();
+                    if (type == null)
+                        return null;
+                    String upper = type.toUpperCase();
+                    return switch (upper) {
+                        case "FRIENDLY", "ALLY" -> "ALLY";
+                        case "HOSTILE", "ENEMY" -> "ENEMY";
+                        case "FAMILY" -> "FAMILY";
+                        case "ROMANTIC" -> "ROMANTIC";
+                        case "NEUTRAL" -> "NEUTRAL";
+                        default -> upper;
                     };
                 })
                 .collect(Collectors.toList());

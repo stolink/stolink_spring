@@ -1,7 +1,7 @@
 package com.stolink.backend.global.common.exception;
 
-import com.stolink.backend.global.common.dto.ApiResponse;
-import lombok.extern.slf4j.Slf4j;
+import java.util.stream.Collectors;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -9,7 +9,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.stream.Collectors;
+import com.stolink.backend.global.common.dto.ApiResponse;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RestControllerAdvice
@@ -23,6 +25,30 @@ public class GlobalExceptionHandler {
                                 .body(ApiResponse.<Void>builder()
                                                 .status(HttpStatus.FORBIDDEN)
                                                 .message(ex.getMessage())
+                                                .build());
+        }
+
+        @ExceptionHandler(org.springframework.security.authorization.AuthorizationDeniedException.class)
+        public ResponseEntity<ApiResponse<Void>> handleAuthorizationDenied(
+                        org.springframework.security.authorization.AuthorizationDeniedException ex) {
+                log.error("Authorization denied: {}", ex.getMessage());
+                return ResponseEntity
+                                .status(HttpStatus.FORBIDDEN)
+                                .body(ApiResponse.<Void>builder()
+                                                .status(HttpStatus.FORBIDDEN)
+                                                .message("접근 권한이 없습니다 (AuthDenied).")
+                                                .build());
+        }
+
+        @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+        public ResponseEntity<ApiResponse<Void>> handleSpringAccessDenied(
+                        org.springframework.security.access.AccessDeniedException ex) {
+                log.error("Spring Security Access denied: {}", ex.getMessage());
+                return ResponseEntity
+                                .status(HttpStatus.FORBIDDEN)
+                                .body(ApiResponse.<Void>builder()
+                                                .status(HttpStatus.FORBIDDEN)
+                                                .message("접근 권한이 없습니다.")
                                                 .build());
         }
 

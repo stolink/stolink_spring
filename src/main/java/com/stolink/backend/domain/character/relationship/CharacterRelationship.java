@@ -1,8 +1,18 @@
 package com.stolink.backend.domain.character.relationship;
 
+import org.springframework.data.neo4j.core.schema.GeneratedValue;
+import org.springframework.data.neo4j.core.schema.Id;
+import org.springframework.data.neo4j.core.schema.Property;
+import org.springframework.data.neo4j.core.schema.RelationshipProperties;
+import org.springframework.data.neo4j.core.schema.TargetNode;
+
 import com.stolink.backend.domain.character.node.Character;
-import lombok.*;
-import org.springframework.data.neo4j.core.schema.*;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @RelationshipProperties
 @Getter
@@ -11,6 +21,9 @@ import org.springframework.data.neo4j.core.schema.*;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CharacterRelationship {
+
+    @Property("projectId")
+    private String projectId;
 
     @Id
     @GeneratedValue
