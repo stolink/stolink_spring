@@ -63,6 +63,17 @@ public class GlobalExceptionHandler {
                                                 .build());
         }
 
+        @ExceptionHandler(DuplicateRelationshipException.class)
+        public ResponseEntity<ApiResponse<Void>> handleDuplicateRelationship(DuplicateRelationshipException ex) {
+                log.error("Duplicate relationship: {}", ex.getMessage());
+                return ResponseEntity
+                                .status(HttpStatus.CONFLICT)
+                                .body(ApiResponse.<Void>builder()
+                                                .status(HttpStatus.CONFLICT)
+                                                .message(ex.getMessage())
+                                                .build());
+        }
+
         @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException ex) {
                 String message = ex.getBindingResult()

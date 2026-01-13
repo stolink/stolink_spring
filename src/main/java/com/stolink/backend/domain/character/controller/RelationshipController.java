@@ -3,16 +3,25 @@ package com.stolink.backend.domain.character.controller;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.stolink.backend.domain.character.dto.RelationshipCreateRequest;
 import com.stolink.backend.domain.character.dto.RelationshipResponse;
+import com.stolink.backend.domain.character.dto.RelationshipUpdateRequest;
 import com.stolink.backend.domain.character.service.CharacterService;
 import com.stolink.backend.global.common.dto.ApiResponse;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
@@ -22,6 +31,9 @@ public class RelationshipController {
 
     private final CharacterService characterService;
 
+    /**
+     * 프로젝트의 모든 관계 조회
+     */
     @GetMapping
     public ApiResponse<List<RelationshipResponse>> getRelationships(
             @AuthenticationPrincipal UUID userId,
@@ -52,5 +64,67 @@ public class RelationshipController {
                 .collect(java.util.stream.Collectors.toList());
 
         return ApiResponse.ok(relationships);
+    }
+
+    /**
+     * 관계 생성
+     * POST /api/projects/{projectId}/relationships
+     *
+     * @apiNote bidirectional: true면 역방향 관계도 자동 생성
+     */
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public ApiResponse<RelationshipResponse> createRelationship(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID projectId,
+            @Valid @RequestBody RelationshipCreateRequest request) {
+
+        RelationshipResponse response = characterService.createRelationshipWithResponse(userId, projectId, request);
+        return ApiResponse.created(response);
+    }
+
+    /**
+     * 단일 관계 조회
+     * GET /api/projects/{projectId}/relationships/{id}
+     */
+    @GetMapping("/{id}")
+    public ApiResponse<RelationshipResponse> getRelationship(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID projectId,
+            @PathVariable String id) {
+
+        RelationshipResponse response = characterService.getRelationshipById(userId, projectId, id);
+        return ApiResponse.ok(response);
+    }
+
+    /**
+     * 관계 수정 (Partial Update)
+     * PATCH /api/projects/{projectId}/relationships/{id}
+     */
+    @PatchMapping("/{id}")
+    public ApiResponse<RelationshipResponse> updateRelationship(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID projectId,
+            @PathVariable String id,
+            @Valid @RequestBody RelationshipUpdateRequest request) {
+
+        RelationshipResponse response = characterService.updateRelationship(userId, projectId, id, request);
+        return ApiResponse.ok(response);
+    }
+
+    /**
+     * 관계 삭제
+     * DELETE /api/projects/{projectId}/relationships/{id}
+     *
+     * @apiNote bidirectional: true인 관계는 역방향도 함께 삭제
+     */
+    @DeleteMapping("/{id}")
+    public ApiResponse<Void> deleteRelationship(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable UUID projectId,
+            @PathVariable String id) {
+
+        characterService.deleteRelationship(userId, projectId, id);
+        return ApiResponse.ok();
     }
 }
