@@ -50,7 +50,8 @@ public interface EventNeo4jRepository extends Neo4jRepository<Event, String> {
         @org.springframework.data.neo4j.repository.query.Query("MATCH (c:Character)-[:PARTICIPATES_IN|PARTICIPATED_IN]->(e:Event) "
                         +
                         "WHERE c.id = $characterId " +
-                        "RETURN e")
+                        "WITH e MATCH (e)<-[r:PARTICIPATES_IN|PARTICIPATED_IN]-(p:Character) " +
+                        "RETURN e, collect(r), collect(p)")
         List<Event> findEventsByCharacterId(
                         @org.springframework.data.repository.query.Param("characterId") String characterId);
 

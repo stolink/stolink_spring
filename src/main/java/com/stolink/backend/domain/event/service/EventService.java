@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.event.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -123,13 +124,33 @@ public class EventService {
             log.warn("Project ID in node is not UUID format: {}", node.getProjectId());
         }
 
+        // 참여자 목록 구성: DB 속성(participants) + 그래프 관계(participantNodes) 합치기
+        List<String> combinedParticipants = new ArrayList<>();
+        if (node.getParticipants() != null) {
+            combinedParticipants.addAll(node.getParticipants());
+        }
+        if (node.getParticipantNodes() != null) {
+            node.getParticipantNodes().forEach(p -> {
+                if (!combinedParticipants.contains(p.getName())) {
+                    combinedParticipants.add(p.getName());
+                }
+            });
+        }
+        if (node.getParticipantNodesLegacy() != null) {
+            node.getParticipantNodesLegacy().forEach(p -> {
+                if (!combinedParticipants.contains(p.getName())) {
+                    combinedParticipants.add(p.getName());
+                }
+            });
+        }
+
         return new EventResponse(
                 id,
                 node.getEventId(),
-                node.getNarrativeSummary(), // Name maps to NarrativeSummary or generic name if available
+                node.getNarrativeSummary(),
                 node.getEventType(),
                 node.getDescription(),
-                node.getParticipants(),
+                combinedParticipants,
                 node.getChapter(),
                 node.getSequenceOrder(),
                 node.getNarrativeSummary(),

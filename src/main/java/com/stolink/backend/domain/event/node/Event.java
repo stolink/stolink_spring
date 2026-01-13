@@ -49,8 +49,16 @@ public class Event {
     private String description;
 
     // JSON 배열을 Neo4j List<String>으로 저장
+    // AI 분석 결과(callback JSON)에서 내려온 원본 리스트 (DB 속성)
     @Property("participants")
     private List<String> participants;
+
+    // 그래프 관계를 통한 실제 참여자들 (INCOMING)
+    @Relationship(type = "PARTICIPATES_IN", direction = Relationship.Direction.INCOMING)
+    private List<Character> participantNodes;
+
+    @Relationship(type = "PARTICIPATED_IN", direction = Relationship.Direction.INCOMING)
+    private List<Character> participantNodesLegacy;
 
     @Property("locationRef")
     private String locationRef;
