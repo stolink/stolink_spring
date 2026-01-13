@@ -24,7 +24,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U stolink -d stolink" ]
+      test: ["CMD-SHELL", "pg_isready -U stolink -d stolink"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,7 +46,15 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7474" ]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:7474",
+        ]
       interval: 10s
       timeout: 5s
       start_period: 120s
@@ -68,7 +76,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 10s
       start_period: 60s
@@ -90,7 +98,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 10s
       start_period: 60s
@@ -108,7 +116,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -160,7 +168,7 @@ services:
       RABBITMQ_IMAGE_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_IMAGE_VHOST: stolink
       # RabbitMQ Queue Names
-      APP_RABBITMQ_QUEUES_ANALYSIS: stolink.analysis.queue
+      APP_RABBITMQ_QUEUES_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue
       APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
@@ -189,7 +197,15 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/actuator/health",
+        ]
       interval: 30s
       timeout: 3s
       start_period: 60s
@@ -203,7 +219,6 @@ volumes:
   rabbitmq_agent_data:
   redis_data:
   backend_storage:
-
 
 networks:
   stolink-local-network:
