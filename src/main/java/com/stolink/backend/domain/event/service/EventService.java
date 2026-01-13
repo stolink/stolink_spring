@@ -66,15 +66,12 @@ public class EventService {
             throw new ResourceNotFoundException("Project not found");
         }
 
-        // 3. 필터링 (Neo4j에서 가져온 후 메모리 필터링)
-        String characterName = character.getName();
-        List<Event> events = eventNeo4jRepository.findByProjectId(projectId.toString());
+        // 3. 그래프 관계를 이용한 조회 (Optimized)
+        List<Event> events = eventNeo4jRepository.findEventsByCharacterId(characterId.toString());
 
-        log.info("Found {} events for project {}, filtering by character '{}'",
-                events.size(), projectId, characterName);
+        log.info("Found {} connected events for character {}", events.size(), characterId);
 
         return events.stream()
-                .filter(event -> event.getParticipants() != null && event.getParticipants().contains(characterName))
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
