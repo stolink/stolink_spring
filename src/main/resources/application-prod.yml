@@ -59,9 +59,9 @@ app:
     base-path: ${APP_STORAGE_BASE_PATH:/app/storage/uploads}
   rabbitmq:
     queues:
-      analysis: stolink.analysis.queue
+      analysis: document_analysis_queue
       image: stolink.image.queue
-      document-analysis: stolink.analysis.queue
+      document-analysis: document_analysis_queue
       global-merge: stolink.global-merge.queue
       # Event Consumer Queues
       analysis-completed: ${APP_RABBITMQ_QUEUES_ANALYSIS_COMPLETED:analysis.completed}
