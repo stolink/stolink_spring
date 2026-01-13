@@ -6,7 +6,10 @@ import org.springframework.data.neo4j.core.schema.GeneratedValue;
 import org.springframework.data.neo4j.core.schema.Id;
 import org.springframework.data.neo4j.core.schema.Node;
 import org.springframework.data.neo4j.core.schema.Property;
+import org.springframework.data.neo4j.core.schema.Relationship;
 import org.springframework.data.neo4j.core.support.UUIDStringGenerator;
+
+import com.stolink.backend.domain.character.node.Character;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,7 +19,7 @@ import lombok.Setter;
 
 /**
  * Event Node Entity - 사건 (Neo4j Graph)
- * 
+ *
  * AI 분석 결과(callback JSON)를 기반으로 1:1 매핑된 사건 노드입니다.
  * JSON 필드 구조를 그대로 따릅니다.
  */
@@ -32,7 +35,7 @@ public class Event {
     @GeneratedValue(generatorClass = UUIDStringGenerator.class)
     private String id;
 
-    @Property("projectId")
+    @Property("project_id")
     private String projectId;
 
     // AI 생성 ID (예: E001)
@@ -49,8 +52,16 @@ public class Event {
     private String description;
 
     // JSON 배열을 Neo4j List<String>으로 저장
+    // AI 분석 결과(callback JSON)에서 내려온 원본 리스트 (DB 속성)
     @Property("participants")
     private List<String> participants;
+
+    // 그래프 관계를 통한 실제 참여자들 (INCOMING)
+    @Relationship(type = "PARTICIPATES_IN", direction = Relationship.Direction.INCOMING)
+    private List<Character> participantNodes;
+
+    @Relationship(type = "PARTICIPATED_IN", direction = Relationship.Direction.INCOMING)
+    private List<Character> participantNodesLegacy;
 
     @Property("locationRef")
     private String locationRef;

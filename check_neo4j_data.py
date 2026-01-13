@@ -35,15 +35,12 @@ def run_cypher(statement, params={}):
 def check_data():
     print(f"Checking data for project {PROJECT_ID}...")
 
-    # Count Characters
-    res = run_cypher("MATCH (n:Character {projectId: $projectId}) RETURN count(n) as count", {"projectId": PROJECT_ID})
-    count = res['results'][0]['data'][0]['row'][0]
-    print(f"Characters: {count}")
+    res = run_cypher("MATCH (n:Character) RETURN n.id, n.name, n.projectId")
+    print(f"All Characters: {res['results'][0]['data']}")
 
-    # Count Relationships
-    res = run_cypher("MATCH (a:Character {projectId: $projectId})-[r:RELATED_TO]->(b:Character) RETURN count(r) as count", {"projectId": PROJECT_ID})
-    rel_count = res['results'][0]['data'][0]['row'][0]
-    print(f"Relationships: {rel_count}")
+    # Inspect Character properties
+    res = run_cypher("MATCH (n:Character) UNWIND keys(n) as k RETURN distinct k")
+    print(f"Distinct Keys: {res['results'][0]['data']}")
 
     # Check link between Javert and Yoon Seo-jun
     res = run_cypher("MATCH (a:Character {name: '자베르'})-[r]-(b:Character {name: '윤서준'}) RETURN r")
