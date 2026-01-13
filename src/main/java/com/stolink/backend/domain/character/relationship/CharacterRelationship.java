@@ -47,6 +47,15 @@ public class CharacterRelationship {
     private Boolean bidirectional; // 양방향 관계 여부
     private Integer revealedInChapter; // 관계가 드러난 챕터
 
+    // New detailed relationship fields
+    private Integer emotionalBond; // 1-10
+    private Integer functionalTrust; // 1-10
+    private Integer valueAlignment; // 1-10
+    private Integer interdependence; // 1-10
+    private Integer latentTension; // 1-10
+    private String publicStance; // e.g., ALLY, ENEMY, NEUTRAL
+    private String privateFeeling; // e.g., TRUST, HATE, CURIOSITY
+
     @com.fasterxml.jackson.annotation.JsonProperty("target")
     public String getTargetId() {
         return target != null ? target.getId() : null;

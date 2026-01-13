@@ -27,4 +27,25 @@ public class RelationshipDTO {
     private String description;
 
     private Boolean bidirectional;
+
+    @JsonProperty("emotional_bond")
+    private Integer emotionalBond;
+
+    @JsonProperty("functional_trust")
+    private Integer functionalTrust;
+
+    @JsonProperty("value_alignment")
+    private Integer valueAlignment;
+
+    @JsonProperty("interdependence")
+    private Integer interdependence;
+
+    @JsonProperty("latent_tension")
+    private Integer latentTension;
+
+    @JsonProperty("public_stance")
+    private String publicStance;
+
+    @JsonProperty("private_feeling")
+    private String privateFeeling;
 }
