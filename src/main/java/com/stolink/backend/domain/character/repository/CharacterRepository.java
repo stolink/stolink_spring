@@ -98,4 +98,118 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         "MATCH ()-[r]->() WHERE r.project_id = $projectId " +
                         "SET r.projectId = r.project_id")
         void normalizeAllEntities(@Param("projectId") String projectId);
+
+        // =========== Relationship CRUD Queries ===========
+
+        /**
+         * 중복 관계 확인 (sourceId → targetId 방향)
+         */
+        @Query("MATCH (s:Character {id: $sourceId})-[r:RELATED_TO]->(t:Character {id: $targetId}) " +
+                        "RETURN count(r) > 0 as exists")
+        Boolean existsRelationship(@Param("sourceId") String sourceId, @Param("targetId") String targetId);
+
+        /**
+         * 역방향 관계 조회 (양방향 삭제용)
+         */
+        @Query("MATCH (s:Character {id: $targetId})-[r:RELATED_TO]->(t:Character {id: $sourceId}) " +
+                        "WHERE r.bidirectional = true " +
+                        "RETURN id(r) as relId")
+        java.util.Optional<Long> findReverseRelationshipId(
+                        @Param("sourceId") String sourceId,
+                        @Param("targetId") String targetId);
+
+        /**
+         * 관계 수정 (Partial Update)
+         */
+        @Query("MATCH (source:Character)-[r:RELATED_TO]->(target:Character) " +
+                        "WHERE id(r) = $relationshipId " +
+                        "SET r.types = CASE WHEN $types IS NOT NULL THEN $types ELSE r.types END, " +
+                        "    r.strength = CASE WHEN $strength IS NOT NULL THEN $strength ELSE r.strength END, " +
+                        "    r.description = CASE WHEN $description IS NOT NULL THEN $description ELSE r.description END "
+                        +
+                        "RETURN source.id as sourceId, target.id as targetId, " +
+                        "       id(r) as relId, r.types as types, r.strength as strength, " +
+                        "       r.description as description, r.bidirectional as bidirectional")
+        java.util.Map<String, Object> updateRelationship(
+                        @Param("relationshipId") Long relationshipId,
+                        @Param("types") java.util.List<String> types,
+                        @Param("strength") Integer strength,
+                        @Param("description") String description);
+
+        /**
+         * 관계 삭제
+         */
+        @Query("MATCH ()-[r:RELATED_TO]->() " +
+                        "WHERE id(r) = $relationshipId " +
+                        "DELETE r")
+        void deleteRelationshipById(@Param("relationshipId") Long relationshipId);
+
+        /**
+         * 관계 상세 조회 (Response용)
+         */
+        @Query("MATCH (source:Character)-[r:RELATED_TO]->(target:Character) " +
+                        "WHERE id(r) = $relationshipId " +
+                        "RETURN source.id as sourceId, target.id as targetId, " +
+                        "       id(r) as relId, r.types as types, r.strength as strength, " +
+                        "       r.description as description, r.bidirectional as bidirectional")
+        java.util.Map<String, Object> getRelationshipDetailsById(@Param("relationshipId") Long relationshipId);
+
+        /**
+         * 관계 생성 후 ID 반환
+         */
+        @Query("MATCH (source:Character {id: $sourceId}), (target:Character {id: $targetId}) " +
+                        "CREATE (source)-[r:RELATED_TO {projectId: $projectId, types: $types, strength: $strength, " +
+                        "        description: $description, bidirectional: $bidirectional}]->(target) " +
+                        "RETURN id(r) as relId")
+        Long createRelationshipReturningId(
+                        @Param("sourceId") String sourceId,
+                        @Param("targetId") String targetId,
+                        @Param("projectId") String projectId,
+                        @Param("types") java.util.List<String> types,
+                        @Param("strength") Integer strength,
+                        @Param("description") String description,
+                        @Param("bidirectional") Boolean bidirectional);
+
+        // =========== Source/Target 기반 쿼리 (프론트엔드 복합 ID 지원) ===========
+
+        /**
+         * 관계 상세 조회 (sourceId + targetId 기반)
+         */
+        @Query("MATCH (source:Character {id: $sourceId})-[r:RELATED_TO]->(target:Character {id: $targetId}) " +
+                        "RETURN source.id as sourceId, target.id as targetId, " +
+                        "       r.types as types, r.strength as strength, " +
+                        "       r.description as description, r.bidirectional as bidirectional")
+        java.util.Map<String, Object> getRelationshipDetailsBySourceTarget(
+                        @Param("sourceId") String sourceId,
+                        @Param("targetId") String targetId,
+                        @Param("projectId") String projectId);
+
+        /**
+         * 관계 수정 (sourceId + targetId 기반, Partial Update)
+         */
+        @Query("MATCH (source:Character {id: $sourceId})-[r:RELATED_TO]->(target:Character {id: $targetId}) " +
+                        "SET r.types = CASE WHEN $types IS NOT NULL THEN $types ELSE r.types END, " +
+                        "    r.strength = CASE WHEN $strength IS NOT NULL THEN $strength ELSE r.strength END, " +
+                        "    r.description = CASE WHEN $description IS NOT NULL THEN $description ELSE r.description END "
+                        +
+                        "RETURN source.id as sourceId, target.id as targetId, " +
+                        "       r.types as types, r.strength as strength, " +
+                        "       r.description as description, r.bidirectional as bidirectional")
+        java.util.Map<String, Object> updateRelationshipBySourceTarget(
+                        @Param("sourceId") String sourceId,
+                        @Param("targetId") String targetId,
+                        @Param("projectId") String projectId,
+                        @Param("types") java.util.List<String> types,
+                        @Param("strength") Integer strength,
+                        @Param("description") String description);
+
+        /**
+         * 관계 삭제 (sourceId + targetId 기반)
+         */
+        @Query("MATCH (source:Character {id: $sourceId})-[r:RELATED_TO]->(target:Character {id: $targetId}) " +
+                        "DELETE r")
+        void deleteRelationshipBySourceTarget(
+                        @Param("sourceId") String sourceId,
+                        @Param("targetId") String targetId,
+                        @Param("projectId") String projectId);
 }
