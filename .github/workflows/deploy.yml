@@ -238,7 +238,7 @@ jobs:
           echo "Waiting for application to start..."
           sleep 60
 
-          HEALTH_URL="https://${{ vars.CLOUDFRONT_URL }}/actuator/health"
+          HEALTH_URL="https://${{ vars.CLOUDFRONT_URL }}/api/actuator/health"
           echo "Health check URL: $HEALTH_URL"
 
           for i in {1..5}; do

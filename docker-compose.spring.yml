@@ -41,7 +41,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: stolink123
       SPRING_RABBITMQ_VIRTUAL_HOST: /
       # RabbitMQ Queue Names
-      APP_RABBITMQ_QUEUES_ANALYSIS: stolink.analysis.queue
+      APP_RABBITMQ_QUEUES_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue
       APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
       APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
@@ -78,7 +78,15 @@ services:
         max-size: "50m"
         max-file: "3"
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health" ]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8080/actuator/health",
+        ]
       interval: 30s
       timeout: 3s
       start_period: 60s
@@ -87,7 +95,6 @@ services:
 volumes:
   backend_storage:
   gradle_cache:
-
 
 networks:
   ai-backend-network:
