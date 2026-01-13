@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 문서 분석 상태 관리 컨트롤러
- * 
+ *
  * Python AI Worker가 분석 상태를 업데이트할 때 사용합니다.
  */
 @RestController
@@ -61,7 +61,10 @@ public class DocumentAnalysisController {
                                 .status(AnalysisJob.JobStatus.PENDING)
                                 .build();
                 analysisJobRepository.save(job);
-                log.info("AnalysisJob 생성 완료: jobId={}, documentId={}", job.getJobId(), document.getId());
+                document.updateAnalysisStatus(Document.AnalysisStatus.PENDING);
+                documentRepository.save(document);
+                log.info("AnalysisJob 생성 및 문서 상태 PENDING 전환 완료: jobId={}, documentId={}", job.getJobId(),
+                                document.getId());
 
                 // 3. 분석 유형 확인 (기본값: full_manuscript)
                 String analysisType = (body != null) ? body.getOrDefault("analysis_type", "full_manuscript")
@@ -71,6 +74,7 @@ public class DocumentAnalysisController {
                 documentAnalysisPublisher.publishAnalysisForDocument(document, analysisType);
 
                 return ResponseEntity.ok(Map.of(
+                                "jobId", jobId,
                                 "documentId", id,
                                 "message", "문서 분석 요청이 대기열에 등록되었습니다.",
                                 "status", Document.AnalysisStatus.PENDING));
@@ -78,9 +82,9 @@ public class DocumentAnalysisController {
 
         /**
          * 문서 분석 상태 업데이트
-         * 
+         *
          * Python Consumer가 메시지 수신 시 PROCESSING 상태로 변경할 때 사용합니다.
-         * 
+         *
          * @param id        문서 ID
          * @param updateDTO 상태 업데이트 정보
          * @return 업데이트 결과
@@ -109,7 +113,7 @@ public class DocumentAnalysisController {
 
         /**
          * 문서 분석 상태 조회
-         * 
+         *
          * @param id 문서 ID
          * @return 현재 분석 상태
          */

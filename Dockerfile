@@ -1,4 +1,14 @@
-# Runtime stage only (빌드는 CI에서 완료됨)
+# Multi-stage build for Local Development
+# Stage 1: Build
+FROM eclipse-temurin:21-jdk-alpine AS builder
+WORKDIR /app
+COPY . .
+# Ensure gradlew is executable and fix line endings (for Windows hosts)
+RUN chmod +x gradlew && sed -i 's/\r$//' gradlew
+# Build the application
+RUN ./gradlew clean build -x test --no-daemon
+
+# Stage 2: Runtime
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
@@ -6,14 +16,14 @@ WORKDIR /app
 RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
-# Copy pre-built jar file from CI
-COPY build/libs/*.jar app.jar
+# Copy built jar from builder stage
+COPY --from=builder /app/build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 
 # Run application

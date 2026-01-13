@@ -17,7 +17,6 @@ import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.entity.Document.AnalysisStatus;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -78,16 +77,20 @@ public class DocumentAnalysisPublisher {
 
             // AnalysisJob 생성 및 저장
             String jobId = UUID.randomUUID().toString();
+            String traceId = UUID.randomUUID().toString(); // traceId 생성
+
             AnalysisJob analysisJob = AnalysisJob.builder()
                     .jobId(jobId)
                     .project(doc.getProject())
                     .documentId(doc.getId()) // documentId 저장
+                    .traceId(traceId) // ✅ traceId 설정
                     .status(AnalysisJob.JobStatus.PENDING)
                     .build();
             analysisJobRepository.save(analysisJob);
 
             // 메시지 생성 및 발행 (우선순위: 1 - 낮음)
-            DocumentAnalysisMessage message = buildMessage(doc, projectId, totalDocuments, "full_manuscript", jobId);
+            DocumentAnalysisMessage message = buildMessage(doc, projectId, totalDocuments, "full_manuscript", jobId,
+                    traceId); // ✅ traceId 전달
             agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message, m -> {
                 m.getMessageProperties().setPriority(1);
                 return m;
@@ -113,11 +116,13 @@ public class DocumentAnalysisPublisher {
         documentRepository.save(document);
 
         String jobId = UUID.randomUUID().toString();
+        String traceId = UUID.randomUUID().toString(); // traceId 생성
 
         AnalysisJob analysisJob = AnalysisJob.builder()
                 .jobId(jobId)
                 .project(document.getProject())
                 .documentId(document.getId())
+                .traceId(traceId) // ✅ traceId 설정
                 .status(AnalysisJob.JobStatus.PENDING)
                 .build();
         analysisJobRepository.save(analysisJob);
@@ -127,7 +132,8 @@ public class DocumentAnalysisPublisher {
                 document.getProject().getId(),
                 1,
                 analysisType,
-                jobId);
+                jobId,
+                traceId); // ✅ traceId 전달
 
         // 작가가 직접 요청한 경우 심화 분석(복선 등) 수행
         message.setRequiresDeepAnalysis(true);
@@ -162,7 +168,7 @@ public class DocumentAnalysisPublisher {
      * 분석 메시지 생성
      */
     private DocumentAnalysisMessage buildMessage(Document document, UUID projectId, int totalDocuments,
-            String analysisType, String jobId) {
+            String analysisType, String jobId, String traceId) { // ✅ traceId 파라미터 추가
         Document parent = document.getParent();
         String parentFolderId = parent != null ? parent.getId().toString() : null;
         String chapterTitle = parent != null ? parent.getTitle() : document.getTitle();
@@ -179,6 +185,7 @@ public class DocumentAnalysisPublisher {
                 .analysisPass(1)
                 .requiresDeepAnalysis(true) // 무조건 심화 분석 수행
                 .callbackUrl(callbackBaseUrl + "/api/internal/ai/analysis/callback")
+                .content(document.getContent()) // ✅ 문서 내용 추가
                 .analysisType(analysisType != null ? analysisType : "full_manuscript")
                 .context(DocumentAnalysisMessage.AnalysisContext.builder()
                         .existingCharacters(List.of()) // 1차 Pass는 빈 배열
@@ -186,7 +193,7 @@ public class DocumentAnalysisPublisher {
                         .existingRelationships(List.of())
                         .existingSettings(List.of())
                         .build())
-                .traceId(UUID.randomUUID().toString())
+                .traceId(traceId) // ✅ 전달받은 traceId 사용
                 .build();
     }
 }

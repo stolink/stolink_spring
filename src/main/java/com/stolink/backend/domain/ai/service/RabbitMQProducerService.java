@@ -55,7 +55,7 @@ public class RabbitMQProducerService {
 
     /**
      * Analysis 작업 배치 전송 (성능 최적화)
-     * 
+     *
      * 여러 문서를 한 번에 발행합니다.
      */
     public int sendAnalysisTaskBatch(List<AnalysisTaskDTO> tasks) {

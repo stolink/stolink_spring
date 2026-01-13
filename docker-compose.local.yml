@@ -19,6 +19,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     networks:
       - stolink-local-network
     restart: unless-stopped
@@ -67,7 +68,7 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 10s
       start_period: 60s
@@ -89,10 +90,27 @@ services:
       - stolink-local-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 10s
       timeout: 10s
       start_period: 60s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:alpine
+    container_name: stolink-redis-local
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - stolink-local-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
       retries: 5
 
   # Spring Boot Backend
@@ -112,13 +130,19 @@ services:
         condition: service_healthy
       rabbitmq-agent:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       # Spring Profile
       SPRING_PROFILES_ACTIVE: local
+      # Redis
+      SPRING_DATA_REDIS_HOST: stolink-redis-local
+      SPRING_DATA_REDIS_PORT: 6379
       # PostgreSQL
       SPRING_DATASOURCE_URL: jdbc:postgresql://stolink-postgres-local:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
       # Neo4j
       SPRING_NEO4J_URI: bolt://stolink-neo4j-local:7687
       SPRING_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USER}
@@ -126,17 +150,24 @@ services:
       # RabbitMQ (Analysis - AI Agent용)
       SPRING_RABBITMQ_HOST: stolink-rabbitmq-agent
       SPRING_RABBITMQ_PORT: 5672
-      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER}
-      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      SPRING_RABBITMQ_VIRTUAL_HOST: stolink
+      SPRING_RABBITMQ_USERNAME: stolink
+      SPRING_RABBITMQ_PASSWORD: stolink123
+      SPRING_RABBITMQ_VIRTUAL_HOST: /
       # RabbitMQ (Image Generation - 기존 RabbitMQ)
       RABBITMQ_IMAGE_HOST: stolink-rabbitmq-local
       RABBITMQ_IMAGE_PORT: 5672
       RABBITMQ_IMAGE_USERNAME: ${RABBITMQ_USER}
       RABBITMQ_IMAGE_PASSWORD: ${RABBITMQ_PASSWORD}
       RABBITMQ_IMAGE_VHOST: stolink
+      # RabbitMQ Queue Names
+      APP_RABBITMQ_QUEUES_ANALYSIS: stolink.analysis.queue
+      APP_RABBITMQ_QUEUES_IMAGE: stolink.image.queue
+      APP_RABBITMQ_QUEUES_DOCUMENT_ANALYSIS: document_analysis_queue
+      APP_RABBITMQ_QUEUES_GLOBAL_MERGE: global_merge_queue
       # AI Callback URL
-      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080/api/internal/ai
+      APP_AI_CALLBACK_BASE_URL: http://stolink-backend:8080
+      # Analysis Settings
+      APP_ANALYSIS_MAX_RETRY_COUNT: 3
       # Storage path
       APP_STORAGE_BASE_PATH: /app/storage/uploads
       # CORS
@@ -170,6 +201,7 @@ volumes:
   neo4j_logs:
   rabbitmq_data:
   rabbitmq_agent_data:
+  redis_data:
   backend_storage:
 
 

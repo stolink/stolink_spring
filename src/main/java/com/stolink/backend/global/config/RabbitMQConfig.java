@@ -78,10 +78,13 @@ public class RabbitMQConfig {
 
     /**
      * 글로벌 병합 큐 (2차 Pass)
+     * 우선순위 큐 설정 (x-max-priority: 10)
      */
     @Bean
     public Queue globalMergeQueue() {
-        return new Queue(globalMergeQueue, true);
+        return org.springframework.amqp.core.QueueBuilder.durable(globalMergeQueue)
+                .withArgument("x-max-priority", 10)
+                .build();
     }
 
     /**
@@ -145,5 +148,84 @@ public class RabbitMQConfig {
         RabbitTemplate template = new RabbitTemplate(connectionFactory);
         template.setMessageConverter(messageConverter());
         return template;
+    }
+
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin imageRabbitAdmin(
+            @Qualifier("imageConnectionFactory") ConnectionFactory connectionFactory) {
+        return new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
+    }
+
+    @Bean
+    public org.springframework.amqp.rabbit.core.RabbitAdmin agentRabbitAdmin(
+            @Qualifier("agentConnectionFactory") ConnectionFactory connectionFactory) {
+        return new org.springframework.amqp.rabbit.core.RabbitAdmin(connectionFactory);
+    }
+
+    // ============================================================
+    // Event Consumer Configuration (Analysis Event Sourcing)
+    // ============================================================
+
+    @Value("${app.rabbitmq.exchanges.analysis-events:stolink.analysis.events}")
+    private String analysisEventsExchange;
+
+    @Value("${app.rabbitmq.queues.analysis-completed:analysis.completed}")
+    private String analysisCompletedQueue;
+
+    @Value("${app.rabbitmq.queues.analysis-dlq:analysis.dlq}")
+    private String analysisDlqQueue;
+
+    /**
+     * Analysis Events Exchange (Direct Exchange)
+     */
+    @Bean
+    public org.springframework.amqp.core.DirectExchange analysisEventsExchange() {
+        return new org.springframework.amqp.core.DirectExchange(analysisEventsExchange, true, false);
+    }
+
+    /**
+     * Analysis Completed Queue with DLQ configuration
+     */
+    @Bean
+    public Queue analysisCompletedQueue() {
+        return org.springframework.amqp.core.QueueBuilder.durable(analysisCompletedQueue)
+                .withArgument("x-dead-letter-exchange", "")
+                .withArgument("x-dead-letter-routing-key", analysisDlqQueue)
+                .build();
+    }
+
+    /**
+     * Dead Letter Queue for failed analysis events
+     */
+    @Bean
+    public Queue analysisDlqQueue() {
+        return new Queue(analysisDlqQueue, true);
+    }
+
+    /**
+     * Binding: analysisEventsExchange -> analysisCompletedQueue
+     */
+    @Bean
+    public org.springframework.amqp.core.Binding analysisCompletedBinding() {
+        return org.springframework.amqp.core.BindingBuilder
+                .bind(analysisCompletedQueue())
+                .to(analysisEventsExchange())
+                .with("analysis.completed");
+    }
+
+    /**
+     * RabbitListenerContainerFactory for Agent RabbitMQ (Event Consumer용)
+     */
+    @Bean
+    public org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory agentRabbitListenerContainerFactory(
+            @Qualifier("agentConnectionFactory") ConnectionFactory connectionFactory) {
+        org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory factory = new org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory();
+        factory.setConnectionFactory(connectionFactory);
+        factory.setMessageConverter(messageConverter());
+        factory.setConcurrentConsumers(1);
+        factory.setMaxConcurrentConsumers(3);
+        factory.setPrefetchCount(1);
+        factory.setDefaultRequeueRejected(false); // DLQ로 이동
+        return factory;
     }
 }

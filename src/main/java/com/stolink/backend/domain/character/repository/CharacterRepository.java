@@ -16,34 +16,40 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         List<Character> findAll();
 
-        @Query("MATCH (c:Character {projectId: $projectId}) " +
-                        "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
+        @Query("MATCH (c:Character) " +
+                        "WHERE (c.projectId = $projectId OR c.project_id = $projectId) " +
+                        "OPTIONAL MATCH (c)-[r]-(other:Character) " +
+                        "WHERE type(r) IN ['RELATED_TO', 'ALLY', 'ENEMY', 'RIVAL', 'ROMANTIC', 'FAMILY', 'NEUTRAL'] " +
                         "RETURN c, collect(r), collect(other)")
         List<Character> findAllWithRelationshipsByProjectId(@Param("projectId") String projectId);
 
-        @Query("MATCH (c:Character {id: $characterId, projectId: $projectId}) " +
-                        "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
+        @Query("MATCH (c:Character {id: $characterId}) " +
+                        "WHERE (c.projectId = $projectId OR c.project_id = $projectId) " +
+                        "OPTIONAL MATCH (c)-[r]-(other:Character) " +
+                        "WHERE type(r) IN ['RELATED_TO', 'ALLY', 'ENEMY', 'RIVAL', 'ROMANTIC', 'FAMILY', 'NEUTRAL'] " +
                         "RETURN c, collect(r), collect(other)")
         Character findByIdAndProjectIdWithRelationships(
                         @Param("characterId") String characterId,
                         @Param("projectId") String projectId);
 
         @Query("MATCH (c:Character {id: $characterId}) " +
-                        "OPTIONAL MATCH (c)-[r:RELATED_TO]-(other:Character) " +
+                        "OPTIONAL MATCH (c)-[r]-(other:Character) " +
+                        "WHERE type(r) IN ['RELATED_TO', 'ALLY', 'ENEMY', 'RIVAL', 'ROMANTIC', 'FAMILY', 'NEUTRAL'] " +
                         "RETURN c, collect(r), collect(other)")
         java.util.Optional<Character> findByIdWithRelationships(@Param("characterId") String characterId);
 
         @Query("MATCH (source:Character {id: $sourceId}), (target:Character {id: $targetId}) " +
                         "MERGE (source)-[r:RELATED_TO]->(target) " +
-                        "ON CREATE SET r.id = randomUUID(), r.type = $type, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
+                        "ON CREATE SET r.id = randomUUID(), r.projectId = $projectId, r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
                         +
-                        "ON MATCH SET r.type = $type, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
+                        "ON MATCH SET r.projectId = $projectId, r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
                         +
                         "RETURN r")
         void createRelationship(
                         @Param("sourceId") String sourceId,
                         @Param("targetId") String targetId,
-                        @Param("type") String type,
+                        @Param("projectId") String projectId,
+                        @Param("types") List<String> types,
                         @Param("strength") Integer strength,
                         @Param("description") String description,
                         @Param("bidirectional") Boolean bidirectional);
@@ -75,4 +81,19 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         @Param("characterId") String characterId,
                         @Param("positionX") Double positionX,
                         @Param("positionY") Double positionY);
+
+        @Query("MATCH (c:Character {projectId: $projectId}) WHERE c.id IS NULL SET c.id = randomUUID()")
+        void assignUuidToCharacters(@Param("projectId") String projectId);
+
+        @Query("MATCH (n) WHERE (n:Character OR n:Event OR n:Setting OR n:Project) AND (n.projectId = $projectId OR n.project_id = $projectId) "
+                        +
+                        "SET n.projectId = COALESCE(n.projectId, n.project_id) " +
+                        "WITH n " +
+                        "MATCH (c:Character) WHERE (c.projectId = $projectId OR c.project_id = $projectId) AND c.id IS NULL AND c.characterId IS NOT NULL "
+                        +
+                        "SET c.id = c.characterId " +
+                        "WITH c " +
+                        "MATCH ()-[r]->() WHERE r.project_id = $projectId " +
+                        "SET r.projectId = r.project_id")
+        void normalizeAllEntities(@Param("projectId") String projectId);
 }

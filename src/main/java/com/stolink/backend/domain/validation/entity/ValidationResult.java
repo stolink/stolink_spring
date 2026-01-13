@@ -1,11 +1,21 @@
 package com.stolink.backend.domain.validation.entity;
 
-import com.stolink.backend.domain.project.entity.Project;
-import com.stolink.backend.global.common.entity.BaseEntity;
-import jakarta.persistence.*;
-import lombok.*;
-
 import java.util.UUID;
+
+import com.stolink.backend.global.common.entity.BaseEntity;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * AI 분석 검증 결과
@@ -23,9 +33,8 @@ public class ValidationResult extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "project_id", nullable = false)
-    private Project project;
+    @Column(name = "document_id", nullable = false)
+    private UUID documentId;
 
     @Column(name = "job_id", length = 100)
     private String jobId;

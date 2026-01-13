@@ -16,7 +16,7 @@ spring:
 
   # Neo4j Configuration
   neo4j:
-    uri: bolt://${NEO4J_URI}:${NEO4J_PORT:7687}
+    uri: ${NEO4J_URI}
     authentication:
       username: ${NEO4J_USERNAME}
       password: ${NEO4J_PASSWORD}
@@ -72,6 +72,11 @@ app:
       image: stolink.image.queue
       document-analysis: stolink.analysis.queue
       global-merge: stolink.global-merge.queue
+      # Event Consumer Queues
+      analysis-completed: ${APP_RABBITMQ_QUEUES_ANALYSIS_COMPLETED:analysis.completed}
+      analysis-dlq: ${APP_RABBITMQ_QUEUES_ANALYSIS_DLQ:analysis.dlq}
+    exchanges:
+      analysis-events: ${APP_RABBITMQ_EXCHANGES_ANALYSIS_EVENTS:stolink.analysis.events}
     # Image RabbitMQ (이미지 생성용)
     image:
       host: ${RABBITMQ_IMAGE_HOST}

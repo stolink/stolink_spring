@@ -14,7 +14,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -32,13 +31,13 @@ import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.ai.service.AICallbackService;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
+import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.global.common.dto.ApiResponse;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import com.stolink.backend.global.sse.SseEmitterService;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -53,11 +52,22 @@ public class AIController {
     private final AnalysisJobRepository analysisJobRepository;
     private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
     private final ProjectRepository projectRepository;
+    private final DocumentRepository documentRepository;
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
 
     @Value("${app.ai.callback-base-url}")
     private String callbackBaseUrl;
+
+    /**
+     * [DEBUG] 모든 분석 작업 삭제 (무한 폴링 방지용)
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/ai/debug/jobs")
+    public ApiResponse<Void> clearAllJobs() {
+        log.warn("Clearing all analysis jobs via debug endpoint");
+        analysisJobRepository.deleteAll();
+        return ApiResponse.ok();
+    }
 
     /**
      * 작업별 전용 스트림 (프론트엔드 호환용)
@@ -67,7 +77,13 @@ public class AIController {
         log.info("SSE stream requested for job: {}", jobId);
         AnalysisJob job = analysisJobRepository.findByJobId(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
-        return sseEmitterService.createEmitter(job.getProject().getId());
+
+        SseEmitter emitter = sseEmitterService.createEmitter(job.getProject().getId());
+
+        // 연결 즉시 현재 진행 상태 전송 (새로고침 시 상태 동기화)
+        callbackService.sendProgressUpdate(job.getProject().getId());
+
+        return emitter;
     }
 
     @PostMapping("/ai/analyze")
@@ -125,6 +141,14 @@ public class AIController {
                     .build();
             analysisJobRepository.save(job);
 
+            // Document 상태 업데이트 (QUEUED) 및 저장
+            UUID finalDocumentId = documentId;
+            documentRepository.findById(finalDocumentId).ifPresent(doc -> {
+                doc.updateAnalysisStatus(com.stolink.backend.domain.document.entity.Document.AnalysisStatus.QUEUED);
+                documentRepository.save(doc);
+                log.info("Reset document {} analysis status to QUEUED for jobId: {}", finalDocumentId, jobId);
+            });
+
             AnalysisTaskDTO task = AnalysisTaskDTO.builder()
                     .jobId(jobId)
                     .projectId(projectId)
@@ -157,14 +181,26 @@ public class AIController {
     /**
      * Job 상태 조회 (프론트엔드 폴링용)
      */
-    @GetMapping("/ai/jobs/{jobId}")
+    /**
+     * Job 상태 조회 (프론트엔드 폴링용)
+     */
+    @GetMapping({ "/ai/jobs/{jobId}", "/ai/jobs/{jobId}/status" })
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ApiResponse<Map<String, Object>> getJobStatus(@PathVariable String jobId) {
+        log.debug("Get Job Status request for: {}", jobId);
         AnalysisJob job = analysisJobRepository.findByJobId(jobId)
                 .orElseThrow(() -> new ResourceNotFoundException("AnalysisJob", "jobId", jobId));
 
+        String projectId = "";
+        if (job.getProject() != null) {
+            projectId = job.getProject().getId().toString();
+        } else {
+            log.warn("AnalysisJob {} has no associated project", jobId);
+        }
+
         return ApiResponse.ok(Map.of(
                 "jobId", job.getJobId(),
-                "projectId", job.getProject().getId().toString(),
+                "projectId", projectId,
                 "status", job.getStatus().name(),
                 "traceId", job.getTraceId() != null ? job.getTraceId() : "",
                 "documentId", job.getDocumentId() != null ? job.getDocumentId().toString() : "",
@@ -174,7 +210,7 @@ public class AIController {
     /**
      * 이미지 생성 Job 상태 조회
      */
-    @GetMapping("/ai/image/jobs/{jobId}")
+    @GetMapping({ "/ai/image/jobs/{jobId}", "/ai/image/jobs/{jobId}/status" })
     public ApiResponse<Map<String, Object>> getImageJobStatus(@PathVariable String jobId) {
         com.stolink.backend.domain.character.entity.ImageGenerationTask task = imageGenerationTaskRepository
                 .findById(jobId)
@@ -213,6 +249,26 @@ public class AIController {
     }
 
     private ApiResponse<Void> processPayload(String rawPayload) {
+        // Null check for payload
+        if (rawPayload == null || rawPayload.isBlank()) {
+            log.error("Received null or empty AI callback payload");
+            return ApiResponse.<Void>builder()
+                    .status(HttpStatus.BAD_REQUEST)
+                    .message("Payload is null or empty")
+                    .build();
+        }
+
+        // [Debug] Save received payload to file
+        try {
+            java.nio.file.Files.writeString(
+                    java.nio.file.Paths.get("/tmp/callback_result.json"),
+                    rawPayload,
+                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+            log.info("Saved AI callback payload to /tmp/callback_result.json");
+        } catch (Exception e) {
+            log.error("Failed to save payload", e);
+        }
+
         try {
             JsonNode root = objectMapper.readTree(rawPayload);
             String messageType = root.path("message_type").asText(null);
@@ -337,8 +393,10 @@ public class AIController {
         }
 
         return AnalysisContext.builder()
-                .chapterNumber(contextMap.get("chapterNumber") != null ? (Integer) contextMap.get("chapterNumber") : null)
-                .totalChapters(contextMap.get("totalChapters") != null ? (Integer) contextMap.get("totalChapters") : null)
+                .chapterNumber(
+                        contextMap.get("chapterNumber") != null ? (Integer) contextMap.get("chapterNumber") : null)
+                .totalChapters(
+                        contextMap.get("totalChapters") != null ? (Integer) contextMap.get("totalChapters") : null)
                 .worldRulesSummary((String) contextMap.get("worldRulesSummary"))
                 .build();
     }

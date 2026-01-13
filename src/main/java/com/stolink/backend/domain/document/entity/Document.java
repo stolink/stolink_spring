@@ -2,9 +2,6 @@ package com.stolink.backend.domain.document.entity;
 
 import java.util.UUID;
 
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
-
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.global.common.entity.BaseEntity;
 
@@ -94,6 +91,10 @@ public class Document extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    // 커뮤니티(Storead) 게시 완료 여부 - Storead에서 최종 게시 완료 시 true로 업데이트됨
+    @Column(name = "is_published", nullable = false)
+    private Boolean isPublished = false;
+
     @Builder
     public Document(UUID id, Project project, Document parent, DocumentType type, String title, String content,
             String synopsis, Integer order, DocumentStatus status, String label, String labelColor, Integer wordCount,
@@ -152,7 +153,7 @@ public class Document extends BaseEntity {
 
     /**
      * 문서의 부모를 변경합니다 (폴더 이동)
-     * 
+     *
      * @param newParent 새로운 부모 문서 (null이면 루트로 이동)
      * @param newOrder  새 부모 아래에서의 순서
      */
@@ -207,6 +208,22 @@ public class Document extends BaseEntity {
         this.analysisRetryCount++;
     }
 
+    // === 커뮤니티 게시 상태 관리 메서드 ===
+
+    /**
+     * 커뮤니티(Storead)에 게시 완료 상태로 변경
+     */
+    public void markAsPublished() {
+        this.isPublished = true;
+    }
+
+    /**
+     * 커뮤니티 게시 취소 (미배포 상태로 변경)
+     */
+    public void markAsUnpublished() {
+        this.isPublished = false;
+    }
+
     // === 분석 잠금 메서드 ===
 
     public void lockForAnalysis() {
@@ -217,42 +234,4 @@ public class Document extends BaseEntity {
         this.analysisLocked = false;
     }
 
-    @Column(name = "plot_integration_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String plotIntegrationJson;
-
-    @Column(name = "consistency_report_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String consistencyReportJson;
-
-    @Column(name = "validation_json", columnDefinition = "jsonb")
-    @JdbcTypeCode(SqlTypes.JSON)
-    private String validationJson;
-
-    // ... existing builder ...
-    // Note: Builder update omitted to keep it concise, Lombok @Builder on class
-    // handles
-    // all fields if we don't manually override.
-    // However, since there is a manual constructor, let's just add setters for
-    // these fields
-    // or rely on the field-level access if needed.
-    // Given the existing manual constructor, it's safer to just rely on setters for
-    // these new fields
-    // to avoid breaking existing constructor calls, OR update the constructor.
-    // Let's add setters via Lombok @Setter on class (already present? No, let's
-    // check).
-    // The class has @Getter but no @Setter. Let's add setters for these new fields
-    // manually.
-
-    public void setPlotIntegrationJson(String plotIntegrationJson) {
-        this.plotIntegrationJson = plotIntegrationJson;
-    }
-
-    public void setConsistencyReportJson(String consistencyReportJson) {
-        this.consistencyReportJson = consistencyReportJson;
-    }
-
-    public void setValidationJson(String validationJson) {
-        this.validationJson = validationJson;
-    }
 }

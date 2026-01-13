@@ -61,6 +61,7 @@ services:
 volumes:
   backend_storage:
 
+
 networks:
   stolink-network:
     driver: bridge

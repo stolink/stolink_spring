@@ -25,7 +25,7 @@ public class DocumentAnalysisMessage {
 
     @JsonProperty("message_type")
     @Builder.Default
-    private String messageType = "DOCUMENT_ANALYSIS";
+    private String messageType = "DOCUMENT_ANALYSIS_REQUEST";
 
     @JsonProperty("document_id")
     private String documentId;
@@ -54,6 +54,13 @@ public class DocumentAnalysisMessage {
 
     @JsonProperty("callback_url")
     private String callbackUrl;
+
+    /**
+     * 문서 내용 (AI 분석 대상)
+     * AI Backend가 분석할 실제 텍스트 내용
+     */
+    @JsonProperty("content")
+    private String content;
 
     /**
      * 분석 유형 (full_manuscript: 전체 분석, partial_snippet: 경량 분석)

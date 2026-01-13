@@ -31,13 +31,16 @@ logs/
 .env.local
 application.yml
 
-# FASTAPI*.md
+FASTAPI*.md
 JOB*.md
 PROJECT*.md
 *.json
 SPRING*.md
 *.txt
 e2e*.py
+*.sh
+baseline*
+TEST_SCENARIOS*
 
 smart-commit-md.md
 

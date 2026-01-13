@@ -2,6 +2,7 @@ package com.stolink.backend.domain.setting.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.stolink.backend.domain.setting.node.Setting;
+
 import lombok.Builder;
 import lombok.Getter;
 
@@ -40,35 +41,22 @@ public class SettingResponse {
     @JsonProperty("notable_features")
     private java.util.List<String> notableFeatures;
 
-    private static final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-
     public static SettingResponse from(Setting setting) {
-        java.util.List<String> features = java.util.Collections.emptyList();
-        if (setting.getStaticObjectsJson() != null) {
-            try {
-                features = objectMapper.readValue(setting.getStaticObjectsJson(),
-                        new com.fasterxml.jackson.core.type.TypeReference<java.util.List<String>>() {
-                        });
-            } catch (Exception e) {
-                // ignore
-            }
-        }
-
         return SettingResponse.builder()
                 .id(setting.getId())
                 .settingId(setting.getSettingId())
                 .name(setting.getName())
-                .locationName(setting.getLocationName())
+                .locationName(setting.getName())
                 .locationType(setting.getLocationType() != null ? setting.getLocationType().toLowerCase() : null)
                 .visualBackground(setting.getVisualBackground())
-                .atmosphere(setting.getAtmosphereKeywords())
+                .atmosphere(setting.getAtmosphere())
                 .timeOfDay(setting.getTimeOfDay())
-                .lighting(setting.getLightingDescription())
-                .weather(setting.getWeatherCondition())
+                .lighting(setting.getLighting())
+                .weather(setting.getWeather())
                 .description(setting.getDescription())
                 .significance(setting.getStorySignificance())
-                .isPrimary(setting.getIsPrimaryLocation())
-                .notableFeatures(features)
+                .isPrimary(setting.getIsPrimary())
+                .notableFeatures(setting.getNotableFeatures())
                 .build();
     }
 }

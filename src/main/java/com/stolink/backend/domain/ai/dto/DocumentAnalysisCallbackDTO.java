@@ -6,6 +6,7 @@ import java.util.Map;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.stolink.backend.domain.ai.dto.callback.CharacterDTO;
+import com.stolink.backend.domain.ai.dto.callback.CharacterTimelineDTO;
 import com.stolink.backend.domain.ai.dto.callback.EventDTO;
 import com.stolink.backend.domain.ai.dto.callback.SectionDTO;
 import com.stolink.backend.domain.ai.dto.callback.SettingDTO;
@@ -70,6 +71,19 @@ public class DocumentAnalysisCallbackDTO {
      */
     @JsonProperty("validation")
     private Map<String, Object> validation;
+
+    /**
+     * Document summary from AI analysis (summary, key_characters, key_events,
+     * level)
+     */
+    @JsonProperty("document_summary")
+    private Map<String, Object> documentSummary;
+
+    /**
+     * Character timelines from AI analysis (character state tracking per chapter)
+     */
+    @JsonProperty("character_timelines")
+    private List<CharacterTimelineDTO> characterTimelines;
 
     /**
      * 성공 여부 확인

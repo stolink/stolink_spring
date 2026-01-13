@@ -26,6 +26,8 @@ import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.AuthProvider;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
+import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
+
 import com.stolink.backend.global.common.dto.ApiResponse;
 
 import lombok.extern.slf4j.Slf4j;
@@ -46,19 +48,25 @@ public class TestAnalysisController {
     private final DocumentRepository documentRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final AnalysisJobRepository analysisJobRepository;
     private final RabbitTemplate agentRabbitTemplate;
+    private final com.stolink.backend.domain.character.repository.CharacterRepository characterRepository;
 
     public TestAnalysisController(
             DocumentAnalysisPublisher documentAnalysisPublisher,
             DocumentRepository documentRepository,
             ProjectRepository projectRepository,
             UserRepository userRepository,
-            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate) {
+            AnalysisJobRepository analysisJobRepository,
+            @Qualifier("agentRabbitTemplate") RabbitTemplate agentRabbitTemplate,
+            com.stolink.backend.domain.character.repository.CharacterRepository characterRepository) {
         this.documentAnalysisPublisher = documentAnalysisPublisher;
         this.documentRepository = documentRepository;
         this.projectRepository = projectRepository;
         this.userRepository = userRepository;
+        this.analysisJobRepository = analysisJobRepository;
         this.agentRabbitTemplate = agentRabbitTemplate;
+        this.characterRepository = characterRepository;
     }
 
     @Value("${app.rabbitmq.queues.document-analysis:document_analysis_queue}")
@@ -272,5 +280,33 @@ public class TestAnalysisController {
                 .orElse(ApiResponse.ok(Map.of(
                         "deleted", false,
                         "message", "삭제할 테스트 데이터가 없습니다.")));
+    }
+
+    /**
+     * 모든 분석 작업 삭제
+     */
+    @DeleteMapping("/jobs")
+    public ApiResponse<Map<String, Object>> deleteAllJobs() {
+        long count = analysisJobRepository.count();
+        analysisJobRepository.deleteAll();
+        log.info("Deleted all {} analysis jobs", count);
+
+        return ApiResponse.ok(Map.of(
+                "deleted", true,
+                "count", count,
+                "message", count + "개의 분석 작업이 삭제되었습니다."));
+    }
+
+    @DeleteMapping("/project/{projectId}/neo4j-data")
+    public ApiResponse<Map<String, Object>> deleteProjectNeo4jData(@PathVariable UUID projectId) {
+        try {
+            characterRepository.deleteByProjectId(projectId.toString());
+            return ApiResponse.ok(Map.of("message", "Deleted Neo4j data for project " + projectId));
+        } catch (Exception e) {
+             return ApiResponse.<Map<String, Object>>builder()
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .message("Failed to delete Neo4j data: " + e.getMessage())
+                    .build();
+        }
     }
 }

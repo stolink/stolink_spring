@@ -1,5 +1,6 @@
 package com.stolink.backend.domain.character.service;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +9,7 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -19,6 +21,7 @@ import com.stolink.backend.domain.ai.service.ImageServerHealthChecker;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
 import com.stolink.backend.domain.character.event.ImageGenerationRequestedEvent;
 import com.stolink.backend.domain.character.node.Character;
+import com.stolink.backend.domain.character.relationship.CharacterRelationship;
 import com.stolink.backend.domain.character.repository.CharacterRepository;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
@@ -60,20 +63,129 @@ public class CharacterService {
         return characterRepository.findAll();
     }
 
-    public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
-        User user = getUserOrThrow(userId);
-        Project project = getProjectOrThrow(projectId, user);
+    @Transactional(readOnly = true)
+    public List<com.stolink.backend.domain.character.dto.RelationshipResponse> getRelationshipsByProjectId(
+            UUID userId, UUID projectId) {
+        List<Character> characters = getCharactersWithRelationships(userId, projectId);
+        List<com.stolink.backend.domain.character.dto.RelationshipResponse> responses = new java.util.ArrayList<>();
 
-        List<Character> characters = characterRepository
-                .findAllWithRelationshipsByProjectId(project.getId().toString());
-
-        // Populate source ID for each relationship to help frontend graph mapping
-        for (Character character : characters) {
-            if (character.getRelationships() != null) {
-                for (var rel : character.getRelationships()) {
-                    rel.setSource(character.getId());
+        for (Character c : characters) {
+            if (c.getRelationships() != null) {
+                for (var r : c.getRelationships()) {
+                    responses.add(com.stolink.backend.domain.character.dto.RelationshipResponse.builder()
+                            .id(r.getId() != null ? r.getId().toString() : java.util.UUID.randomUUID().toString())
+                            .sourceId(c.getId())
+                            .targetId(r.getTargetId())
+                            .types(r.getTypes())
+                            .strength(r.getStrength())
+                            .description(r.getDescription())
+                            .bidirectional(r.getBidirectional())
+                            .build());
                 }
             }
+        }
+        return responses;
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
+        log.info("Fetching characters manually (Robust Mode) for project: {}", projectId);
+        // User user = getUserOrThrow(userId);
+        // Project project = getProjectOrThrow(projectId, user);
+
+        List<Character> characters = new ArrayList<>();
+        String pid = projectId.toString();
+
+        try (var session = driver.session()) {
+            var result = session.run("""
+                    MATCH (c:Character)
+                    WHERE c.project_id = $pid OR c.projectId = $pid
+                    OPTIONAL MATCH (c)-[r]->(target:Character)
+                    RETURN c, collect(r) as rels, collect(target) as targets
+                    """, java.util.Map.of("pid", pid));
+
+            while (result.hasNext()) {
+                var record = result.next();
+                var cNode = record.get("c").asNode();
+                var cMap = cNode.asMap();
+
+                // --- ROBUST MANUAL MAPPING (No ObjectMapper) ---
+                Character character = new Character();
+
+                // ID Handling
+                if (cMap.containsKey("characterId")) {
+                    character.setId((String) cMap.get("characterId"));
+                } else if (cMap.containsKey("id")) {
+                    character.setId((String) cMap.get("id"));
+                } else {
+                    character.setId(cNode.elementId());
+                }
+
+                // Basic Fields
+                character.setName((String) cMap.getOrDefault("name", "Unknown"));
+                character.setRole((String) cMap.getOrDefault("role", "Unknown"));
+                character.setImageUrl((String) cMap.getOrDefault("imageUrl", null));
+                character.setProjectId(pid);
+
+                // Relationships (Same as before but safer)
+                List<CharacterRelationship> relationships = new ArrayList<>();
+                if (!record.get("rels").isNull()) {
+                    var rels = record.get("rels").asList(org.neo4j.driver.Value::asRelationship);
+                    var targets = record.get("targets").asList(org.neo4j.driver.Value::asNode);
+
+                    for (int i = 0; i < rels.size(); i++) {
+                        var rel = rels.get(i);
+                        var targetNode = (i < targets.size()) ? targets.get(i) : null;
+
+                        if (targetNode == null)
+                            continue;
+
+                        // Target Mapping
+                        var targetMap = targetNode.asMap();
+                        Character targetChar = new Character();
+                        if (targetMap.containsKey("characterId")) {
+                            targetChar.setId((String) targetMap.get("characterId"));
+                        } else if (targetMap.containsKey("id")) {
+                            targetChar.setId((String) targetMap.get("id"));
+                        } else {
+                            targetChar.setId(targetNode.elementId());
+                        }
+                        targetChar.setName((String) targetMap.getOrDefault("name", "Unknown"));
+                        targetChar.setImageUrl((String) targetMap.getOrDefault("imageUrl", null));
+
+                        // Types
+                        List<String> typesList = new ArrayList<>();
+                        if (!rel.get("types").isNull()) {
+                            typesList.addAll(rel.get("types").asList(org.neo4j.driver.Value::asString));
+                        } else {
+                            typesList.add(rel.type());
+                        }
+
+                        CharacterRelationship charRel = CharacterRelationship.builder()
+                                .source(character.getId())
+                                .target(targetChar)
+                                .types(typesList)
+                                .strength(rel.get("strength").isNull() ? 0 : rel.get("strength").asInt())
+                                .description(rel.get("description").asString(""))
+                                .bidirectional(rel.get("bidirectional").asBoolean(false))
+                                .projectId(pid)
+                                .build();
+
+                        relationships.add(charRel);
+                    }
+                }
+                character.setRelationships(relationships);
+                characters.add(character);
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch characters manually: {}", e.getMessage(), e);
+            // Return a debug error character
+            Character errorChar = new Character();
+            errorChar.setId("error-1");
+            errorChar.setName("ERROR: " + e.getMessage());
+            errorChar.setRole("protagonist");
+            characters.add(errorChar);
+            return characters;
         }
 
         return characters;
@@ -111,16 +223,25 @@ public class CharacterService {
 
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
-            String type, Integer strength, String description) {
-        createRelationship(userId, sourceId, targetId, type, strength, description, false);
+            List<String> types, Integer strength, String description) {
+        createRelationship(userId, sourceId, targetId, types, strength, description, false);
     }
 
     @Transactional
     public void createRelationship(UUID userId, String sourceId, String targetId,
-            String type, Integer strength, String description, Boolean bidirectional) {
+            List<String> types, Integer strength, String description, Boolean bidirectional) {
         // For simplicity, just create the relationship
         // In production, verify ownership of both characters
-        characterRepository.createRelationship(sourceId, targetId, type, strength, description, bidirectional);
+        // We need to find the projectId from one of the characters if not provided,
+        // but here we can't easily without fetching them.
+        // For now, if this is called from the controller without projectId, we might
+        // have an issue.
+        // However, createRelationship is usually called with knowledge of the project.
+        // Let's assume we can fetch it or it's passed.
+        Character source = characterRepository.findById(sourceId).orElse(null);
+        String pId = (source != null) ? source.getProjectId() : null;
+
+        characterRepository.createRelationship(sourceId, targetId, pId, types, strength, description, bidirectional);
         log.info("Relationship created: {} -> {}", sourceId, targetId);
     }
 
@@ -149,7 +270,8 @@ public class CharacterService {
 
             // 2. Cleanup existing dummy project by title if it exists
             String projectTitle = "Les Misérables";
-            UUID targetProjectId = UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+            // Updated to match the user's testing project ID
+            UUID targetProjectId = UUID.fromString("b958f822-f231-4f9f-a8a9-2d728ed66ae0");
 
             projectRepository.findById(targetProjectId).ifPresent(p -> {
                 log.info("Cleaning up existing '{}' project...", projectTitle);
@@ -235,23 +357,23 @@ public class CharacterService {
                             CREATE (bo:Character {id: randomUUID(), projectId: $pid, name: 'Bossuet', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Bossuet'})
                             CREATE (az:Character {id: randomUUID(), projectId: $pid, name: 'Azelma', role: 'other', imageUrl: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Azelma'})
 
-                            // Relationships
-                            CREATE (v)-[:RELATED_TO {type: 'enemy', strength: 9, description: 'Obsessive Pursuer'}]->(j)
-                            CREATE (j)-[:RELATED_TO {type: 'enemy', strength: 9, description: 'Target'}]->(v)
-                            CREATE (m)-[:RELATED_TO {type: 'lover', strength: 10, description: 'True Love'}]->(c)
-                            CREATE (c)-[:RELATED_TO {type: 'lover', strength: 10, description: 'True Love'}]->(m)
-                            CREATE (v)-[:RELATED_TO {type: 'friend', strength: 10, description: 'Guardian'}]->(c)
-                            CREATE (f)-[:RELATED_TO {type: 'lover', strength: 10, description: 'Biological Mother'}]->(c)
-                            CREATE (e)-[:RELATED_TO {type: 'lover', strength: 7, description: 'Unrequited Love'}]->(m)
-                            CREATE (t)-[:RELATED_TO {type: 'enemy', strength: 8, description: 'Blackmailer'}]->(v)
-                            CREATE (en)-[:RELATED_TO {type: 'friend', strength: 9, description: 'Leader and Follower'}]->(gr)
-                            CREATE (g)-[:RELATED_TO {type: 'friend', strength: 8, description: 'Street Ally'}]->(en)
-                            CREATE (bm)-[:RELATED_TO {type: 'friend', strength: 10, description: 'Spiritual Savior'}]->(v)
-                            CREATE (co)-[:RELATED_TO {type: 'friend', strength: 8, description: 'ABC Friends'}]->(en)
-                            CREATE (cu)-[:RELATED_TO {type: 'friend', strength: 8, description: 'ABC Friends'}]->(m)
-                            CREATE (t)-[:RELATED_TO {type: 'friend', strength: 5, description: 'Spouse/Partner'}]->(mt)
-                            CREATE (t)-[:RELATED_TO {type: 'friend', strength: 7, description: 'Father'}]->(e)
-                            CREATE (mt)-[:RELATED_TO {type: 'friend', strength: 7, description: 'Mother'}]->(az)
+                            // Relationships with types as array
+                            CREATE (v)-[:RELATED_TO {projectId: $pid, types: ['ENEMY'], strength: 9, description: 'Obsessive Pursuer'}]->(j)
+                            CREATE (j)-[:RELATED_TO {projectId: $pid, types: ['ENEMY'], strength: 9, description: 'Target'}]->(v)
+                            CREATE (m)-[:RELATED_TO {projectId: $pid, types: ['ROMANTIC'], strength: 10, description: 'True Love'}]->(c)
+                            CREATE (c)-[:RELATED_TO {projectId: $pid, types: ['ROMANTIC'], strength: 10, description: 'True Love'}]->(m)
+                            CREATE (v)-[:RELATED_TO {projectId: $pid, types: ['ALLY'], strength: 10, description: 'Guardian'}]->(c)
+                            CREATE (f)-[:RELATED_TO {projectId: $pid, types: ['FAMILY'], strength: 10, description: 'Biological Mother'}]->(c)
+                            CREATE (e)-[:RELATED_TO {projectId: $pid, types: ['ROMANTIC'], strength: 7, description: 'Unrequited Love'}]->(m)
+                            CREATE (t)-[:RELATED_TO {projectId: $pid, types: ['ENEMY'], strength: 8, description: 'Blackmailer'}]->(v)
+                            CREATE (en)-[:RELATED_TO {projectId: $pid, types: ['ALLY'], strength: 9, description: 'Leader and Follower'}]->(gr)
+                            CREATE (g)-[:RELATED_TO {projectId: $pid, types: ['ALLY'], strength: 8, description: 'Street Ally'}]->(en)
+                            CREATE (bm)-[:RELATED_TO {projectId: $pid, types: ['ALLY'], strength: 10, description: 'Spiritual Savior'}]->(v)
+                            CREATE (co)-[:RELATED_TO {projectId: $pid, types: ['ALLY'], strength: 8, description: 'ABC Friends'}]->(en)
+                            CREATE (cu)-[:RELATED_TO {projectId: $pid, types: ['ALLY'], strength: 8, description: 'ABC Friends'}]->(m)
+                            CREATE (t)-[:RELATED_TO {projectId: $pid, types: ['FAMILY'], strength: 5, description: 'Spouse/Partner'}]->(mt)
+                            CREATE (t)-[:RELATED_TO {projectId: $pid, types: ['FAMILY'], strength: 7, description: 'Father'}]->(e)
+                            CREATE (mt)-[:RELATED_TO {projectId: $pid, types: ['FAMILY'], strength: 7, description: 'Mother'}]->(az)
                             """,
                             java.util.Map.of("pid", pid));
                     return null;
@@ -329,6 +451,24 @@ public class CharacterService {
                 .description(fullPrompt) // Save the FULL generated prompt
                 .status(com.stolink.backend.domain.character.entity.ImageGenerationTask.TaskStatus.PENDING)
                 .build();
+
+        // Extract and Store Setting Prompts if available
+        if (setting != null) {
+            String settingIdStr = (String) setting.get("settingId");
+            if (settingIdStr != null) {
+                try {
+                    task.setSettingId(UUID.fromString(settingIdStr));
+                } catch (IllegalArgumentException e) {
+                    log.warn("Invalid settingId format: {}", settingIdStr);
+                }
+            }
+            task.setVisualBackground((String) setting.get("visual_background"));
+            task.setAtmosphere((String) setting.get("atmosphere"));
+            task.setLighting((String) setting.get("lighting"));
+            task.setTimeOfDay((String) setting.get("time_of_day"));
+            task.setArtStyle((String) setting.get("art_style"));
+        }
+
         imageGenerationTaskRepository.save(task);
 
         // 트랜잭션 커밋 후 메시지 발송을 위한 이벤트 발행
@@ -345,8 +485,10 @@ public class CharacterService {
     // 트랜잭션 커밋 후 RabbitMQ 이미지 생성 태스크 전송
     // @TransactionalEventListener(phase = AFTER_COMMIT): 트랜잭션이 성공적으로 커밋된 후에만 실행됨
     // 실패 시 ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onImageGenerationRequested(ImageGenerationRequestedEvent event) {
+        log.info("onImageGenerationRequested triggered for jobId: {}", event.jobId());
         try {
             // 헬스체크: 이미지 서버가 정상이 아니면 예외 발생
             imageServerHealthChecker.checkHealthOrThrow();
@@ -371,7 +513,7 @@ public class CharacterService {
             });
 
             log.info("Image generation task sent to RabbitMQ: jobId={}", event.jobId());
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // 트랜잭션은 이미 커밋됨 - throw해도 롤백 불가
             // ImageGenerationTask 상태를 FAILED로 업데이트하여 재시도 가능하게 함
             log.error("Failed to send image generation task: jobId={}, error={}",
