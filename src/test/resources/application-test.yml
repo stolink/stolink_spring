@@ -45,14 +45,14 @@ app:
     image:
       host: localhost
       port: 5672
-      username: guest
-      password: guest
+      username: stolink
+      password: stolink123
       virtual-host: /
     agent:
       host: localhost
       port: 5672
-      username: guest
-      password: guest
+      username: stolink
+      password: stolink123
       virtual-host: /
   storead:
     base-url: http://localhost:8000
