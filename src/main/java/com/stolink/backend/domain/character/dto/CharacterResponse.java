@@ -60,6 +60,13 @@ public class CharacterResponse {
         private List<String> types;
         private Integer strength;
         private String description;
+        private Integer emotionalBond;
+        private Integer functionalTrust;
+        private Integer valueAlignment;
+        private Integer interdependence;
+        private Integer latentTension;
+        private String publicStance;
+        private String privateFeeling;
 
         public String getType() {
             return (types != null && !types.isEmpty()) ? types.get(0) : "NEUTRAL";
@@ -98,6 +105,13 @@ public class CharacterResponse {
                     gRel.put("type", rel.getType());
                     gRel.put("strength", rel.getStrength());
                     gRel.put("description", rel.getDescription());
+                    gRel.put("emotional_bond", rel.getEmotionalBond());
+                    gRel.put("functional_trust", rel.getFunctionalTrust());
+                    gRel.put("value_alignment", rel.getValueAlignment());
+                    gRel.put("interdependence", rel.getInterdependence());
+                    gRel.put("latent_tension", rel.getLatentTension());
+                    gRel.put("public_stance", rel.getPublicStance());
+                    gRel.put("private_feeling", rel.getPrivateFeeling());
                     graph.add(gRel);
                 }
             }
@@ -147,6 +161,13 @@ public class CharacterResponse {
                         .types(mapRelationshipTypes(rel.getTypes()))
                         .strength(rel.getStrength())
                         .description(rel.getDescription())
+                        .emotionalBond(rel.getEmotionalBond())
+                        .functionalTrust(rel.getFunctionalTrust())
+                        .valueAlignment(rel.getValueAlignment())
+                        .interdependence(rel.getInterdependence())
+                        .latentTension(rel.getLatentTension())
+                        .publicStance(rel.getPublicStance())
+                        .privateFeeling(rel.getPrivateFeeling())
                         .build())
                 .collect(Collectors.toList());
     }

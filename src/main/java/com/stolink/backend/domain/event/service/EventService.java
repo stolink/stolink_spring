@@ -117,6 +117,15 @@ public class EventService {
             log.warn("Document ID in node is not UUID format: {}", node.getDocumentId());
         }
 
+        UUID projectId = null;
+        try {
+            if (node.getProjectId() != null) {
+                projectId = UUID.fromString(node.getProjectId());
+            }
+        } catch (IllegalArgumentException e) {
+            log.warn("Project ID in node is not UUID format: {}", node.getProjectId());
+        }
+
         return new EventResponse(
                 id,
                 node.getEventId(),
@@ -131,7 +140,8 @@ public class EventService {
                 node.getLocationRef(),
                 null, // StartTime
                 null, // EndTime
-                documentId);
+                documentId,
+                projectId);
     }
 
     private User getUserOrThrow(UUID userId) {
