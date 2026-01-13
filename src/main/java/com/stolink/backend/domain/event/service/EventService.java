@@ -41,8 +41,9 @@ public class EventService {
     public List<EventResponse> getEventsByCharacter(UUID userId, UUID characterId) {
         log.info("Fetching events for characterId: {}, userId: {}", characterId, userId);
 
-        // 1. Neo4j에서 캐릭터 조회
+        // 1. Neo4j에서 캐릭터 조회 (id 또는 characterId로 조회 시도)
         Character character = characterRepository.findById(characterId.toString())
+                .or(() -> characterRepository.findByCharacterId(characterId.toString()))
                 .orElseThrow(() -> {
                     log.error("Character not found in Neo4j: {}", characterId);
                     return new ResourceNotFoundException("Character not found: " + characterId);
@@ -67,14 +68,56 @@ public class EventService {
             throw new ResourceNotFoundException("Project not found");
         }
 
-        // 3. 그래프 관계를 이용한 조회 (Optimized)
-        List<Event> events = eventNeo4jRepository.findEventsByCharacterId(characterId.toString());
+        // 3. relationsJson에서 event_refs 파싱
+        List<String> eventRefs = parseEventRefsFromRelationsJson(character.getRelationsJson());
+        log.info("Parsed event_refs for character {}: {}", character.getName(), eventRefs);
 
-        log.info("Found {} connected events for character {}", events.size(), characterId);
+        if (eventRefs.isEmpty()) {
+            log.info("No event_refs found for character {}", character.getName());
+            return List.of();
+        }
+
+        // 4. Neo4j에서 직접 eventId 리스트로 필터링 (최적화)
+        List<Event> events = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
+                projectId.toString(), eventRefs);
+
+        log.info("Found {} events for character {} (using optimized query)",
+                events.size(), character.getName());
 
         return events.stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * relationsJson에서 event_refs 배열 추출 (snake_case/camelCase 모두 지원)
+     */
+    private List<String> parseEventRefsFromRelationsJson(String relationsJson) {
+        if (relationsJson == null || relationsJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(relationsJson);
+
+            // snake_case 또는 camelCase 키 모두 체크
+            com.fasterxml.jackson.databind.JsonNode eventRefsNode = root.get("event_refs");
+            if (eventRefsNode == null) {
+                eventRefsNode = root.get("eventRefs");
+            }
+
+            if (eventRefsNode == null || !eventRefsNode.isArray()) {
+                return List.of();
+            }
+            List<String> refs = new ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : eventRefsNode) {
+                refs.add(node.asText());
+            }
+            return refs;
+        } catch (Exception e) {
+            log.warn("Failed to parse relationsJson: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**

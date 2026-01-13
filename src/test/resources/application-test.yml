@@ -1,0 +1,71 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+  sql:
+    init:
+      mode: never
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: dummy-client-id
+            client-secret: dummy-client-secret
+            scope: profile, email
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            authorization-grant-type: authorization_code
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: password
+app:
+  ai:
+    callback-base-url: http://localhost:8080
+  rabbitmq:
+    queues:
+      image: image_queue
+      document-analysis: document_analysis_queue
+      global-merge: global_merge_queue
+      analysis-completed: analysis.completed
+      analysis-dlq: analysis.dlq
+    exchanges:
+      analysis-events: stolink.analysis.events
+    image:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+      virtual-host: /
+    agent:
+      host: localhost
+      port: 5672
+      username: guest
+      password: guest
+      virtual-host: /
+  storead:
+    base-url: http://localhost:8000
+    service-key: dummy-service-key-for-test
+  cors:
+    allowed-origins: http://localhost:3000
+  storage:
+    base-path: ./build/test-storage
+
+oauth2:
+  redirect-uri: http://localhost:3000/oauth2/callback
+
+jwt:
+  secret: this-is-a-very-secure-secret-key-for-testing-purposes-only-32chars
+  access-token-expiry: 3600000
+  refresh-token-expiry: 86400000

@@ -113,12 +113,18 @@ public class CharacterService {
                 Character character = new Character();
 
                 // ID Handling
-                if (cMap.containsKey("characterId")) {
-                    character.setId((String) cMap.get("characterId"));
-                } else if (cMap.containsKey("id")) {
+                // ID Handling
+                if (cMap.containsKey("id")) {
                     character.setId((String) cMap.get("id"));
+                } else if (cMap.containsKey("characterId")) {
+                    // Fallback to characterId if id is missing, though unlikely given the schema
+                    character.setId((String) cMap.get("characterId"));
                 } else {
                     character.setId(cNode.elementId());
+                }
+
+                if (cMap.containsKey("characterId")) {
+                    character.setCharacterId((String) cMap.get("characterId"));
                 }
 
                 // Basic Fields

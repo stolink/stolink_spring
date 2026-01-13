@@ -58,6 +58,8 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         java.util.Optional<Character> findByNameAndProjectId(String name, String projectId);
 
+        java.util.Optional<Character> findByCharacterId(String characterId);
+
         // 중복 안전 조회 - 여러 결과가 있을 수 있는 경우 사용
         List<Character> findAllByNameAndProjectId(String name, String projectId);
 
