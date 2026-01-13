@@ -99,7 +99,7 @@ volumes:
 networks:
   ai-backend-network:
     external: true
-    name: sto-link-ai-backend_stolink-network
+    name: stolink_fastapi_agent_stolink-network
   shared-network:
     external: true
     name: stolink-shared-network

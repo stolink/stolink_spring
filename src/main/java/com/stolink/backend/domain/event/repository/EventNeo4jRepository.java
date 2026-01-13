@@ -46,5 +46,25 @@ public interface EventNeo4jRepository extends Neo4jRepository<Event, String> {
                         @org.springframework.data.repository.query.Param("eventId") String eventId,
                         @org.springframework.data.repository.query.Param("settingName") String settingName);
 
+        // Character -> Event: participants 속성 기반 필터링 (Edge 데이터 대신 속성 사용)
+        @org.springframework.data.neo4j.repository.query.Query("MATCH (c:Character {id: $characterId}) " +
+                        "MATCH (e:Event) " +
+                        "WHERE c.name IN e.participants AND e.project_id = c.project_id " +
+                        "RETURN e")
+        List<Event> findEventsByCharacterId(
+                        @org.springframework.data.repository.query.Param("characterId") String characterId);
+
+        // eventId 리스트로 직접 필터링 (성능 최적화)
+        @org.springframework.data.neo4j.repository.query.Query("MATCH (e:Event) " +
+                        "WHERE e.project_id = $projectId " +
+                        "AND ANY(ref IN $eventRefs WHERE e.eventId = ref OR e.eventId ENDS WITH '_' + ref) " +
+                        "RETURN e.id as id, e.eventId as eventId, e.narrativeSummary as narrativeSummary, " +
+                        "e.eventType as eventType, e.description as description, e.participants as participants, " +
+                        "e.chapter as chapter, e.sequenceOrder as sequenceOrder, e.importance as importance, " +
+                        "e.locationRef as locationRef, e.documentId as documentId, e.project_id as projectId")
+        List<Event> findEventsByProjectIdAndEventRefs(
+                        @org.springframework.data.repository.query.Param("projectId") String projectId,
+                        @org.springframework.data.repository.query.Param("eventRefs") List<String> eventRefs);
+
         void deleteByProjectId(String projectId);
 }
