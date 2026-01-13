@@ -16,7 +16,7 @@ import lombok.Setter;
 
 /**
  * Event Node Entity - 사건 (Neo4j Graph)
- * 
+ *
  * AI 분석 결과(callback JSON)를 기반으로 1:1 매핑된 사건 노드입니다.
  * JSON 필드 구조를 그대로 따릅니다.
  */
@@ -32,7 +32,7 @@ public class Event {
     @GeneratedValue(generatorClass = UUIDStringGenerator.class)
     private String id;
 
-    @Property("projectId")
+    @Property("project_id")
     private String projectId;
 
     // AI 생성 ID (예: E001)
