@@ -11,6 +11,17 @@ import lombok.AllArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class CharacterUpdateRequest {
+    private String name;
+    private String role;
+    private String imageUrl;
+
     private Double positionX;
     private Double positionY;
+
+    // JSON fields (Map -> String conversion in Service)
+    private java.util.Map<String, Object> appearance;
+    private java.util.Map<String, Object> profile;
+    private java.util.Map<String, Object> personality;
+    private java.util.Map<String, Object> currentMood;
+    private java.util.List<Object> inventory;
 }
