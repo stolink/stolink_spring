@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
 import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -73,6 +74,7 @@ public class AICallbackService {
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
     private final TransactionTemplate transactionTemplate;
+    private final ConsistencyRefiner consistencyRefiner;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -488,6 +490,11 @@ public class AICallbackService {
         if (reportData == null)
             return;
         try {
+            // Refine Conflicts before saving
+            List<ConsistencyReportDTO.ConflictDTO> refinedConflicts = consistencyRefiner
+                    .refineConflicts(reportData.getConflicts());
+            reportData.setConflicts(refinedConflicts);
+
             ConsistencyReport report = ConsistencyReport.builder()
                     .project(project)
                     .jobId(jobId)

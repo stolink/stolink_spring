@@ -19,4 +19,6 @@ public interface ConsistencyReportRepository extends JpaRepository<ConsistencyRe
     List<ConsistencyReport> findByProjectOrderByCreatedAtDesc(Project project);
 
     void deleteAllByProject(Project project);
+
+    Optional<ConsistencyReport> findFirstByProjectIdOrderByCreatedAtDesc(UUID projectId);
 }

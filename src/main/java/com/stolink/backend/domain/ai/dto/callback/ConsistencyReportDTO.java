@@ -70,5 +70,21 @@ public class ConsistencyReportDTO {
         private String description;
         private String severity;
         private String resolution;
+        @JsonProperty("suggestion")
+        private String suggestion;
+        private LocationDTO location;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class LocationDTO {
+        private String chapter;
+        private Integer line;
+
+        @JsonProperty("document_id")
+        private String documentId;
     }
 }
