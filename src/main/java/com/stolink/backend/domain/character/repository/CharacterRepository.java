@@ -77,6 +77,31 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         Character mergeNodes(@Param("primaryId") String primaryId, @Param("mergedId") String mergedId);
 
         @Query("MATCH (c:Character {id: $characterId}) " +
+                        "SET c.positionX = COALESCE($positionX, c.positionX), " +
+                        "    c.positionY = COALESCE($positionY, c.positionY), " +
+                        "    c.name = COALESCE($name, c.name), " +
+                        "    c.role = COALESCE($role, c.role), " +
+                        "    c.imageUrl = COALESCE($imageUrl, c.imageUrl), " +
+                        "    c.appearanceJson = COALESCE($appearanceJson, c.appearanceJson), " +
+                        "    c.profileJson = COALESCE($profileJson, c.profileJson), " +
+                        "    c.personalityJson = COALESCE($personalityJson, c.personalityJson), " +
+                        "    c.currentMoodJson = COALESCE($currentMoodJson, c.currentMoodJson), " +
+                        "    c.inventoryJson = COALESCE($inventoryJson, c.inventoryJson) " +
+                        "RETURN c")
+        Character updateCharacterFull(
+                        @Param("characterId") String characterId,
+                        @Param("name") String name,
+                        @Param("role") String role,
+                        @Param("imageUrl") String imageUrl,
+                        @Param("positionX") Double positionX,
+                        @Param("positionY") Double positionY,
+                        @Param("appearanceJson") String appearanceJson,
+                        @Param("profileJson") String profileJson,
+                        @Param("personalityJson") String personalityJson,
+                        @Param("currentMoodJson") String currentMoodJson,
+                        @Param("inventoryJson") String inventoryJson);
+
+        @Query("MATCH (c:Character {id: $characterId}) " +
                         "SET c.positionX = $positionX, c.positionY = $positionY " +
                         "RETURN c")
         Character updatePosition(

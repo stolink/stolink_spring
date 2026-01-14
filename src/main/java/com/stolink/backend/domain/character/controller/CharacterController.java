@@ -128,15 +128,15 @@ public class CharacterController {
     }
 
     /**
-     * 캐릭터 부분 업데이트 (위치 등)
+     * 캐릭터 정보 업데이트 (이름, 외형, 위치 등)
      */
     @PatchMapping("/characters/{characterId}")
     public ApiResponse<CharacterResponse> updateCharacter(
             @AuthenticationPrincipal UUID userId,
             @PathVariable String characterId,
             @RequestBody com.stolink.backend.domain.character.dto.CharacterUpdateRequest request) {
-        Character updated = characterService.updateCharacterPosition(
-                userId, characterId, request.getPositionX(), request.getPositionY());
+        Character updated = characterService.updateCharacter(
+                userId, characterId, request);
         return ApiResponse.ok(characterMapper.toResponse(updated));
     }
 }
