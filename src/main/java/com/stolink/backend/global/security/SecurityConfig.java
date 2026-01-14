@@ -142,22 +142,33 @@ public class SecurityConfig {
 
         @Bean
         public CorsConfigurationSource corsConfigurationSource() {
-                CorsConfiguration configuration = new CorsConfiguration();
+                // 상용/프론트엔드용 기본 서비스 설정
+                CorsConfiguration defaultConfiguration = new CorsConfiguration();
 
                 // 환경 변수에서 allowed origins 읽기 (쉼표로 구분된 값)
                 String[] origins = allowedOrigins.split(",");
-                configuration.setAllowedOrigins(Arrays.stream(origins)
+                defaultConfiguration.setAllowedOrigins(Arrays.stream(origins)
                                 .map(String::trim)
                                 .filter(s -> !s.isEmpty())
                                 .toList());
 
-                configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-                configuration.setAllowedHeaders(List.of("*"));
-                configuration.setAllowCredentials(true);
-                configuration.setMaxAge(3600L);
+                defaultConfiguration
+                                .setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                defaultConfiguration.setAllowedHeaders(List.of("*"));
+                defaultConfiguration.setAllowCredentials(true);
+                defaultConfiguration.setMaxAge(3600L);
+
+                // 내부 API 및 콜백용 설정 (서버 간 통신이므로 CORS 제약 완화)
+                CorsConfiguration internalConfiguration = new CorsConfiguration();
+                internalConfiguration.setAllowedOrigins(List.of("*")); // 모든 Origin 허용
+                internalConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+                internalConfiguration.setAllowedHeaders(List.of("*"));
+                internalConfiguration.setAllowCredentials(false); // allowedOrigins가 "*"일 때는 false여야 함
 
                 UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-                source.registerCorsConfiguration("/**", configuration);
+                source.registerCorsConfiguration("/api/internal/**", internalConfiguration);
+                source.registerCorsConfiguration("/api/ai-callback/**", internalConfiguration);
+                source.registerCorsConfiguration("/**", defaultConfiguration);
                 return source;
         }
 }
