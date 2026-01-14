@@ -469,6 +469,12 @@ public class AICallbackService {
 
         // Character Update (JPA) removed - assuming handled externally or not needed in
         // Postgres.
+        try {
+            characterRepository.updateImageUrl(callback.getCharacterId().toString(), imageUrl);
+            log.info("Updated Character {} imageUrl in Neo4j", callback.getCharacterId());
+        } catch (Exception e) {
+            log.error("Failed to update character image URL in Neo4j: {}", e.getMessage());
+        }
 
         imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
             task.setImageUrl(imageUrl);
