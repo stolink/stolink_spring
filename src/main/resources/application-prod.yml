@@ -6,6 +6,10 @@ spring:
     username: ${POSTGRESQL_USERNAME}
     password: ${POSTGRESQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20 # 예시: 서버 사양과 DB 부하에 맞춰 조정
+      connection-timeout: 30000
+      minimum-idle: 10
 
   # Neo4j Configuration
   neo4j:
