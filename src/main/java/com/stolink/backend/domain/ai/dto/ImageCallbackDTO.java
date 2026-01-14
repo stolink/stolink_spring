@@ -29,6 +29,6 @@ public class ImageCallbackDTO {
     @JsonAlias("image_url")
     private String imageUrl;
 
-    @JsonAlias("error_message")
+    @JsonAlias({ "error_message", "error" })
     private String errorMessage;
 }
