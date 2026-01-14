@@ -36,6 +36,9 @@ public class ValidationResult extends BaseEntity {
     @Column(name = "document_id", nullable = false)
     private UUID documentId;
 
+    @Column(name = "project_id", nullable = false)
+    private UUID projectId;
+
     @Column(name = "job_id", length = 100)
     private String jobId;
 
