@@ -63,7 +63,7 @@ public class CharacterService {
         return characterRepository.findAll();
     }
 
-    @Transactional(readOnly = true)
+    // @Transactional 제거: Neo4j만 사용하므로 PostgreSQL 커넥션 불필요
     public List<com.stolink.backend.domain.character.dto.RelationshipResponse> getRelationshipsByProjectId(
             UUID userId, UUID projectId) {
         List<Character> characters = getCharactersWithRelationships(userId, projectId);
@@ -87,7 +87,9 @@ public class CharacterService {
         return responses;
     }
 
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    // @Transactional 제거: Neo4j driver.session()만 사용하므로 PostgreSQL 커넥션 불필요
+    // 이전 코드에서 @Transactional이 있으면 메서드 시작 시 HikariCP에서 커넥션을 확보하고
+    // Neo4j 응답을 기다리는 동안 PostgreSQL 커넥션이 유휴 상태로 점유되어 풀 고갈 발생
     public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
         log.info("Fetching characters manually (Robust Mode) for project: {}", projectId);
         // User user = getUserOrThrow(userId);
@@ -767,27 +769,56 @@ public class CharacterService {
     }
 
     /**
-     * 캐릭터 위치 업데이트 (프론트엔드 그래프 노드 위치 저장용)
+     * 캐릭터 정보 업데이트 (이름, 역할, 위치, 외형 등)
      *
      * @param userId      사용자 ID
      * @param characterId 캐릭터 ID
-     * @param positionX   X 좌표
-     * @param positionY   Y 좌표
+     * @param request     업데이트 요청 DTO
      * @return 업데이트된 캐릭터
      */
     @Transactional
-    public Character updateCharacterPosition(UUID userId, String characterId, Double positionX, Double positionY) {
+    public Character updateCharacter(UUID userId, String characterId,
+            com.stolink.backend.domain.character.dto.CharacterUpdateRequest request) {
         // Verify user existence
         getUserOrThrow(userId);
 
-        Character updated = characterRepository.updatePosition(characterId, positionX, positionY);
+        String appearanceJson = toJson(request.getAppearance());
+        String profileJson = toJson(request.getProfile());
+        String personalityJson = toJson(request.getPersonality());
+        String currentMoodJson = toJson(request.getCurrentMood());
+        String inventoryJson = toJson(request.getInventory());
+
+        Character updated = characterRepository.updateCharacterFull(
+                characterId,
+                request.getName(),
+                request.getRole(),
+                request.getImageUrl(),
+                request.getPositionX(),
+                request.getPositionY(),
+                appearanceJson,
+                profileJson,
+                personalityJson,
+                currentMoodJson,
+                inventoryJson);
+
         if (updated == null) {
             throw new ResourceNotFoundException("Character", "id", characterId);
         }
 
-        log.info("Character position updated: characterId={}, positionX={}, positionY={}", characterId, positionX,
-                positionY);
+        log.info("Character updated: id={}", characterId);
         return updated;
+    }
+
+    private String toJson(Object object) {
+        if (object == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(object);
+        } catch (Exception e) {
+            log.warn("Failed to serialize object to JSON: {}", e.getMessage());
+            return null;
+        }
     }
 
     private String generatePrompt(Character character, Map<String, Object> appearance, Map<String, Object> setting,

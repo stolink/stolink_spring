@@ -120,5 +120,21 @@ public class ConsistencyReportDTO {
          * Legacy: 해결 방안 (이전 버전 호환)
          */
         private String resolution;
+        @JsonProperty("suggestion")
+        private String suggestion;
+        private LocationDTO location;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class LocationDTO {
+        private String chapter;
+        private Integer line;
+
+        @JsonProperty("document_id")
+        private String documentId;
     }
 }
