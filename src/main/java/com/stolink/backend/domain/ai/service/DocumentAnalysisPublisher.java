@@ -9,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.stolink.backend.domain.ai.dto.BatchRetryRequest;
+import com.stolink.backend.domain.ai.dto.BatchRetryResponse;
 import com.stolink.backend.domain.ai.dto.DocumentAnalysisMessage;
 import com.stolink.backend.domain.ai.dto.GlobalMergeMessage;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
@@ -194,6 +196,91 @@ public class DocumentAnalysisPublisher {
                         .existingSettings(List.of())
                         .build())
                 .traceId(traceId) // ✅ 전달받은 traceId 사용
+                .sentAt(System.currentTimeMillis()) // ✅ 발송 시점 타임스탬프 (순서 보장용)
                 .build();
+    }
+
+    // ==================== 배치 재발송 기능 ====================
+
+    /**
+     * 배치 재발송 처리
+     * AI Backend에서 타임아웃된 배치의 누락 문서 재발송을 요청할 때 호출됩니다.
+     *
+     * @param request 재발송 요청 정보 (batchId, projectId, missingDocumentOrders)
+     * @return 재발송 결과 (RETRY 또는 CANCELLED)
+     */
+    @Transactional
+    public BatchRetryResponse retryBatch(BatchRetryRequest request) {
+        UUID projectId = UUID.fromString(request.getProjectId());
+        List<Integer> missingOrders = request.getMissingDocumentOrders();
+
+        log.info("배치 재발송 요청: batchId={}, projectId={}, missingOrders={}",
+                request.getBatchId(), projectId, missingOrders);
+
+        // 프로젝트의 문서 목록 조회
+        List<Document> textDocuments = documentRepository.findTextDocumentsByProjectId(projectId);
+
+        if (textDocuments.isEmpty()) {
+            log.warn("프로젝트 {}에 문서가 없습니다.", projectId);
+            return BatchRetryResponse.cancelled(request.getBatchId(), "프로젝트에 문서가 없습니다.");
+        }
+
+        // 누락된 순서에 해당하는 문서 필터링
+        List<Document> documentsToRetry = textDocuments.stream()
+                .filter(doc -> missingOrders.contains(doc.getOrder()))
+                .toList();
+
+        if (documentsToRetry.isEmpty()) {
+            log.warn("재발송할 문서를 찾을 수 없습니다: missingOrders={}", missingOrders);
+            return BatchRetryResponse.cancelled(request.getBatchId(), "재발송할 문서를 찾을 수 없습니다.");
+        }
+
+        // 문서 재발송
+        List<Integer> retriedOrders = new java.util.ArrayList<>();
+        String batchId = request.getBatchId();
+        int totalDocuments = textDocuments.size();
+
+        for (Document doc : documentsToRetry) {
+            try {
+                String jobId = UUID.randomUUID().toString();
+                String traceId = UUID.randomUUID().toString();
+
+                // AnalysisJob 생성
+                AnalysisJob analysisJob = AnalysisJob.builder()
+                        .jobId(jobId)
+                        .project(doc.getProject())
+                        .documentId(doc.getId())
+                        .traceId(traceId)
+                        .status(AnalysisJob.JobStatus.PENDING)
+                        .build();
+                analysisJobRepository.save(analysisJob);
+
+                // 메시지 생성 (배치 정보 포함)
+                DocumentAnalysisMessage message = buildMessage(doc, projectId, totalDocuments,
+                        "full_manuscript", jobId, traceId);
+                message.setBatchId(batchId);
+                message.setTotalDocuments(totalDocuments);
+                message.setBatchTimeoutSeconds(300);
+
+                // 발송
+                agentRabbitTemplate.convertAndSend(documentAnalysisQueue, message, m -> {
+                    m.getMessageProperties().setPriority(5); // 재발송은 중간 우선순위
+                    return m;
+                });
+
+                retriedOrders.add(doc.getOrder());
+                log.info("문서 재발송 완료: documentId={}, order={}", doc.getId(), doc.getOrder());
+
+            } catch (Exception e) {
+                log.error("문서 재발송 실패: documentId={}, error={}", doc.getId(), e.getMessage());
+            }
+        }
+
+        if (retriedOrders.isEmpty()) {
+            return BatchRetryResponse.cancelled(request.getBatchId(), "모든 문서 재발송에 실패했습니다.");
+        }
+
+        log.info("배치 재발송 완료: batchId={}, retriedOrders={}", batchId, retriedOrders);
+        return BatchRetryResponse.retry(batchId, retriedOrders);
     }
 }

@@ -85,6 +85,40 @@ public class DocumentAnalysisMessage {
     private String traceId;
 
     /**
+     * 메시지 발송 시점 타임스탬프 (Unix epoch milliseconds)
+     * 네트워크 지연에 관계없이 발송 순서대로 처리하기 위해 사용됩니다.
+     * 필수 필드 - 빌더 사용 시 자동으로 현재 시간이 설정됩니다.
+     */
+    @JsonProperty("sent_at")
+    @Builder.Default
+    private Long sentAt = System.currentTimeMillis();
+
+    // ==================== 배치 기반 순서 보장 필드 ====================
+
+    /**
+     * 배치 식별자 (UUID)
+     * 여러 문서를 순차 처리할 때 사용됩니다.
+     * null이면 즉시 처리 모드로 동작합니다.
+     */
+    @JsonProperty("batch_id")
+    private String batchId;
+
+    /**
+     * 배치 내 총 문서 수
+     * 모든 문서가 도착했는지 확인하는 데 사용됩니다.
+     */
+    @JsonProperty("total_documents")
+    private Integer totalDocuments;
+
+    /**
+     * 배치 타임아웃 (초)
+     * 이 시간 내에 모든 문서가 도착하지 않으면 재발송 요청이 발생합니다.
+     */
+    @JsonProperty("batch_timeout_seconds")
+    @Builder.Default
+    private Integer batchTimeoutSeconds = 300;
+
+    /**
      * 분석 컨텍스트 (기존 캐릭터, 이벤트 등)
      */
     @Getter
