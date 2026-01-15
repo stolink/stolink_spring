@@ -1,10 +1,15 @@
 package com.stolink.backend.domain.ai.dto.callback;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.*;
-
 import java.util.List;
 import java.util.Map;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * ConsistencyReport DTO - AI 분석 결과의 일관성 보고서 데이터
@@ -59,6 +64,7 @@ public class ConsistencyReportDTO {
 
     /**
      * Conflict item DTO
+     * AI 분석에서 감지된 일관성 충돌 정보
      */
     @Getter
     @Setter
@@ -66,9 +72,53 @@ public class ConsistencyReportDTO {
     @AllArgsConstructor
     @Builder
     public static class ConflictDTO {
+        /**
+         * 충돌 유형 (CHARACTER_TRAIT_CONFLICT, RELATIONSHIP_CONFLICT,
+         * SOCIAL_PROTOCOL_VIOLATION, EMOTIONAL_CONTINUITY_ERROR,
+         * CONSEQUENCE_MISSING, CROSS_CHAPTER_CONFLICT 등)
+         */
         private String type;
-        private String description;
+
+        /**
+         * 심각도 (HIGH, MEDIUM, LOW)
+         */
         private String severity;
+
+        /**
+         * 충돌 원인/출처
+         */
+        private String source;
+
+        /**
+         * 기존 설정값
+         */
+        private String existing;
+
+        /**
+         * 충돌하는 새로운 값
+         */
+        @JsonProperty("new")
+        private String newValue;
+
+        /**
+         * 관련 캐릭터(들)
+         */
+        private String character;
+
+        /**
+         * 충돌 상세 설명
+         */
+        private String description;
+
+        /**
+         * 제안된 조치 (FLAG_FOR_HUMAN, IGNORE, REEXTRACT 등)
+         */
+        @JsonProperty("suggested_action")
+        private String suggestedAction;
+
+        /**
+         * Legacy: 해결 방안 (이전 버전 호환)
+         */
         private String resolution;
         @JsonProperty("suggestion")
         private String suggestion;

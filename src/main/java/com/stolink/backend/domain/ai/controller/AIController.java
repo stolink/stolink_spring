@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stolink.backend.domain.ai.dto.AnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.AnalysisContext;
 import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
+import com.stolink.backend.domain.ai.dto.BatchRetryRequest;
+import com.stolink.backend.domain.ai.dto.BatchRetryResponse;
 import com.stolink.backend.domain.ai.dto.DocumentAnalysisCallbackDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeCallbackDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
@@ -30,6 +32,7 @@ import com.stolink.backend.domain.ai.dto.ImageCallbackDTO;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
 import com.stolink.backend.domain.ai.service.AICallbackService;
+import com.stolink.backend.domain.ai.service.DocumentAnalysisPublisher;
 import com.stolink.backend.domain.ai.service.RabbitMQProducerService;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.project.entity.Project;
@@ -53,6 +56,7 @@ public class AIController {
     private final com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository imageGenerationTaskRepository;
     private final ProjectRepository projectRepository;
     private final DocumentRepository documentRepository;
+    private final DocumentAnalysisPublisher documentAnalysisPublisher;
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
 
@@ -422,5 +426,32 @@ public class AIController {
         producerService.sendGlobalMergeRequest(request);
 
         return ApiResponse.ok();
+    }
+
+    // ==================== 배치 기반 순서 보장 API ====================
+
+    /**
+     * 배치 재발송 요청 API
+     * AI Backend에서 타임아웃된 배치의 누락 문서 재발송을 요청할 때 사용됩니다.
+     */
+    @PostMapping("/internal/ai/batch/retry")
+    public ApiResponse<BatchRetryResponse> handleBatchRetry(
+            @jakarta.validation.Valid @RequestBody BatchRetryRequest request) {
+
+        log.info("Batch retry request: batchId={}, projectId={}, missingOrders={}",
+                request.getBatchId(), request.getProjectId(), request.getMissingDocumentOrders());
+
+        try {
+            BatchRetryResponse response = documentAnalysisPublisher.retryBatch(request);
+            log.info("Batch retry response: status={}, retriedOrders={}",
+                    response.getStatus(), response.getRetriedOrders());
+            return ApiResponse.ok(response);
+        } catch (Exception e) {
+            log.error("Batch retry failed: {}", e.getMessage(), e);
+            BatchRetryResponse cancelledResponse = BatchRetryResponse.cancelled(
+                    request.getBatchId(),
+                    "Failed to retry batch: " + e.getMessage());
+            return ApiResponse.ok(cancelledResponse);
+        }
     }
 }

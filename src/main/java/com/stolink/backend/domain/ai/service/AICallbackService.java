@@ -1,7 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
-import java.util.UUID;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -374,9 +374,18 @@ public class AICallbackService {
 
         // 2. 일관성 보고서 저장 (PostgreSQL)
         ConsistencyReportDTO consistencyData = callback.getEffectiveConsistencyReport();
+        log.info("Consistency report check - data present: {}, result present: {}, direct field present: {}",
+                consistencyData != null,
+                callback.getResult() != null ? callback.getResult().getConsistencyReport() != null : "no result",
+                callback.getConsistencyReport() != null);
         if (consistencyData != null) {
+            log.info("Saving consistency report - score: {}, conflicts count: {}",
+                    consistencyData.getEffectiveScore(),
+                    consistencyData.getConflicts() != null ? consistencyData.getConflicts().size() : 0);
             logConsistencyReport(consistencyData);
             saveConsistencyReport(consistencyData, project, callback.getJobId());
+        } else {
+            log.warn("Consistency report is NULL - no data to save for job: {}", callback.getJobId());
         }
 
         // 3. 검증 결과 저장 (PostgreSQL)
@@ -490,10 +499,17 @@ public class AICallbackService {
         if (reportData == null)
             return;
         try {
-            // Refine Conflicts before saving
+            log.info("Building ConsistencyReport entity - projectId: {}, jobId: {}", project.getId(), jobId);
+
+            // 1. Refine Conflicts before serialization
             List<ConsistencyReportDTO.ConflictDTO> refinedConflicts = consistencyRefiner
                     .refineConflicts(reportData.getConflicts());
             reportData.setConflicts(refinedConflicts);
+
+            // 2. Serialize refined conflicts to JSON
+            String conflictsJsonStr = toJson(refinedConflicts);
+            log.info("Conflicts JSON length (after refine): {}",
+                    conflictsJsonStr != null ? conflictsJsonStr.length() : 0);
 
             ConsistencyReport report = ConsistencyReport.builder()
                     .project(project)
@@ -501,14 +517,15 @@ public class AICallbackService {
                     .overallScore(reportData.getEffectiveScore())
                     .requiresReextraction(
                             reportData.getRequiresReExtraction() != null ? reportData.getRequiresReExtraction() : false)
-                    .conflictsJson(toJson(reportData.getConflicts()))
+                    .conflictsJson(conflictsJsonStr)
                     .warningsJson(toJson(reportData.getWarnings()))
                     .resolutionSummaryJson(toJson(reportData.getResolutionSummary()))
                     .neo4jValidationJson(toJson(reportData.getNeo4jValidation()))
                     .build();
             consistencyReportRepository.save(report);
+            log.info("Successfully saved ConsistencyReport with id: {} for job: {}", report.getId(), jobId);
         } catch (Exception e) {
-            log.error("Failed to save consistency report: {}", e.getMessage());
+            log.error("Failed to save consistency report: {}", e.getMessage(), e);
         }
     }
 

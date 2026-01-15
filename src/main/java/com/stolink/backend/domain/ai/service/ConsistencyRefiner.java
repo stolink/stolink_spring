@@ -1,11 +1,18 @@
 package com.stolink.backend.domain.ai.service;
 
-import com.stolink.backend.domain.ai.dto.callback.ConsistencyReportDTO;
-import lombok.extern.slf4j.Slf4j;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import com.stolink.backend.domain.ai.dto.callback.ConsistencyReportDTO;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * AI 분석 결과(일관성 보고서)를 후처리하여 품질을 개선하는 서비스
@@ -117,6 +124,12 @@ public class ConsistencyRefiner {
                 .resolution(original.getResolution())
                 .suggestion(original.getSuggestion())
                 .location(original.getLocation())
+                // 새로 추가된 필드들 복사
+                .source(original.getSource())
+                .existing(original.getExisting())
+                .newValue(original.getNewValue())
+                .character(original.getCharacter())
+                .suggestedAction(original.getSuggestedAction())
                 .build();
 
         String originalDesc = original.getDescription();
