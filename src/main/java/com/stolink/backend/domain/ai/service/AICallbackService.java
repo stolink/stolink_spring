@@ -1,7 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
-import java.util.UUID;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -500,13 +500,16 @@ public class AICallbackService {
             return;
         try {
             log.info("Building ConsistencyReport entity - projectId: {}, jobId: {}", project.getId(), jobId);
-            String conflictsJsonStr = toJson(reportData.getConflicts());
-            log.info("Conflicts JSON length: {}", conflictsJsonStr != null ? conflictsJsonStr.length() : 0);
 
-            // Refine Conflicts before saving
+            // 1. Refine Conflicts before serialization
             List<ConsistencyReportDTO.ConflictDTO> refinedConflicts = consistencyRefiner
                     .refineConflicts(reportData.getConflicts());
             reportData.setConflicts(refinedConflicts);
+
+            // 2. Serialize refined conflicts to JSON
+            String conflictsJsonStr = toJson(refinedConflicts);
+            log.info("Conflicts JSON length (after refine): {}",
+                    conflictsJsonStr != null ? conflictsJsonStr.length() : 0);
 
             ConsistencyReport report = ConsistencyReport.builder()
                     .project(project)
