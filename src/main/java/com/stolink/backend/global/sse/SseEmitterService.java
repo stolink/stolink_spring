@@ -95,8 +95,9 @@ public class SseEmitterService {
                 emitters.remove(projectId);
                 try {
                     emitter.complete();
-                } catch (Exception ignored) {
-                    // 이미 클라이언트가 끊었을 수 있음
+                } catch (Exception e) {
+                    log.debug("SSE emitter.complete() failed for project: {} - client may have disconnected: {}", 
+                            projectId, e.getMessage());
                 }
             }
         } catch (IOException e) {
