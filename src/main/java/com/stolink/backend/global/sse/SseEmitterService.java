@@ -74,6 +74,7 @@ public class SseEmitterService {
 
     /**
      * 프로젝트에 상태 업데이트를 전송합니다.
+     * COMPLETED 또는 FAILED 상태인 경우 전송 후 연결을 자동 종료합니다.
      */
     public void sendStatus(UUID projectId, AnalysisStatusEvent event) {
         SseEmitter emitter = emitters.get(projectId);
@@ -87,6 +88,17 @@ public class SseEmitterService {
                     .name("status")
                     .data(event));
             log.debug("SSE status sent for project: {}", projectId);
+            
+            // 분석 완료/실패 시 연결 자동 종료
+            if ("COMPLETED".equals(event.status()) || "FAILED".equals(event.status())) {
+                log.info("Analysis finished with status: {}. Closing SSE for project: {}", event.status(), projectId);
+                emitters.remove(projectId);
+                try {
+                    emitter.complete();
+                } catch (Exception ignored) {
+                    // 이미 클라이언트가 끊었을 수 있음
+                }
+            }
         } catch (IOException e) {
             log.error("Failed to send SSE for project: {}", projectId, e);
             emitters.remove(projectId);

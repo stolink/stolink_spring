@@ -63,7 +63,7 @@ public class CharacterService {
         return characterRepository.findAll();
     }
 
-    @Transactional(readOnly = true)
+    // @Transactional 제거: Neo4j만 사용하므로 PostgreSQL 커넥션 불필요
     public List<com.stolink.backend.domain.character.dto.RelationshipResponse> getRelationshipsByProjectId(
             UUID userId, UUID projectId) {
         List<Character> characters = getCharactersWithRelationships(userId, projectId);
@@ -87,7 +87,9 @@ public class CharacterService {
         return responses;
     }
 
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    // @Transactional 제거: Neo4j driver.session()만 사용하므로 PostgreSQL 커넥션 불필요
+    // 이전 코드에서 @Transactional이 있으면 메서드 시작 시 HikariCP에서 커넥션을 확보하고
+    // Neo4j 응답을 기다리는 동안 PostgreSQL 커넥션이 유휴 상태로 점유되어 풀 고갈 발생
     public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
         log.info("Fetching characters manually (Robust Mode) for project: {}", projectId);
         // User user = getUserOrThrow(userId);
