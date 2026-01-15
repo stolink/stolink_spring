@@ -57,6 +57,33 @@ public interface DocumentRepository extends JpaRepository<Document, UUID> {
                         @Param("status") Document.AnalysisStatus status);
 
         /**
+         * 프로젝트 내 TEXT 문서의 모든 분석 상태를 단일 쿼리로 집계
+         * 5개의 개별 COUNT 쿼리 대신 1개의 집계 쿼리로 최적화
+         */
+        @Query(value = """
+                        SELECT
+                                COUNT(*) as total,
+                                SUM(CASE WHEN analysis_status = 'COMPLETED' THEN 1 ELSE 0 END) as completed,
+                                SUM(CASE WHEN analysis_status = 'FAILED' THEN 1 ELSE 0 END) as failed,
+                                SUM(CASE WHEN analysis_status = 'PROCESSING' THEN 1 ELSE 0 END) as processing,
+                                SUM(CASE WHEN analysis_status = 'QUEUED' THEN 1 ELSE 0 END) as queued
+                        FROM documents
+                        WHERE project_id = :projectId AND type = 'TEXT'
+                        """, nativeQuery = true)
+        AnalysisStatusCounts countAllAnalysisStatusByProjectId(@Param("projectId") UUID projectId);
+
+        /**
+         * 분석 상태 집계 결과를 위한 인터페이스 프로젝션
+         */
+        interface AnalysisStatusCounts {
+                Long getTotal();
+                Long getCompleted();
+                Long getFailed();
+                Long getProcessing();
+                Long getQueued();
+        }
+
+        /**
          * 분석 상태가 FAILED이고 재시도 횟수가 maxRetry 미만인 문서 조회
          */
         @Query("SELECT d FROM Document d WHERE d.analysisStatus = 'FAILED' AND d.analysisRetryCount < :maxRetry")

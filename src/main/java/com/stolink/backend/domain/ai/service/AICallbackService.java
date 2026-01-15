@@ -1,6 +1,7 @@
 package com.stolink.backend.domain.ai.service;
 
 import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -73,6 +74,7 @@ public class AICallbackService {
     private final ObjectMapper objectMapper;
     private final SseEmitterService sseEmitterService;
     private final TransactionTemplate transactionTemplate;
+    private final ConsistencyRefiner consistencyRefiner;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -380,7 +382,7 @@ public class AICallbackService {
         // 3. 검증 결과 저장 (PostgreSQL)
         ValidationDTO validationData = callback.getEffectiveValidation();
         if (validationData != null) {
-            saveValidationResult(validationData, job.getDocumentId(), callback.getJobId());
+            saveValidationResult(validationData, job.getDocumentId(), callback.getJobId(), project.getId());
         }
 
         // Job 완료 처리
@@ -469,6 +471,12 @@ public class AICallbackService {
 
         // Character Update (JPA) removed - assuming handled externally or not needed in
         // Postgres.
+        try {
+            characterRepository.updateImageUrl(callback.getCharacterId().toString(), imageUrl);
+            log.info("Updated Character {} imageUrl in Neo4j", callback.getCharacterId());
+        } catch (Exception e) {
+            log.error("Failed to update character image URL in Neo4j: {}", e.getMessage());
+        }
 
         imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
             task.setImageUrl(imageUrl);
@@ -482,6 +490,11 @@ public class AICallbackService {
         if (reportData == null)
             return;
         try {
+            // Refine Conflicts before saving
+            List<ConsistencyReportDTO.ConflictDTO> refinedConflicts = consistencyRefiner
+                    .refineConflicts(reportData.getConflicts());
+            reportData.setConflicts(refinedConflicts);
+
             ConsistencyReport report = ConsistencyReport.builder()
                     .project(project)
                     .jobId(jobId)
@@ -499,12 +512,13 @@ public class AICallbackService {
         }
     }
 
-    private void saveValidationResult(ValidationDTO validationData, UUID documentId, String jobId) {
+    private void saveValidationResult(ValidationDTO validationData, UUID documentId, String jobId, UUID projectId) {
         if (validationData == null)
             return;
         try {
             ValidationResult validation = ValidationResult.builder()
                     .documentId(documentId)
+                    .projectId(projectId)
                     .jobId(jobId)
                     .isValid(validationData.getIsValid() != null ? validationData.getIsValid() : true)
                     .qualityScore(validationData.getQualityScore())
