@@ -60,8 +60,11 @@ public class AIAnalysisService {
     /**
      * 프로젝트의 현재 분석 상태를 조회합니다.
      * SSE 연결 초기화 시 클라이언트에게 현재 상태를 전달하기 위해 사용됩니다.
+     * 
+     * NOTE: @Transactional을 사용하지 않음 - SSE 엔드포인트에서 호출되어
+     * 트랜잭션이 오래 유지되면 Connection Leak 경고가 발생할 수 있음.
+     * 읽기 전용 COUNT 쿼리들이므로 트랜잭션 없이도 안전함.
      */
-    @Transactional(readOnly = true)
     public SseEmitterService.AnalysisStatusEvent getAnalysisStatus(UUID projectId) {
         long totalTextDocs = documentRepository.countTextDocumentsByProjectId(projectId);
         if (totalTextDocs == 0) {
