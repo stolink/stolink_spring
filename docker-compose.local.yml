@@ -134,8 +134,8 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
+      # rabbitmq:
+      #   condition: service_healthy
       rabbitmq-agent:
         condition: service_healthy
       redis:
@@ -162,7 +162,7 @@ services:
       SPRING_RABBITMQ_PASSWORD: stolink123
       SPRING_RABBITMQ_VIRTUAL_HOST: /
       # RabbitMQ (Image Generation - 기존 RabbitMQ)
-      RABBITMQ_IMAGE_HOST: stolink-rabbitmq-local
+      RABBITMQ_IMAGE_HOST: stolink-rabbitmq-standalone
       RABBITMQ_IMAGE_PORT: 5672
       RABBITMQ_IMAGE_USERNAME: ${RABBITMQ_USER}
       RABBITMQ_IMAGE_PASSWORD: ${RABBITMQ_PASSWORD}
@@ -188,13 +188,14 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_COOKIE_DOMAIN: ${JWT_COOKIE_DOMAIN}
       # Image Server URL (FastAPI)
-      IMAGE_SERVER_URL: ${IMAGE_SERVER_URL:-http://host.docker.internal:8001}
+      IMAGE_SERVER_URL: ${IMAGE_SERVER_URL:-http://stolink-image-worker-standalone:8000}
     ports:
       - "8080:8080"
     volumes:
       - backend_storage:/app/storage/uploads
     networks:
       - stolink-local-network
+      - stolink-standalone-network
     restart: unless-stopped
     healthcheck:
       test:
@@ -213,8 +214,14 @@ services:
 
 volumes:
   postgres_data:
+    external: true
+    name: stolink_fastapi_agent_postgres_data
   neo4j_data:
+    external: true
+    name: stolink_fastapi_agent_neo4j_data
   neo4j_logs:
+    external: true
+    name: stolink_fastapi_agent_neo4j_logs
   rabbitmq_data:
   rabbitmq_agent_data:
   redis_data:
@@ -224,3 +231,6 @@ networks:
   stolink-local-network:
     name: stolink-shared-network # Spring/FastAPI 공통 네트워크 - 먼저 실행하는 쪽에서 생성
     driver: bridge
+  stolink-standalone-network:
+    name: stolink-fastapi-standalone-network
+    external: true

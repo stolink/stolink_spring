@@ -299,6 +299,78 @@ public class AIAnalysisService {
     }
 
     /**
+     * 프로젝트의 최신 일관성 분석 보고서를 조회합니다.
+     */
+    @Transactional(readOnly = true)
+    public com.stolink.backend.domain.project.dto.ConsistencyReportResponse getLatestConsistencyReport(UUID projectId) {
+        com.stolink.backend.domain.consistency.entity.ConsistencyReport report = consistencyReportRepository
+                .findFirstByProjectIdOrderByCreatedAtDesc(projectId)
+                .orElse(null);
+
+        if (report == null) {
+            return null;
+        }
+
+        List<com.stolink.backend.domain.project.dto.ConsistencyReportResponse.Conflict> conflicts = new ArrayList<>();
+        java.util.Map<String, Object> resolutionSummary = null;
+
+        com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+
+        try {
+            if (report.getConflictsJson() != null && !report.getConflictsJson().isEmpty()) {
+                List<java.util.Map<String, Object>> conflictsMapList = objectMapper.readValue(report.getConflictsJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<>() {
+                        });
+                for (java.util.Map<String, Object> map : conflictsMapList) {
+                    com.stolink.backend.domain.project.dto.ConsistencyReportResponse.Location location = null;
+                    if (map.containsKey("location")) {
+                        location = objectMapper.convertValue(map.get("location"),
+                                com.stolink.backend.domain.project.dto.ConsistencyReportResponse.Location.class);
+                    }
+
+                    conflicts.add(com.stolink.backend.domain.project.dto.ConsistencyReportResponse.Conflict.builder()
+                            .type((String) map.get("type"))
+                            .severity((String) map.get("severity"))
+                            .description((String) map.get("description"))
+                            .suggestion((String) map.get("suggestion"))
+                            .location(location)
+                            .build());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse conflicts json for report {}: {}", report.getId(), e.getMessage());
+        }
+
+        try {
+            if (report.getResolutionSummaryJson() != null && !report.getResolutionSummaryJson().isEmpty()) {
+                resolutionSummary = objectMapper.readValue(report.getResolutionSummaryJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<>() {
+                        });
+            } else {
+                // Fallback stats if summary json is missing
+                resolutionSummary = new java.util.HashMap<>();
+                resolutionSummary.put("high_severity_count", report.getHighSeverityCount());
+                resolutionSummary.put("medium_severity_count", report.getMediumSeverityCount());
+                resolutionSummary.put("auto_fixable_count", report.getAutoFixableCount());
+                resolutionSummary.put("requires_human_review_count", report.getRequiresHumanReviewCount());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse resolution summary json for report {}: {}", report.getId(), e.getMessage());
+        }
+
+        return com.stolink.backend.domain.project.dto.ConsistencyReportResponse.builder()
+                .jobId(report.getJobId())
+                .createdAt(report.getCreatedAt())
+                .score(report.getOverallScore())
+                .overallScore(report.getOverallScore())
+                .requiresHumanReview(
+                        report.getRequiresHumanReviewCount() != null && report.getRequiresHumanReviewCount() > 0)
+                .conflicts(conflicts)
+                .resolutionSummary(resolutionSummary)
+                .build();
+    }
+
+    /**
      * Trace ID 생성 (분산 추적용)
      */
     private String generateTraceId() {

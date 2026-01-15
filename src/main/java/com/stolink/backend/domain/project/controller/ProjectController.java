@@ -26,7 +26,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.stolink.backend.domain.ai.dto.ProjectAnalysisJobResponse;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
+import com.stolink.backend.domain.ai.service.AIAnalysisService;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
+import com.stolink.backend.domain.project.dto.ConsistencyReportResponse;
 import com.stolink.backend.domain.project.dto.CreateProjectRequest;
 import com.stolink.backend.domain.project.dto.ProjectResponse;
 import com.stolink.backend.domain.project.dto.ProjectStatsResponse;
@@ -51,6 +53,7 @@ public class ProjectController {
         private final ProjectRepository projectRepository;
         private final AnalysisJobRepository analysisJobRepository;
         private final DocumentRepository documentRepository;
+        private final AIAnalysisService aiAnalysisService;
 
         @GetMapping
         public ApiResponse<Map<String, Object>> getProjects(
@@ -178,5 +181,34 @@ public class ProjectController {
                                 "failed",
                                 0,
                                 latestJob.getCompletedAt()));
+        }
+
+        /**
+         * 일관성 분석 결과 조회
+         */
+        @GetMapping("/{projectId}/consistency-report")
+        public ApiResponse<ConsistencyReportResponse> getConsistencyReport(
+                        @PathVariable UUID projectId,
+                        @AuthenticationPrincipal UUID userId) {
+
+                log.info("Get Consistency Report request for: {} by user: {}", projectId, userId);
+
+                // 1. 프로젝트 존재 여부 확인
+                if (!projectRepository.existsById(projectId)) {
+                        throw new ResourceNotFoundException("Project", "id", projectId);
+                }
+
+                // 2. 서비스 호출
+                ConsistencyReportResponse report = aiAnalysisService.getLatestConsistencyReport(projectId);
+
+                if (report == null) {
+                        // 분석 작업이 없거나 결과가 없는 경우 204 No Content 또는 빈 객체 반환
+                        // 프론트엔드 요구사항에 따라 204 대신 빈 응답 또는 404를 줄 수 있음.
+                        // 여기서는 null data를 가진 200 OK로 주거나, ResourceNotFound로 처리할 수 있음.
+                        // 요구사항에 "return 404 Not Found or 204 No Content" 라고 되어 있음.
+                        throw new ResourceNotFoundException("Consistency Report", "projectId", projectId);
+                }
+
+                return ApiResponse.ok(report);
         }
 }
