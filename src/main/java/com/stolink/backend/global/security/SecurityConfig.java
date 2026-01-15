@@ -160,7 +160,7 @@ public class SecurityConfig {
 
                 // 내부 API 및 콜백용 설정 (서버 간 통신이므로 CORS 제약 완화)
                 CorsConfiguration internalConfiguration = new CorsConfiguration();
-                internalConfiguration.setAllowedOrigins(List.of("*")); // 모든 Origin 허용
+                internalConfiguration.setAllowedOriginPatterns(List.of("*")); // 진짜로 모든 Origin 허용
                 internalConfiguration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
                 internalConfiguration.setAllowedHeaders(List.of("*"));
                 internalConfiguration.setAllowCredentials(false); // allowedOrigins가 "*"일 때는 false여야 함

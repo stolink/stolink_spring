@@ -63,21 +63,18 @@ public class AIAnalysisService {
      */
     @Transactional(readOnly = true)
     public SseEmitterService.AnalysisStatusEvent getAnalysisStatus(UUID projectId) {
-        long totalTextDocs = documentRepository.countTextDocumentsByProjectId(projectId);
+        // 단일 쿼리로 모든 분석 상태를 집계 (5개 쿼리 → 1개로 최적화)
+        DocumentRepository.AnalysisStatusCounts counts = documentRepository.countAllAnalysisStatusByProjectId(projectId);
+        
+        long totalTextDocs = counts.getTotal() != null ? counts.getTotal() : 0;
         if (totalTextDocs == 0) {
             return new SseEmitterService.AnalysisStatusEvent("NONE", 0, 0, "분석할 문서가 없습니다.");
         }
 
-        long completedDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
-                projectId, Document.AnalysisStatus.COMPLETED);
-
-        long failedDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
-                projectId, Document.AnalysisStatus.FAILED);
-
-        long processingDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
-                projectId, Document.AnalysisStatus.PROCESSING);
-        long queuedDocs = documentRepository.countByProjectIdAndTypeTextAndAnalysisStatus(
-                projectId, Document.AnalysisStatus.QUEUED);
+        long completedDocs = counts.getCompleted() != null ? counts.getCompleted() : 0;
+        long failedDocs = counts.getFailed() != null ? counts.getFailed() : 0;
+        long processingDocs = counts.getProcessing() != null ? counts.getProcessing() : 0;
+        long queuedDocs = counts.getQueued() != null ? counts.getQueued() : 0;
 
         String status;
         String message;
