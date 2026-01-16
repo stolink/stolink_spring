@@ -8,6 +8,11 @@ import com.stolink.backend.domain.project.dto.ProjectResponse;
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
+import com.stolink.backend.domain.ai.repository.CallbackLogRepository;
+import com.stolink.backend.domain.ai.repository.CharacterTimelineRepository;
+import com.stolink.backend.domain.ai.repository.DocumentSummaryRepository;
+import com.stolink.backend.domain.character.repository.ImageGenerationTaskRepository;
+import com.stolink.backend.domain.draft.repository.DraftRepository;
 import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +34,11 @@ public class ProjectService {
     private final UserRepository userRepository;
     private final DocumentRepository documentRepository;
     private final DocumentService documentService;
+    private final DocumentSummaryRepository documentSummaryRepository;
+    private final CharacterTimelineRepository characterTimelineRepository;
+    private final ImageGenerationTaskRepository imageGenerationTaskRepository;
+    private final CallbackLogRepository callbackLogRepository;
+    private final DraftRepository draftRepository;
 
     public Page<ProjectResponse> getProjects(UUID userId, Pageable pageable) {
         User user = getUserOrThrow(userId);
@@ -98,6 +108,18 @@ public class ProjectService {
         User user = getUserOrThrow(userId);
         Project project = projectRepository.findByIdAndUser(projectId, user)
                 .orElseThrow(() -> new ResourceNotFoundException("Project", "id", projectId));
+
+        // 연관된 비-JPA 데이터 삭제 (느슨한 결합)
+        // FK 제약 조건 등을 방지하기 위해 먼저 삭제 시도
+        try {
+            documentSummaryRepository.deleteByProjectId(projectId);
+            characterTimelineRepository.deleteByProjectId(projectId);
+            imageGenerationTaskRepository.deleteByProjectId(projectId);
+            callbackLogRepository.deleteByProjectId(projectId);
+            draftRepository.deleteByProjectId(projectId.toString());
+        } catch (Exception e) {
+            log.warn("Error deleting associated data for project: {}", projectId, e);
+        }
 
         projectRepository.delete(project);
         log.info("Project deleted: {}", projectId);

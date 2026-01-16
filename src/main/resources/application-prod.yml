@@ -6,6 +6,10 @@ spring:
     username: ${POSTGRESQL_USERNAME}
     password: ${POSTGRESQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20 # 예시: 서버 사양과 DB 부하에 맞춰 조정
+      connection-timeout: 30000
+      minimum-idle: 10
 
   # Neo4j Configuration
   neo4j:
@@ -53,6 +57,12 @@ oauth2:
 
 # Application Configuration
 app:
+  # Image Server Configuration (FastAPI Image Worker)
+  image-server:
+    url: ${IMAGE_SERVER_URL:http://stolink-image-worker-standalone:8000}
+    health-endpoint: /health
+    health-check-enabled: false # Temporarily disabled for debugging
+    health-timeout-ms: 5000
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:5174}
   storage:

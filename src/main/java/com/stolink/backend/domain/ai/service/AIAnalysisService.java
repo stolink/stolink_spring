@@ -15,12 +15,10 @@ import com.stolink.backend.domain.ai.dto.AnalysisTaskDTO;
 import com.stolink.backend.domain.ai.dto.GlobalMergeRequestDTO;
 import com.stolink.backend.domain.ai.entity.AnalysisJob;
 import com.stolink.backend.domain.ai.repository.AnalysisJobRepository;
-// CharacterJpaRepository import removed
 import com.stolink.backend.domain.consistency.repository.ConsistencyReportRepository;
 import com.stolink.backend.domain.document.entity.Document;
 import com.stolink.backend.domain.document.repository.DocumentRepository;
 import com.stolink.backend.domain.foreshadowing.repository.ForeshadowingRepository;
-// PlotIntegrationRepository import removed
 import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.validation.repository.ValidationResultRepository;

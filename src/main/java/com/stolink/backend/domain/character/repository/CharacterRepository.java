@@ -42,9 +42,7 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         "MERGE (source)-[r:RELATED_TO]->(target) " +
                         "ON CREATE SET r.id = randomUUID(), r.projectId = $projectId, r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
                         +
-                        "ON MATCH SET r.projectId = $projectId, r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional "
-                        +
-                        "RETURN r")
+                        "ON MATCH SET r.projectId = $projectId, r.types = $types, r.strength = $strength, r.description = $description, r.bidirectional = $bidirectional")
         void createRelationship(
                         @Param("sourceId") String sourceId,
                         @Param("targetId") String targetId,
@@ -150,16 +148,22 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         "WHERE id(r) = $relationshipId " +
                         "SET r.types = CASE WHEN $types IS NOT NULL THEN $types ELSE r.types END, " +
                         "    r.strength = CASE WHEN $strength IS NOT NULL THEN $strength ELSE r.strength END, " +
-                        "    r.description = CASE WHEN $description IS NOT NULL THEN $description ELSE r.description END "
+                        "    r.description = CASE WHEN $description IS NOT NULL THEN $description ELSE r.description END, "
+                        +
+                        "    r.bidirectional = CASE WHEN $bidirectional IS NOT NULL THEN $bidirectional ELSE r.bidirectional END, "
+                        +
+                        "    r.since = CASE WHEN $since IS NOT NULL THEN $since ELSE r.since END "
                         +
                         "RETURN source.id as sourceId, target.id as targetId, " +
                         "       id(r) as relId, r.types as types, r.strength as strength, " +
-                        "       r.description as description, r.bidirectional as bidirectional")
-        java.util.Map<String, Object> updateRelationship(
+                        "       r.description as description, r.bidirectional as bidirectional, r.since as since, r.projectId as projectId")
+        RelationshipProjection updateRelationship(
                         @Param("relationshipId") Long relationshipId,
                         @Param("types") java.util.List<String> types,
                         @Param("strength") Integer strength,
-                        @Param("description") String description);
+                        @Param("description") String description,
+                        @Param("bidirectional") Boolean bidirectional,
+                        @Param("since") String since);
 
         /**
          * 관계 삭제
@@ -176,8 +180,9 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         "WHERE id(r) = $relationshipId " +
                         "RETURN source.id as sourceId, target.id as targetId, " +
                         "       id(r) as relId, r.types as types, r.strength as strength, " +
-                        "       r.description as description, r.bidirectional as bidirectional")
-        java.util.Map<String, Object> getRelationshipDetailsById(@Param("relationshipId") Long relationshipId);
+                        "       r.description as description, r.bidirectional as bidirectional, r.since as since, r.projectId as projectId")
+        java.util.Optional<RelationshipProjection> getRelationshipDetailsById(
+                        @Param("relationshipId") Long relationshipId);
 
         /**
          * 관계 생성 후 ID 반환
@@ -202,9 +207,9 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
          */
         @Query("MATCH (source:Character {id: $sourceId})-[r:RELATED_TO]->(target:Character {id: $targetId}) " +
                         "RETURN source.id as sourceId, target.id as targetId, " +
-                        "       r.types as types, r.strength as strength, " +
-                        "       r.description as description, r.bidirectional as bidirectional")
-        java.util.Map<String, Object> getRelationshipDetailsBySourceTarget(
+                        "       id(r) as relId, r.types as types, r.strength as strength, " +
+                        "       r.description as description, r.bidirectional as bidirectional, r.since as since, r.projectId as projectId")
+        java.util.Optional<RelationshipProjection> getRelationshipDetailsBySourceTarget(
                         @Param("sourceId") String sourceId,
                         @Param("targetId") String targetId,
                         @Param("projectId") String projectId);
@@ -215,18 +220,24 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         @Query("MATCH (source:Character {id: $sourceId})-[r:RELATED_TO]->(target:Character {id: $targetId}) " +
                         "SET r.types = CASE WHEN $types IS NOT NULL THEN $types ELSE r.types END, " +
                         "    r.strength = CASE WHEN $strength IS NOT NULL THEN $strength ELSE r.strength END, " +
-                        "    r.description = CASE WHEN $description IS NOT NULL THEN $description ELSE r.description END "
+                        "    r.description = CASE WHEN $description IS NOT NULL THEN $description ELSE r.description END, "
+                        +
+                        "    r.bidirectional = CASE WHEN $bidirectional IS NOT NULL THEN $bidirectional ELSE r.bidirectional END, "
+                        +
+                        "    r.since = CASE WHEN $since IS NOT NULL THEN $since ELSE r.since END "
                         +
                         "RETURN source.id as sourceId, target.id as targetId, " +
-                        "       r.types as types, r.strength as strength, " +
-                        "       r.description as description, r.bidirectional as bidirectional")
-        java.util.Map<String, Object> updateRelationshipBySourceTarget(
+                        "       id(r) as relId, r.types as types, r.strength as strength, " +
+                        "       r.description as description, r.bidirectional as bidirectional, r.since as since, r.projectId as projectId")
+        RelationshipProjection updateRelationshipBySourceTarget(
                         @Param("sourceId") String sourceId,
                         @Param("targetId") String targetId,
                         @Param("projectId") String projectId,
                         @Param("types") java.util.List<String> types,
                         @Param("strength") Integer strength,
-                        @Param("description") String description);
+                        @Param("description") String description,
+                        @Param("bidirectional") Boolean bidirectional,
+                        @Param("since") String since);
 
         /**
          * 관계 삭제 (sourceId + targetId 기반)

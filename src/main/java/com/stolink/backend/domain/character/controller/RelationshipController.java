@@ -25,7 +25,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/api/projects/{projectId}/relationships")
 @RequiredArgsConstructor
 public class RelationshipController {
 
@@ -34,7 +33,7 @@ public class RelationshipController {
     /**
      * 프로젝트의 모든 관계 조회
      */
-    @GetMapping
+    @GetMapping("/api/projects/{projectId}/relationships")
     public ApiResponse<List<RelationshipResponse>> getRelationships(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId) {
@@ -59,6 +58,7 @@ public class RelationshipController {
                                     .strength(r.getStrength())
                                     .description(r.getDescription())
                                     .bidirectional(r.getBidirectional())
+                                    .since(r.getSince())
                                     .build());
                 })
                 .collect(java.util.stream.Collectors.toList());
@@ -72,7 +72,7 @@ public class RelationshipController {
      *
      * @apiNote bidirectional: true면 역방향 관계도 자동 생성
      */
-    @PostMapping
+    @PostMapping("/api/projects/{projectId}/relationships")
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<RelationshipResponse> createRelationship(
             @AuthenticationPrincipal UUID userId,
@@ -87,7 +87,7 @@ public class RelationshipController {
      * 단일 관계 조회
      * GET /api/projects/{projectId}/relationships/{id}
      */
-    @GetMapping("/{id}")
+    @GetMapping("/api/projects/{projectId}/relationships/{id}")
     public ApiResponse<RelationshipResponse> getRelationship(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
@@ -101,7 +101,7 @@ public class RelationshipController {
      * 관계 수정 (Partial Update)
      * PATCH /api/projects/{projectId}/relationships/{id}
      */
-    @PatchMapping("/{id}")
+    @PatchMapping("/api/projects/{projectId}/relationships/{id}")
     public ApiResponse<RelationshipResponse> updateRelationship(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
@@ -118,13 +118,42 @@ public class RelationshipController {
      *
      * @apiNote bidirectional: true인 관계는 역방향도 함께 삭제
      */
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/api/projects/{projectId}/relationships/{id}")
     public ApiResponse<Void> deleteRelationship(
             @AuthenticationPrincipal UUID userId,
             @PathVariable UUID projectId,
             @PathVariable String id) {
 
         characterService.deleteRelationship(userId, projectId, id);
+        return ApiResponse.ok();
+    }
+
+    // =========== Global Relationship Endpoints (No projectId in path) ===========
+
+    /**
+     * 관계 수정 (Global)
+     * PATCH /api/relationships/{id}
+     */
+    @PatchMapping("/api/relationships/{id}")
+    public ApiResponse<RelationshipResponse> updateRelationshipGlobal(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable String id,
+            @Valid @RequestBody RelationshipUpdateRequest request) {
+
+        RelationshipResponse response = characterService.updateRelationship(userId, id, request);
+        return ApiResponse.ok(response);
+    }
+
+    /**
+     * 관계 삭제 (Global)
+     * DELETE /api/relationships/{id}
+     */
+    @DeleteMapping("/api/relationships/{id}")
+    public ApiResponse<Void> deleteRelationshipGlobal(
+            @AuthenticationPrincipal UUID userId,
+            @PathVariable String id) {
+
+        characterService.deleteRelationship(userId, id);
         return ApiResponse.ok();
     }
 }

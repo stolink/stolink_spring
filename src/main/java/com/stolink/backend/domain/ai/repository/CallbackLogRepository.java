@@ -21,4 +21,9 @@ public interface CallbackLogRepository extends JpaRepository<CallbackLog, UUID> 
      * jobId로 콜백 로그 조회
      */
     Optional<CallbackLog> findByJobId(String jobId);
+
+    /**
+     * 특정 프로젝트의 콜백 로그 전체 삭제
+     */
+    void deleteByProjectId(UUID projectId);
 }
