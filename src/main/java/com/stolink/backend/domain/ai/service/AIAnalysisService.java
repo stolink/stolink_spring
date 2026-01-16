@@ -338,6 +338,7 @@ public class AIAnalysisService {
                             .severity((String) map.get("severity"))
                             .description((String) map.get("description"))
                             .suggestion((String) map.get("suggestion"))
+                            .suggestedAction((String) map.get("suggested_action"))
                             .location(location)
                             .build());
                 }

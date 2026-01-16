@@ -333,8 +333,16 @@ public class AICallbackService {
     public void handleGlobalMergeCallback(GlobalMergeCallbackDTO callback) {
         log.info("Processing global merge callback, projectId: {}, status: {}", callback.getProjectId(),
                 callback.getStatus());
-        // Global Merge logic currently mostly handled by AI Backend (Neo4j update).
-        // Log completion.
+
+        // [FIX] Ensure All entities use 'projectId' instead of 'project_id'
+        // Moved from per-job callback to global merge to prevention connection pool
+        // exhaustion
+        try {
+            characterRepository.normalizeAllEntities(callback.getProjectId());
+            log.info("Normalized property names for project: {}", callback.getProjectId());
+        } catch (Exception e) {
+            log.warn("Failed to normalize properties: {}", e.getMessage());
+        }
     }
 
     /**
@@ -357,13 +365,7 @@ public class AICallbackService {
                 .orElseThrow(() -> new RuntimeException("Project not found: " + projectProxy.getId()));
 
         // --- Character, Event, Setting, Relationship 저장 로직 제거됨 (AI Backend가 Neo4j 처리)
-        // [FIX] Ensure All entities use 'projectId' instead of 'project_id'
-        try {
-            characterRepository.normalizeAllEntities(project.getId().toString());
-            log.info("Normalized property names for project: {}", project.getId());
-        } catch (Exception e) {
-            log.warn("Failed to normalize properties: {}", e.getMessage());
-        }
+        // Note: Normalization moved to handleGlobalMergeCallback
         // ---
 
         // 1. 플롯 저장 (PostgreSQL)
@@ -447,7 +449,7 @@ public class AICallbackService {
         }
     }
 
-    @Transactional
+    // @Transactional removed to prevent holding DB connection during Neo4j call
     public void handleImageCallback(ImageCallbackDTO callback) {
         String jobId = callback.getJobId();
         log.info("Processing image callback for job: {}, character: {}",
@@ -466,32 +468,45 @@ public class AICallbackService {
         if (tempImageUrl != null && tempImageUrl.contains("minio:9000")) {
             tempImageUrl = tempImageUrl.replace("minio:9000", "localhost:9000");
         }
-        String imageUrl = tempImageUrl;
+        final String imageUrl = tempImageUrl;
 
         if ("FAILED".equals(callback.getStatus())) {
             log.error("Image generation failed: {}", callback.getErrorMessage());
             final String errorMsg = callback.getErrorMessage();
-            imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
-                task.markAsFailed(errorMsg);
-                imageGenerationTaskRepository.save(task);
+
+            // Transaction for RDB Update only
+            transactionTemplate.execute(status -> {
+                imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
+                    task.markAsFailed(errorMsg);
+                    imageGenerationTaskRepository.save(task);
+                });
+                return null;
             });
             return;
         }
 
-        // Character Update (JPA) removed - assuming handled externally or not needed in
-        // Postgres.
+        // 1. Neo4j Update (External Network Call) - Performed OUTSIDE of RDB
+        // Transaction
+        // This prevents holding a Postgres connection while waiting for Neo4j
         try {
             characterRepository.updateImageUrl(callback.getCharacterId().toString(), imageUrl);
             log.info("Updated Character {} imageUrl in Neo4j", callback.getCharacterId());
         } catch (Exception e) {
             log.error("Failed to update character image URL in Neo4j: {}", e.getMessage());
+            // We continue to update RDB status even if Neo4j update fails,
+            // or we could mark as failed depending on requirements.
+            // Currently continuing as Task handles the generation status.
         }
 
-        imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
-            task.setImageUrl(imageUrl);
-            task.setStatus(ImageGenerationTask.TaskStatus.COMPLETED);
-            imageGenerationTaskRepository.save(task);
-            log.info("Updated ImageGenerationTask {} to COMPLETED", jobId);
+        // 2. RDB Update (Task Status) - Short Transaction
+        transactionTemplate.execute(status -> {
+            imageGenerationTaskRepository.findById(jobId).ifPresent(task -> {
+                task.setImageUrl(imageUrl);
+                task.setStatus(ImageGenerationTask.TaskStatus.COMPLETED);
+                imageGenerationTaskRepository.save(task);
+                log.info("Updated ImageGenerationTask {} to COMPLETED", jobId);
+            });
+            return null;
         });
     }
 
