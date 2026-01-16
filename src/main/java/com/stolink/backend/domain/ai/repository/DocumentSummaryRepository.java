@@ -11,7 +11,7 @@ import com.stolink.backend.domain.ai.entity.DocumentSummary;
 
 /**
  * DocumentSummary Repository (읽기 전용)
- * 
+ *
  * FastAPI AI Backend에서 데이터를 쓰며, Spring에서는 읽기 전용으로 사용합니다.
  */
 @Repository
@@ -50,4 +50,9 @@ public interface DocumentSummaryRepository extends JpaRepository<DocumentSummary
     default Optional<DocumentSummary> findNovelSummaryByProjectId(UUID projectId) {
         return findByProjectIdAndLevel(projectId, 1).stream().findFirst();
     }
+
+    /**
+     * 특정 프로젝트의 요약 전체 삭제
+     */
+    void deleteByProjectId(UUID projectId);
 }

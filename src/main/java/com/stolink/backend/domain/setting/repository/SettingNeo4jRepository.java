@@ -11,14 +11,25 @@ import com.stolink.backend.domain.setting.node.Setting;
 @Repository
 public interface SettingNeo4jRepository extends Neo4jRepository<Setting, String> {
 
-    List<Setting> findByProjectId(String projectId);
+    @org.springframework.data.neo4j.repository.query.Query("MATCH (s:Setting) WHERE s.project_id = $projectId OR s.projectId = $projectId RETURN s")
+    List<Setting> findByProjectId(@org.springframework.data.repository.query.Param("projectId") String projectId);
 
-    Optional<Setting> findByProjectIdAndName(String projectId, String name);
+    @org.springframework.data.neo4j.repository.query.Query("MATCH (s:Setting) WHERE (s.project_id = $projectId OR s.projectId = $projectId) AND s.name = $name RETURN s LIMIT 1")
+    Optional<Setting> findByProjectIdAndName(
+            @org.springframework.data.repository.query.Param("projectId") String projectId,
+            @org.springframework.data.repository.query.Param("name") String name);
 
     // 중복 안전 조회
-    List<Setting> findAllByProjectIdAndName(String projectId, String name);
+    @org.springframework.data.neo4j.repository.query.Query("MATCH (s:Setting) WHERE (s.project_id = $projectId OR s.projectId = $projectId) AND s.name = $name RETURN s")
+    List<Setting> findAllByProjectIdAndName(
+            @org.springframework.data.repository.query.Param("projectId") String projectId,
+            @org.springframework.data.repository.query.Param("name") String name);
 
-    Optional<Setting> findByProjectIdAndSettingId(String projectId, String settingId);
+    @org.springframework.data.neo4j.repository.query.Query("MATCH (s:Setting) WHERE (s.project_id = $projectId OR s.projectId = $projectId) AND s.settingId = $settingId RETURN s LIMIT 1")
+    Optional<Setting> findByProjectIdAndSettingId(
+            @org.springframework.data.repository.query.Param("projectId") String projectId,
+            @org.springframework.data.repository.query.Param("settingId") String settingId);
 
-    void deleteByProjectId(String projectId);
+    @org.springframework.data.neo4j.repository.query.Query("MATCH (s:Setting) WHERE s.project_id = $projectId OR s.projectId = $projectId DETACH DELETE s")
+    void deleteByProjectId(@org.springframework.data.repository.query.Param("projectId") String projectId);
 }
