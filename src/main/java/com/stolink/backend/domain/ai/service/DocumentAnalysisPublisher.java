@@ -109,9 +109,11 @@ public class DocumentAnalysisPublisher {
 
     /**
      * 단일 문서 분석 요청 발행
+     *
+     * @return 발행된 작업의 JobId
      */
     @Transactional
-    public void publishAnalysisForDocument(Document document, String analysisType) {
+    public String publishAnalysisForDocument(Document document, String analysisType) {
         document.updateAnalysisStatus(AnalysisStatus.PENDING);
         documentRepository.save(document);
 
@@ -147,7 +149,9 @@ public class DocumentAnalysisPublisher {
         document.updateAnalysisStatus(AnalysisStatus.QUEUED);
         documentRepository.save(document);
 
-        log.info("문서 {} 분석 요청 발행 완료", document.getId());
+        log.info("문서 {} 분석 요청 발행 완료: jobId={}", document.getId(), jobId);
+
+        return jobId;
     }
 
     /**

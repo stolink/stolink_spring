@@ -3,8 +3,10 @@ package com.stolink.backend.domain.document.entity;
 import java.util.UUID;
 
 import com.stolink.backend.domain.project.entity.Project;
+import com.stolink.backend.domain.document.entity.Section;
 import com.stolink.backend.global.common.entity.BaseEntity;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -15,7 +17,10 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -90,6 +95,9 @@ public class Document extends BaseEntity {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, targetEntity = Section.class)
+    private List<Section> sections = new ArrayList<>();
 
     // 커뮤니티(Storead) 게시 완료 여부 - Storead에서 최종 게시 완료 시 true로 업데이트됨
     @Column(name = "is_published", nullable = false)

@@ -72,6 +72,8 @@ public class ConsistencyReportDTO {
         private String resolution;
         @JsonProperty("suggestion")
         private String suggestion;
+        @JsonProperty("suggested_action")
+        private String suggestedAction;
         private LocationDTO location;
     }
 
