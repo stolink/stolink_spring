@@ -2,13 +2,17 @@ package com.stolink.backend.domain.validation.entity;
 
 import java.util.UUID;
 
+import com.stolink.backend.domain.project.entity.Project;
 import com.stolink.backend.global.common.entity.BaseEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -36,8 +40,9 @@ public class ValidationResult extends BaseEntity {
     @Column(name = "document_id", nullable = false)
     private UUID documentId;
 
-    @Column(name = "project_id", nullable = false)
-    private UUID projectId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "project_id", nullable = false)
+    private Project project;
 
     @Column(name = "job_id", length = 100)
     private String jobId;

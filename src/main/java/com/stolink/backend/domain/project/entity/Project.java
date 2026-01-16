@@ -41,6 +41,10 @@ public class Project extends BaseEntity {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Foreshadowing> foreshadowings = new ArrayList<>();
 
+    // 프로젝트 삭제 시 연관된 검증 결과도 함께 삭제
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<com.stolink.backend.domain.validation.entity.ValidationResult> validationResults = new ArrayList<>();
+
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
     private Genre genre;
