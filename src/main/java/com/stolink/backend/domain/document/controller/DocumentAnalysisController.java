@@ -46,32 +46,12 @@ public class DocumentAnalysisController {
                 // 1. 문서 조회 및 권한 검증
                 Document document = documentService.getDocument(userId, id);
 
-                // 2. AnalysisJob 생성 (AI 콜백에서 document_id로 조회할 수 있도록)
-                // 동일 jobId로 기존 Job이 있으면 삭제 후 새로 생성 (중복 방지)
-                String jobId = document.getId().toString();
-                analysisJobRepository.findByJobId(jobId).ifPresent(existingJob -> {
-                        log.info("기존 AnalysisJob 삭제: jobId={}", jobId);
-                        analysisJobRepository.delete(existingJob);
-                });
-
-                AnalysisJob job = AnalysisJob.builder()
-                                .jobId(jobId)
-                                .project(document.getProject())
-                                .documentId(document.getId())
-                                .status(AnalysisJob.JobStatus.PENDING)
-                                .build();
-                analysisJobRepository.save(job);
-                document.updateAnalysisStatus(Document.AnalysisStatus.PENDING);
-                documentRepository.save(document);
-                log.info("AnalysisJob 생성 및 문서 상태 PENDING 전환 완료: jobId={}, documentId={}", job.getJobId(),
-                                document.getId());
-
                 // 3. 분석 유형 확인 (기본값: full_manuscript)
                 String analysisType = (body != null) ? body.getOrDefault("analysis_type", "full_manuscript")
                                 : "full_manuscript";
 
-                // 4. 분석 요청 발행
-                documentAnalysisPublisher.publishAnalysisForDocument(document, analysisType);
+                // 4. 분석 요청 발행 (Job ID 반환)
+                String jobId = documentAnalysisPublisher.publishAnalysisForDocument(document, analysisType);
 
                 return ResponseEntity.ok(Map.of(
                                 "jobId", jobId,

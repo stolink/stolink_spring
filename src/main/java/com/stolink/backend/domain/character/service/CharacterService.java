@@ -641,7 +641,7 @@ public class CharacterService {
         log.info("Before URL Replace - action: {}, url: {}", safeAction, originalImageUrl);
         // Docker 환경 호환성: localhost URL을 내부 컨테이너 호스트명으로 변환
         if (originalImageUrl != null && originalImageUrl.contains("localhost")) {
-            originalImageUrl = originalImageUrl.replace("localhost", "stolink-minio-local");
+            originalImageUrl = originalImageUrl.replace("localhost", "stolink-minio-standalone");
             log.info("After URL Replace: {}", originalImageUrl);
         }
 
@@ -773,7 +773,8 @@ public class CharacterService {
      *
      * @param userId      사용자 ID
      * @param characterId 캐릭터 ID
-     * @param request     업데이트 요청 DTO
+     * @param positionX   X 좌표
+     * @param positionY   Y 좌표
      * @return 업데이트된 캐릭터
      */
     @Transactional

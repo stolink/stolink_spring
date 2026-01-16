@@ -43,6 +43,8 @@ public class ConsistencyReportResponse {
         private String severity;
         private String description;
         private String suggestion;
+        @JsonProperty("suggested_action")
+        private String suggestedAction;
         private Location location;
     }
 
