@@ -391,7 +391,7 @@ public class AICallbackService {
         // 3. 검증 결과 저장 (PostgreSQL)
         ValidationDTO validationData = callback.getEffectiveValidation();
         if (validationData != null) {
-            saveValidationResult(validationData, job.getDocumentId(), callback.getJobId(), project.getId());
+            saveValidationResult(validationData, job.getDocumentId(), callback.getJobId(), project);
         }
 
         // Job 완료 처리
@@ -529,13 +529,13 @@ public class AICallbackService {
         }
     }
 
-    private void saveValidationResult(ValidationDTO validationData, UUID documentId, String jobId, UUID projectId) {
+    private void saveValidationResult(ValidationDTO validationData, UUID documentId, String jobId, Project project) {
         if (validationData == null)
             return;
         try {
             ValidationResult validation = ValidationResult.builder()
                     .documentId(documentId)
-                    .projectId(projectId)
+                    .project(project)
                     .jobId(jobId)
                     .isValid(validationData.getIsValid() != null ? validationData.getIsValid() : true)
                     .qualityScore(validationData.getQualityScore())
