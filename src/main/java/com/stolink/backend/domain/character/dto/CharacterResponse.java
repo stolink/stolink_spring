@@ -101,6 +101,7 @@ public class CharacterResponse {
                         .anyMatch(g -> String.valueOf(g.get("target")).equals(rel.getTargetId()));
                 if (!exists) {
                     Map<String, Object> gRel = new java.util.HashMap<>();
+                    gRel.put("id", rel.getId());
                     gRel.put("target", rel.getTargetId());
                     gRel.put("type", rel.getType());
                     gRel.put("strength", rel.getStrength());

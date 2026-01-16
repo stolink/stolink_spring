@@ -328,108 +328,187 @@ public class CharacterService {
                 .build();
     }
 
+    // =========== Relationship CRUD Operations ===========
+
     /**
-     * 관계 수정 (Partial Update)
-     * ID 형식: "sourceId-targetId"
-     *
-     * @return 수정된 관계 정보
+     * URL에 projectId가 없는 경우의 단일 관계 조회
+     */
+    @Transactional(readOnly = true)
+    public com.stolink.backend.domain.character.dto.RelationshipResponse getRelationshipById(
+            UUID userId, String relationshipId) {
+        return handleRelationshipOperation(userId, null, relationshipId, "GET", null);
+    }
+
+    /**
+     * URL에 projectId가 없는 경우의 관계 수정
+     */
+    @Transactional
+    public com.stolink.backend.domain.character.dto.RelationshipResponse updateRelationship(
+            UUID userId, String relationshipId,
+            com.stolink.backend.domain.character.dto.RelationshipUpdateRequest request) {
+        return handleRelationshipOperation(userId, null, relationshipId, "PATCH", request);
+    }
+
+    /**
+     * URL에 projectId가 없는 경우의 관계 삭제
+     */
+    @Transactional
+    public void deleteRelationship(UUID userId, String relationshipId) {
+        handleRelationshipOperation(userId, null, relationshipId, "DELETE", null);
+    }
+
+    /**
+     * 기존 컨트롤러 호환용 관계 수정 (projectId 포함)
      */
     @Transactional
     public com.stolink.backend.domain.character.dto.RelationshipResponse updateRelationship(
             UUID userId, UUID projectId, String relationshipId,
             com.stolink.backend.domain.character.dto.RelationshipUpdateRequest request) {
-
-        // 프로젝트 소유권 검증
-        User user = getUserOrThrow(userId);
-        Project project = getProjectOrThrow(projectId, user);
-        String pId = project.getId().toString();
-
-        // 복합 ID 파싱 (sourceId-targetId)
-        String[] parts = relationshipId.split("-", 2);
-        if (parts.length < 2) {
-            // 단일 UUID인 경우 전체를 ID로 사용 시도
-            parts = parseCompositeId(relationshipId);
-        }
-        String sourceId = parts[0];
-        String targetId = parts[1];
-
-        // 관계 수정 수행
-        java.util.Map<String, Object> updated = characterRepository.updateRelationshipBySourceTarget(
-                sourceId, targetId, pId,
-                request.types(),
-                request.strength(),
-                request.description());
-
-        if (updated == null || updated.isEmpty()) {
-            throw new ResourceNotFoundException("Relationship", "id", relationshipId);
-        }
-
-        log.info("Relationship updated: {} -> {}", sourceId, targetId);
-
-        return buildRelationshipResponse(updated, relationshipId);
+        return handleRelationshipOperation(userId, projectId, relationshipId, "PATCH", request);
     }
 
     /**
-     * 관계 삭제
-     * ID 형식: "sourceId-targetId"
-     * - bidirectional: true인 경우 역방향 관계도 함께 삭제
+     * 기존 컨트롤러 호환용 관계 삭제 (projectId 포함)
      */
     @Transactional
     public void deleteRelationship(UUID userId, UUID projectId, String relationshipId) {
-        // 프로젝트 소유권 검증
-        User user = getUserOrThrow(userId);
-        Project project = getProjectOrThrow(projectId, user);
-        String pId = project.getId().toString();
-
-        // 복합 ID 파싱 (sourceId-targetId)
-        String[] parts = parseCompositeId(relationshipId);
-        String sourceId = parts[0];
-        String targetId = parts[1];
-
-        // 관계 상세 조회
-        java.util.Map<String, Object> details = characterRepository.getRelationshipDetailsBySourceTarget(
-                sourceId, targetId, pId);
-        if (details == null || details.isEmpty()) {
-            throw new ResourceNotFoundException("Relationship", "id", relationshipId);
-        }
-
-        Boolean bidirectional = (Boolean) details.get("bidirectional");
-
-        // 역방향 관계 삭제 (bidirectional인 경우)
-        if (Boolean.TRUE.equals(bidirectional)) {
-            characterRepository.deleteRelationshipBySourceTarget(targetId, sourceId, pId);
-            log.info("Reverse relationship deleted: {} -> {}", targetId, sourceId);
-        }
-
-        // 원본 관계 삭제
-        characterRepository.deleteRelationshipBySourceTarget(sourceId, targetId, pId);
-        log.info("Relationship deleted: {} -> {}", sourceId, targetId);
+        handleRelationshipOperation(userId, projectId, relationshipId, "DELETE", null);
     }
 
     /**
-     * 관계 조회 (단일)
-     * ID 형식: "sourceId-targetId"
+     * 기존 컨트롤러 호환용 단일 관계 조회 (projectId 포함)
      */
     @Transactional(readOnly = true)
     public com.stolink.backend.domain.character.dto.RelationshipResponse getRelationshipById(
             UUID userId, UUID projectId, String relationshipId) {
+        return handleRelationshipOperation(userId, projectId, relationshipId, "GET", null);
+    }
+
+    /**
+     * 관계 작업을 통합 처리하는 내부 메서드
+     * - ID 형식(Numeric vs Composite) 자동 감지
+     * - projectId 검증 및 소유권 확인
+     */
+    private com.stolink.backend.domain.character.dto.RelationshipResponse handleRelationshipOperation(
+            UUID userId, UUID projectId, String relationshipId, String operation,
+            com.stolink.backend.domain.character.dto.RelationshipUpdateRequest request) {
 
         User user = getUserOrThrow(userId);
-        Project project = getProjectOrThrow(projectId, user);
-        String pId = project.getId().toString();
+        com.stolink.backend.domain.character.repository.RelationshipProjection details = null;
+        Long numericId = tryParseLong(relationshipId);
 
-        // 복합 ID 파싱 (sourceId-targetId)
-        String[] parts = parseCompositeId(relationshipId);
-        String sourceId = parts[0];
-        String targetId = parts[1];
+        if (numericId != null) {
+            details = characterRepository.getRelationshipDetailsById(numericId).orElse(null);
+        } else {
+            String[] parts = parseCompositeId(relationshipId);
+            details = characterRepository.getRelationshipDetailsBySourceTarget(parts[0], parts[1],
+                    projectId != null ? projectId.toString() : null).orElse(null);
+        }
 
-        java.util.Map<String, Object> details = characterRepository.getRelationshipDetailsBySourceTarget(
-                sourceId, targetId, pId);
-        if (details == null || details.isEmpty()) {
+        // PATCH (Update) operations with Composite ID can turn into Create (Upsert) if
+        // missing
+        boolean isUpsert = "PATCH".equals(operation) && numericId == null && details == null;
+
+        if (!isUpsert && details == null) {
             throw new ResourceNotFoundException("Relationship", "id", relationshipId);
         }
 
-        return buildRelationshipResponse(details, relationshipId);
+        String pIdInDb = null;
+        if (details != null) {
+            // Project 소유권 검증 (If exists)
+            pIdInDb = details.projectId();
+            if (projectId != null && !projectId.toString().equals(pIdInDb)) {
+                throw new IllegalArgumentException("Relationship does not belong to the specified project");
+            }
+        }
+
+        // Resolve project and check ownership
+        if (pIdInDb != null) {
+            getProjectOrThrow(UUID.fromString(pIdInDb), user);
+        } else if (projectId != null) {
+            getProjectOrThrow(projectId, user);
+            pIdInDb = projectId.toString();
+        }
+
+        switch (operation) {
+            case "GET":
+                return buildRelationshipResponse(details, String.valueOf(details.relId()));
+
+            case "PATCH":
+                com.stolink.backend.domain.character.repository.RelationshipProjection updated = null;
+                boolean isCreated = false;
+
+                if (numericId != null) {
+                    updated = characterRepository.updateRelationship(numericId, request.types(),
+                            request.strength(), request.description(), request.bidirectional(), request.since());
+                } else {
+                    String[] parts = parseCompositeId(relationshipId);
+                    String sourceId = parts[0];
+                    String targetId = parts[1];
+
+                    if (details == null) {
+                        // UPSERT: Relationship missing, create it
+                        if (pIdInDb == null) {
+                            // Fetch source char to get proper projectId
+                            com.stolink.backend.domain.character.node.Character sourceChar = characterRepository
+                                    .findById(sourceId)
+                                    .orElseThrow(() -> new ResourceNotFoundException("Character", "id", sourceId));
+                            pIdInDb = sourceChar.getProjectId();
+
+                            // Check ownership
+                            getProjectOrThrow(UUID.fromString(pIdInDb), user);
+                        }
+
+                        characterRepository.createRelationship(sourceId, targetId, pIdInDb,
+                                request.types(), request.strength(), request.description(), request.bidirectional());
+
+                        updated = characterRepository.getRelationshipDetailsBySourceTarget(sourceId, targetId, pIdInDb)
+                                .orElseThrow(() -> new ResourceNotFoundException("Relationship", "id", relationshipId));
+                        isCreated = true;
+                        log.info("Relationship lazily created during update: {} -> {}", sourceId, targetId);
+                    } else {
+                        updated = characterRepository.updateRelationshipBySourceTarget(sourceId, targetId, pIdInDb,
+                                request.types(), request.strength(), request.description(), request.bidirectional(),
+                                request.since());
+                    }
+                }
+
+                if (updated == null) {
+                    throw new ResourceNotFoundException("Relationship", "id", relationshipId);
+                }
+
+                log.info("Relationship updated (created={}): {} ({})", isCreated, relationshipId, operation);
+                return buildRelationshipResponse(updated, String.valueOf(updated.relId()));
+
+            case "DELETE":
+                Boolean bidirectional = details.bidirectional();
+                String sourceId = details.sourceId();
+                String targetId = details.targetId();
+
+                if (Boolean.TRUE.equals(bidirectional)) {
+                    characterRepository.deleteRelationshipBySourceTarget(targetId, sourceId, pIdInDb);
+                    log.info("Reverse relationship deleted: {} -> {}", targetId, sourceId);
+                }
+
+                if (numericId != null) {
+                    characterRepository.deleteRelationshipById(numericId);
+                } else {
+                    characterRepository.deleteRelationshipBySourceTarget(sourceId, targetId, pIdInDb);
+                }
+                log.info("Relationship deleted: {}", relationshipId);
+                return null;
+
+            default:
+                throw new UnsupportedOperationException("Unsupported relationship operation: " + operation);
+        }
+    }
+
+    private Long tryParseLong(String s) {
+        try {
+            return Long.parseLong(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
@@ -452,20 +531,25 @@ public class CharacterService {
             String targetId = String.join("-", java.util.Arrays.copyOfRange(parts, 5, 10));
             return new String[] { sourceId, targetId };
         }
+        // If it's just a regular split
+        parts = compositeId.split("-", 2);
+        if (parts.length == 2) {
+            return parts;
+        }
         throw new IllegalArgumentException("Invalid relationship ID format: " + compositeId);
     }
 
-    @SuppressWarnings("unchecked")
     private com.stolink.backend.domain.character.dto.RelationshipResponse buildRelationshipResponse(
-            java.util.Map<String, Object> data, String relationshipId) {
+            com.stolink.backend.domain.character.repository.RelationshipProjection data, String relationshipId) {
         return com.stolink.backend.domain.character.dto.RelationshipResponse.builder()
                 .id(relationshipId)
-                .sourceId((String) data.get("sourceId"))
-                .targetId((String) data.get("targetId"))
-                .types((java.util.List<String>) data.get("types"))
-                .strength(data.get("strength") != null ? ((Number) data.get("strength")).intValue() : null)
-                .description((String) data.get("description"))
-                .bidirectional((Boolean) data.get("bidirectional"))
+                .sourceId(data.sourceId())
+                .targetId(data.targetId())
+                .types(data.types())
+                .strength(data.strength())
+                .description(data.description())
+                .bidirectional(data.bidirectional())
+                .since(data.since())
                 .build();
     }
 
