@@ -3,6 +3,8 @@ package com.stolink.backend.global.util;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
+import org.owasp.encoder.Encode;
+
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.gfm.tasklist.TaskListExtension;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
@@ -26,13 +28,16 @@ public class MarkdownUtils {
     // 마크다운 패턴 감지를 위한 정규식
     private static final Pattern MARKDOWN_PATTERNS = Pattern.compile(
             "(^#{1,6}\\s+.+$)" + // 헤딩 (#, ##, ###...)
-                    "|(^[*_]{1,3}.+[*_]{1,3}$)" + // 볼드/이탤릭 (*text*, **text**, _text_, __text__)
+                    "|(\\*\\*[^*]+\\*\\*)" + // 볼드 (**text**)
+                    "|(\\*[^*]+\\*)" + // 이탤릭 (*text*)
+                    "|(__[^_]+__)" + // 볼드 (__text__)
+                    "|(_[^_]+_)" + // 이탤릭 (_text_)
                     "|(^\\s*[-*+]\\s+.+$)" + // 리스트 (- item, * item, + item)
                     "|(^\\s*\\d+\\.\\s+.+$)" + // 순서 리스트 (1. item)
                     "|(^>.+$)" + // 인용구 (> text)
                     "|(```[\\s\\S]*?```)" + // 코드 블록 (```code```)
-                    "|(^\\[.+\\]\\(.+\\)$)" + // 링크 ([text](url))
-                    "|(^!\\[.+\\]\\(.+\\)$)" + // 이미지 (![alt](url))
+                    "|(\\[.+?\\]\\(.+?\\))" + // 링크 ([text](url))
+                    "|(!\\[.+?\\]\\(.+?\\))" + // 이미지 (![alt](url))
                     "|(\\[\\s*[xX]?\\s*\\])", // 체크박스 ([ ] or [x])
             Pattern.MULTILINE);
 
@@ -72,11 +77,13 @@ public class MarkdownUtils {
 
         try {
             Node document = PARSER.parse(markdown);
-            return RENDERER.render(document).trim();
+            String html = RENDERER.render(document).trim();
+            // XSS 방어를 위한 HTML 새니타이즈
+            return sanitizeHtml(html);
         } catch (Exception e) {
             log.error("마크다운 변환 실패: {}", e.getMessage());
-            // 변환 실패 시 원본 텍스트를 <p> 태그로 감싸서 반환
-            return wrapInParagraphs(markdown);
+            // 변환 실패 시 원본 텍스트를 이스케이프 처리 후 <p> 태그로 감싸서 반환
+            return wrapInParagraphs(Encode.forHtml(markdown));
         }
     }
 
@@ -92,9 +99,10 @@ public class MarkdownUtils {
             return false;
         }
 
-        // HTML 태그가 많으면 이미 HTML임
+        // HTML 태그 비율로 판단 (전체 줄 대비 20% 이상이면 HTML로 간주)
         long htmlTagCount = HTML_TAG_PATTERN.matcher(text).results().count();
-        if (htmlTagCount > 5) {
+        int totalLines = text.split("\n").length;
+        if (totalLines > 0 && htmlTagCount > totalLines * 0.2) {
             return false;
         }
 
@@ -119,6 +127,53 @@ public class MarkdownUtils {
         }
 
         return content;
+    }
+
+    /**
+     * 순수 텍스트 기준 단어 수 계산
+     * HTML 태그와 마크다운 문법을 제거한 후 길이 반환
+     *
+     * @param text 원본 텍스트
+     * @return 단어 수
+     */
+    public static int countWords(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+
+        // HTML 태그 및 마크다운 문법 제거
+        String plainText = text
+                .replaceAll("<[^>]+>", "") // HTML 태그 제거
+                .replaceAll("[#*_`>\\[\\]()]", "") // 마크다운 문법 제거
+                .replaceAll("\\s+", " ") // 연속된 공백 제거
+                .trim();
+
+        return plainText.length();
+    }
+
+    /**
+     * XSS 방어를 위한 HTML 새니타이즈
+     * 위험한 태그와 속성을 제거
+     *
+     * @param html 원본 HTML
+     * @return 새니타이즈된 HTML
+     */
+    private static String sanitizeHtml(String html) {
+        if (html == null || html.isEmpty()) {
+            return "";
+        }
+
+        return html
+                // 위험한 태그 제거
+                .replaceAll("<script[^>]*>.*?</script>", "")
+                .replaceAll("<iframe[^>]*>.*?</iframe>", "")
+                .replaceAll("<object[^>]*>.*?</object>", "")
+                .replaceAll("<embed[^>]*>.*?</embed>", "")
+                // 이벤트 핸들러 속성 제거
+                .replaceAll("on\\w+\\s*=\\s*[\"'][^\"']*[\"']", "")
+                .replaceAll("on\\w+\\s*=\\s*[^\\s>]+", "")
+                // javascript: 프로토콜 제거
+                .replaceAll("javascript:", "");
     }
 
     /**
