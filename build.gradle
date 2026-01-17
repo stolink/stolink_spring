@@ -67,6 +67,9 @@ dependencies {
 	implementation 'com.google.guava:guava:33.0.0-jre'
 	implementation 'io.github.cdimascio:java-dotenv:5.2.2'
 
+	// Markdown Parser (flexmark-java)
+	implementation 'com.vladsch.flexmark:flexmark-all:0.64.8'
+
 	// HTTP Client for AI callback
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
 

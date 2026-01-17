@@ -20,6 +20,7 @@ import com.stolink.backend.domain.project.repository.ProjectRepository;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.domain.user.repository.UserRepository;
 import com.stolink.backend.global.common.exception.ResourceNotFoundException;
+import com.stolink.backend.global.util.MarkdownUtils;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -170,12 +171,15 @@ public class ManuscriptJobService {
 
         String finalTitle = (title != null && !title.isEmpty()) ? title : (parent != null ? "본문" : "프롤로그");
 
+        // 마크다운인 경우 HTML로 변환
+        String processedContent = MarkdownUtils.convertIfMarkdown(content);
+
         Document doc = Document.builder()
                 .project(project)
                 .parent(parent)
                 .type(Document.DocumentType.TEXT)
                 .title(finalTitle)
-                .content(content) // 전체 내용 저장
+                .content(processedContent) // 변환된 HTML 또는 원본 저장
                 .wordCount(content.length())
                 .targetWordCount(0)
                 .order(order++)
