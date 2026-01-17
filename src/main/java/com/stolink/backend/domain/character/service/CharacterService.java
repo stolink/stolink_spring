@@ -91,35 +91,35 @@ public class CharacterService {
     // 이전 코드에서 @Transactional이 있으면 메서드 시작 시 HikariCP에서 커넥션을 확보하고
     // Neo4j 응답을 기다리는 동안 PostgreSQL 커넥션이 유휴 상태로 점유되어 풀 고갈 발생
     public List<Character> getCharactersWithRelationships(UUID userId, UUID projectId) {
-        log.info("Fetching characters manually (Robust Mode) for project: {}", projectId);
-        // User user = getUserOrThrow(userId);
-        // Project project = getProjectOrThrow(projectId, user);
+        log.info("Fetching characters manually (Robust Mode - Split Query) for project: {}", projectId);
 
         List<Character> characters = new ArrayList<>();
+        Map<String, Character> characterMap = new java.util.HashMap<>();
         String pid = projectId.toString();
 
         try (var session = driver.session()) {
-            var result = session.run("""
+
+            // 1. Fetch ALL Characters first (Nodes only)
+            // Reverted to fetching full node 'c' to ensure all JSON fields (profile, mbti,
+            // etc.) are available for the frontend.
+            // valid optimization: Split Query is maintained to avoid Cartesian product.
+            var nodeResult = session.run("""
                     MATCH (c:Character)
                     WHERE c.project_id = $pid OR c.projectId = $pid
-                    OPTIONAL MATCH (c)-[r]->(target:Character)
-                    RETURN c, collect(r) as rels, collect(target) as targets
+                    RETURN c
                     """, java.util.Map.of("pid", pid));
 
-            while (result.hasNext()) {
-                var record = result.next();
+            while (nodeResult.hasNext()) {
+                var record = nodeResult.next();
                 var cNode = record.get("c").asNode();
                 var cMap = cNode.asMap();
 
-                // --- ROBUST MANUAL MAPPING (No ObjectMapper) ---
                 Character character = new Character();
 
-                // ID Handling
                 // ID Handling
                 if (cMap.containsKey("id")) {
                     character.setId((String) cMap.get("id"));
                 } else if (cMap.containsKey("characterId")) {
-                    // Fallback to characterId if id is missing, though unlikely given the schema
                     character.setId((String) cMap.get("characterId"));
                 } else {
                     character.setId(cNode.elementId());
@@ -135,59 +135,95 @@ public class CharacterService {
                 character.setImageUrl((String) cMap.getOrDefault("imageUrl", null));
                 character.setProjectId(pid);
 
-                // Relationships (Same as before but safer)
-                List<CharacterRelationship> relationships = new ArrayList<>();
-                if (!record.get("rels").isNull()) {
-                    var rels = record.get("rels").asList(org.neo4j.driver.Value::asRelationship);
-                    var targets = record.get("targets").asList(org.neo4j.driver.Value::asNode);
+                character.setStatus((String) cMap.getOrDefault("status", null));
+                character.setAge(cMap.containsKey("age") ? ((Number) cMap.get("age")).intValue() : null);
+                character.setGender((String) cMap.getOrDefault("gender", null));
+                character.setRace((String) cMap.getOrDefault("race", null));
+                character.setMbti((String) cMap.getOrDefault("mbti", null));
+                character.setBackstory((String) cMap.getOrDefault("backstory", null));
+                character.setFaction((String) cMap.getOrDefault("faction", null));
 
-                    for (int i = 0; i < rels.size(); i++) {
-                        var rel = rels.get(i);
-                        var targetNode = (i < targets.size()) ? targets.get(i) : null;
+                if (cMap.containsKey("positionX"))
+                    character.setPositionX(((Number) cMap.get("positionX")).doubleValue());
+                if (cMap.containsKey("positionY"))
+                    character.setPositionY(((Number) cMap.get("positionY")).doubleValue());
 
-                        if (targetNode == null)
-                            continue;
+                // JSON Fields
+                character.setAliasesJson((String) cMap.getOrDefault("aliasesJson", null));
+                character.setProfileJson((String) cMap.getOrDefault("profileJson", null));
+                character.setAppearanceJson((String) cMap.getOrDefault("appearanceJson", null));
+                character.setPersonalityJson((String) cMap.getOrDefault("personalityJson", null));
+                character.setRelationsJson((String) cMap.getOrDefault("relationsJson", null));
+                character.setCurrentMoodJson((String) cMap.getOrDefault("currentMoodJson", null));
+                character.setMetaJson((String) cMap.getOrDefault("metaJson", null));
+                character.setEmbeddingJson((String) cMap.getOrDefault("embeddingJson", null));
+                character.setInventoryJson((String) cMap.getOrDefault("inventoryJson", null));
+                character.setVisualJson((String) cMap.getOrDefault("visualJson", null));
+                character.setMotivation((String) cMap.getOrDefault("motivation", null));
+                character.setFirstAppearance((String) cMap.getOrDefault("firstAppearance", null));
+                character.setExtrasJson((String) cMap.getOrDefault("extrasJson", null));
 
-                        // Target Mapping
-                        var targetMap = targetNode.asMap();
-                        Character targetChar = new Character();
-                        if (targetMap.containsKey("characterId")) {
-                            targetChar.setId((String) targetMap.get("characterId"));
-                        } else if (targetMap.containsKey("id")) {
-                            targetChar.setId((String) targetMap.get("id"));
-                        } else {
-                            targetChar.setId(targetNode.elementId());
-                        }
-                        targetChar.setName((String) targetMap.getOrDefault("name", "Unknown"));
-                        targetChar.setImageUrl((String) targetMap.getOrDefault("imageUrl", null));
+                character.setRelationships(new ArrayList<>()); // Initialize list
 
-                        // Types
-                        List<String> typesList = new ArrayList<>();
-                        if (!rel.get("types").isNull()) {
-                            typesList.addAll(rel.get("types").asList(org.neo4j.driver.Value::asString));
-                        } else {
-                            typesList.add(rel.type());
-                        }
-
-                        CharacterRelationship charRel = CharacterRelationship.builder()
-                                .source(character.getId())
-                                .target(targetChar)
-                                .types(typesList)
-                                .strength(rel.get("strength").isNull() ? 0 : rel.get("strength").asInt())
-                                .description(rel.get("description").asString(""))
-                                .bidirectional(rel.get("bidirectional").asBoolean(false))
-                                .projectId(pid)
-                                .build();
-
-                        relationships.add(charRel);
-                    }
-                }
-                character.setRelationships(relationships);
                 characters.add(character);
+                characterMap.put(character.getId(), character);
             }
+
+            // 2. Fetch ALL Relationships (Edges) and map them in memory
+            // This avoids the Cartesian product of "1 Character * N Relationships" in the
+            // DB result
+            var relResult = session.run("""
+                    MATCH (c:Character)-[r]->(target:Character)
+                    WHERE (c.project_id = $pid OR c.projectId = $pid)
+                    RETURN c.id as sourceId, r, target
+                    """, java.util.Map.of("pid", pid));
+
+            while (relResult.hasNext()) {
+                var record = relResult.next();
+                String sourceId = record.get("sourceId").asString();
+                var rel = record.get("r").asRelationship();
+                var targetNode = record.get("target").asNode();
+
+                Character sourceChar = characterMap.get(sourceId);
+                if (sourceChar == null)
+                    continue; // Should not happen if consistency is good
+
+                // Target Mapping (Lightweight)
+                var targetMap = targetNode.asMap();
+                Character targetChar = new Character();
+                if (targetMap.containsKey("characterId")) {
+                    targetChar.setId((String) targetMap.get("characterId"));
+                } else if (targetMap.containsKey("id")) {
+                    targetChar.setId((String) targetMap.get("id"));
+                } else {
+                    targetChar.setId(targetNode.elementId());
+                }
+                targetChar.setName((String) targetMap.getOrDefault("name", "Unknown"));
+                targetChar.setImageUrl((String) targetMap.getOrDefault("imageUrl", null));
+
+                // Types
+                List<String> typesList = new ArrayList<>();
+                if (!rel.get("types").isNull()) {
+                    typesList.addAll(rel.get("types").asList(org.neo4j.driver.Value::asString));
+                } else {
+                    typesList.add(rel.type());
+                }
+
+                CharacterRelationship charRel = CharacterRelationship.builder()
+                        .source(sourceId)
+                        .target(targetChar)
+                        .types(typesList)
+                        .strength(rel.get("strength").isNull() ? 0 : rel.get("strength").asInt())
+                        .description(rel.get("description").asString(""))
+                        .bidirectional(rel.get("bidirectional").asBoolean(false))
+                        .projectId(pid)
+                        .build();
+
+                sourceChar.getRelationships().add(charRel);
+            }
+
         } catch (Exception e) {
             log.error("Failed to fetch characters manually: {}", e.getMessage(), e);
-            // Return a debug error character
             Character errorChar = new Character();
             errorChar.setId("error-1");
             errorChar.setName("ERROR: " + e.getMessage());
