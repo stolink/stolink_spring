@@ -72,6 +72,7 @@ dependencies {
 	
 	// XSS Protection
 	implementation 'org.owasp.encoder:encoder:1.2.3'
+	implementation 'org.jsoup:jsoup:1.17.2'
 
 	// HTTP Client for AI callback
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'

@@ -171,16 +171,16 @@ public class ManuscriptJobService {
 
         String finalTitle = (title != null && !title.isEmpty()) ? title : (parent != null ? "본문" : "프롤로그");
 
-        // 마크다운인 경우 HTML로 변환
-        String processedContent = MarkdownUtils.convertIfMarkdown(content);
+        // 마크다운 변환 없이 원본 저장 (데이터 손실 방지)
+        // String processedContent = MarkdownUtils.convertIfMarkdown(content);
 
         Document doc = Document.builder()
                 .project(project)
                 .parent(parent)
                 .type(Document.DocumentType.TEXT)
                 .title(finalTitle)
-                .content(processedContent) // 변환된 HTML 또는 원본 저장
-                .wordCount(MarkdownUtils.countWords(content)) // 순수 텍스트 기준 단어 수
+                .content(content) // 원본 마크다운 저장
+                .wordCount(MarkdownUtils.countCharacters(content)) // 순수 텍스트 기준 글자 수
                 .targetWordCount(0)
                 .order(order++)
                 .status(Document.DocumentStatus.DRAFT)

@@ -3,6 +3,8 @@ package com.stolink.backend.global.util;
 import java.util.Arrays;
 import java.util.regex.Pattern;
 
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 import org.owasp.encoder.Encode;
 
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
@@ -136,7 +138,7 @@ public class MarkdownUtils {
      * @param text 원본 텍스트
      * @return 단어 수
      */
-    public static int countWords(String text) {
+    public static int countCharacters(String text) {
         if (text == null || text.isEmpty()) {
             return 0;
         }
@@ -163,17 +165,7 @@ public class MarkdownUtils {
             return "";
         }
 
-        return html
-                // 위험한 태그 제거
-                .replaceAll("<script[^>]*>.*?</script>", "")
-                .replaceAll("<iframe[^>]*>.*?</iframe>", "")
-                .replaceAll("<object[^>]*>.*?</object>", "")
-                .replaceAll("<embed[^>]*>.*?</embed>", "")
-                // 이벤트 핸들러 속성 제거
-                .replaceAll("on\\w+\\s*=\\s*[\"'][^\"']*[\"']", "")
-                .replaceAll("on\\w+\\s*=\\s*[^\\s>]+", "")
-                // javascript: 프로토콜 제거
-                .replaceAll("javascript:", "");
+        return Jsoup.clean(html, Safelist.relaxed());
     }
 
     /**
