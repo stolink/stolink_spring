@@ -1,7 +1,10 @@
 package com.stolink.backend.domain.project.entity;
 
+import com.stolink.backend.domain.consistency.entity.ConsistencyReport;
 import com.stolink.backend.domain.document.entity.Document;
+import com.stolink.backend.domain.document.entity.ManuscriptJob;
 import com.stolink.backend.domain.foreshadowing.entity.Foreshadowing;
+import com.stolink.backend.domain.share.entity.Share;
 import com.stolink.backend.domain.user.entity.User;
 import com.stolink.backend.global.common.entity.BaseEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
@@ -48,6 +51,22 @@ public class Project extends BaseEntity {
     // 프로젝트 삭제 시 연관된 분석 작업도 함께 삭제
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<com.stolink.backend.domain.ai.entity.AnalysisJob> analysisJobs = new ArrayList<>();
+
+    // 프로젝트 삭제 시 연관된 공유 설정도 함께 삭제
+    @OneToOne(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Share share;
+
+    // 프로젝트 삭제 시 연관된 일관성 리포트도 함께 삭제
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ConsistencyReport> consistencyReports = new ArrayList<>();
+
+    // 프로젝트 삭제 시 연관된 집필 목표도 함께 삭제
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<WritingGoal> writingGoals = new ArrayList<>();
+
+    // 프로젝트 삭제 시 연관된 원고 작업도 함께 삭제
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ManuscriptJob> manuscriptJobs = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
