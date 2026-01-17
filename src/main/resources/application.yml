@@ -35,8 +35,6 @@ server:
     remote-ip-header: x-forwarded-for
     protocol-header: x-forwarded-proto
     internal-proxies: ".*"
-    max-http-form-post-size: 50MB
-    max-swallow-size: 50MB
   error:
     include-message: always
     include-binding-errors: always

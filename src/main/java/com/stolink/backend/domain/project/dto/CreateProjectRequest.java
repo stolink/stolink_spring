@@ -15,7 +15,6 @@ public class CreateProjectRequest {
     private String genre;
     private String description;
     private String status;
-    private String coverImage; // 표지 이미지 (Base64 또는 URL)
     private String manuscript; // 기존 원고 불러오기용
 
     public Project.Genre getGenreEnum() {

@@ -100,11 +100,6 @@ public class ProjectService {
                 null,
                 request.getStatusEnum());
 
-        // 표지 이미지 업데이트 (별도 처리)
-        if (request.getCoverImage() != null) {
-            project.updateCoverImage(request.getCoverImage());
-        }
-
         return ProjectResponse.from(project);
     }
 
