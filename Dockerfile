@@ -26,5 +26,18 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
 
-# Run application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Run application with optimized JVM settings for 4GB RAM
+# -Xms: Initial heap size (1.5GB)
+# -Xmx: Maximum heap size (2.5GB, 62.5% of total RAM - balanced setting)
+# -XX:+UseG1GC: Use G1 Garbage Collector
+# -XX:MaxGCPauseMillis: Target max GC pause time
+# -XX:+UseContainerSupport: Detect container memory limits
+# -XX:MaxMetaspaceSize: Limit Metaspace to 256MB
+ENTRYPOINT ["java", \
+    "-Xms1536m", \
+    "-Xmx2560m", \
+    "-XX:+UseG1GC", \
+    "-XX:MaxGCPauseMillis=200", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxMetaspaceSize=256m", \
+    "-jar", "app.jar"]
