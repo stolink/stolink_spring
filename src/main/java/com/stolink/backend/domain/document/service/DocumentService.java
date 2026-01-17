@@ -37,6 +37,29 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final com.stolink.backend.domain.ai.service.ChatbotIngestionService chatbotIngestionService;
+
+    // ... (helper method to be added later or inline)
+    private void triggerChatbotIngestion(Document document) {
+        if (document.getType() != Document.DocumentType.TEXT) {
+            return;
+        }
+
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("documentId", document.getId().toString());
+            payload.put("projectId", document.getProject().getId().toString());
+            payload.put("title", document.getTitle());
+            payload.put("content", document.getContent());
+            payload.put("order", document.getOrder());
+            payload.put("type", document.getType().toString());
+            payload.put("updatedAt", java.time.LocalDateTime.now().toString());
+
+            chatbotIngestionService.ingestDocument(payload);
+        } catch (Exception e) {
+            log.warn("Failed to prepare chatbot ingestion payload for doc: {}", document.getId(), e);
+        }
+    }
 
     public List<DocumentTreeResponse> getDocumentTree(UUID userId, UUID projectId) {
         User user = getUserOrThrow(userId);
@@ -134,6 +157,9 @@ public class DocumentService {
         document = documentRepository.save(document);
         log.info("Document created: {} in project: {}", document.getId(), request.getProjectId());
 
+        // Chatbot Ingestion Trigger
+        triggerChatbotIngestion(document);
+
         return DocumentTreeResponse.from(document);
     }
 
@@ -193,6 +219,10 @@ public class DocumentService {
         Document document = getDocument(userId, documentId);
         document.updateContent(content);
         log.info("Document content updated: {}", documentId);
+
+        // Chatbot Ingestion Trigger
+        triggerChatbotIngestion(document);
+
         return document;
     }
 

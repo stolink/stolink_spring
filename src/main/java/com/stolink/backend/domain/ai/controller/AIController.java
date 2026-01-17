@@ -240,56 +240,86 @@ public class AIController {
      * Internal callback endpoint for Analysis Worker (Documented path)
      */
     @PostMapping("/internal/ai/analysis/callback")
-    public ApiResponse<Void> handleInternalAICallback(@RequestBody String rawPayload) {
-        return processPayload(rawPayload);
+    public ApiResponse<Void> handleInternalAICallback(jakarta.servlet.http.HttpServletRequest request) {
+        try (java.io.InputStream inputStream = request.getInputStream()) {
+            return processPayload(inputStream);
+        } catch (java.io.IOException e) {
+            log.error("Failed to get input stream from request", e);
+            return ApiResponse.<Void>builder()
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .message("Failed to read request body")
+                    .build();
+        }
     }
 
     /**
      * Legacy callback endpoint
      */
     @PostMapping("/ai-callback")
-    public ApiResponse<Void> handleAICallback(@RequestBody String rawPayload) {
-        return processPayload(rawPayload);
-    }
-
-    private ApiResponse<Void> processPayload(String rawPayload) {
-        // Null check for payload
-        if (rawPayload == null || rawPayload.isBlank()) {
-            log.error("Received null or empty AI callback payload");
+    public ApiResponse<Void> handleAICallback(jakarta.servlet.http.HttpServletRequest request) {
+        try (java.io.InputStream inputStream = request.getInputStream()) {
+            return processPayload(inputStream);
+        } catch (java.io.IOException e) {
+            log.error("Failed to get input stream from request", e);
             return ApiResponse.<Void>builder()
-                    .status(HttpStatus.BAD_REQUEST)
-                    .message("Payload is null or empty")
+                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .message("Failed to read request body")
                     .build();
         }
+    }
 
-        // [Debug] Save received payload to file
-        try {
-            java.nio.file.Files.writeString(
-                    java.nio.file.Paths.get("/tmp/callback_result.json"),
-                    rawPayload,
-                    java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
-            log.info("Saved AI callback payload to /tmp/callback_result.json");
-        } catch (Exception e) {
-            log.error("Failed to save payload", e);
-        }
+    private ApiResponse<Void> processPayload(java.io.InputStream inputStream) {
+        // [Debug] Log start of processing (Do NOT log full payload)
+        log.info("Starting to process AI callback payload stream...");
 
         try {
-            JsonNode root = objectMapper.readTree(rawPayload);
+            // Use readTree on InputStream directly to avoid String allocation of the whole
+            // body
+            JsonNode root = objectMapper.readTree(inputStream);
+
+            if (root == null || root.isEmpty()) {
+                log.error("Received null or empty AI callback payload");
+                return ApiResponse.<Void>builder()
+                        .status(HttpStatus.BAD_REQUEST)
+                        .message("Payload is null or empty")
+                        .build();
+            }
+
             String messageType = root.path("message_type").asText(null);
-
             log.info("Processing AI callback, message_type: {}", messageType);
 
+            // Save only a summary or simplified version for debug if needed
+            // avoiding full string serialization
+            try {
+                // For debug: write just the message type and status to a file, or a truncated
+                // version
+                java.util.Map<String, Object> debugInfo = new java.util.HashMap<>();
+                debugInfo.put("message_type", messageType);
+                debugInfo.put("timestamp", java.time.LocalDateTime.now().toString());
+                // Add simple top-level fields
+                if (root.has("job_id"))
+                    debugInfo.put("job_id", root.get("job_id").asText());
+                if (root.has("status"))
+                    debugInfo.put("status", root.get("status").asText());
+
+                objectMapper.writeValue(
+                        new java.io.File("/tmp/callback_summary.json"),
+                        debugInfo);
+            } catch (Exception e) {
+                log.warn("Failed to save callback summary", e);
+            }
+
             if ("DOCUMENT_ANALYSIS_RESULT".equals(messageType)) {
-                DocumentAnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                DocumentAnalysisCallbackDTO callback = objectMapper.treeToValue(root,
                         DocumentAnalysisCallbackDTO.class);
                 callbackService.handleDocumentAnalysisCallback(callback);
             } else if ("GLOBAL_MERGE_RESULT".equals(messageType)) {
-                GlobalMergeCallbackDTO callback = objectMapper.readValue(rawPayload,
+                GlobalMergeCallbackDTO callback = objectMapper.treeToValue(root,
                         GlobalMergeCallbackDTO.class);
                 callbackService.handleGlobalMergeCallback(callback);
             } else {
                 // Default or Legacy
-                AnalysisCallbackDTO callback = objectMapper.readValue(rawPayload,
+                AnalysisCallbackDTO callback = objectMapper.treeToValue(root,
                         AnalysisCallbackDTO.class);
                 callbackService.handleAnalysisCallback(callback);
             }
