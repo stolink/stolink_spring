@@ -180,7 +180,7 @@ public class ManuscriptJobService {
                 .type(Document.DocumentType.TEXT)
                 .title(finalTitle)
                 .content(processedContent) // 변환된 HTML 또는 원본 저장
-                .wordCount(content.length())
+                .wordCount(MarkdownUtils.countWords(content)) // 순수 텍스트 기준 단어 수
                 .targetWordCount(0)
                 .order(order++)
                 .status(Document.DocumentStatus.DRAFT)
