@@ -52,9 +52,13 @@ public class EventService {
         // 2. 프로젝트 조회 및 소유권 검증
         UUID projectId;
         try {
+            if (character.getProjectId() == null) {
+                log.error("Project ID is missing for character: {}", characterId);
+                throw new ResourceNotFoundException("Project ID is missing for character: " + characterId);
+            }
             projectId = UUID.fromString(character.getProjectId());
         } catch (IllegalArgumentException e) {
-            throw new ResourceNotFoundException("Invalid Project ID in Character node");
+            throw new ResourceNotFoundException("Invalid Project ID in Character node: " + character.getProjectId());
         }
 
         Project project = projectRepository.findByIdWithUser(projectId)
