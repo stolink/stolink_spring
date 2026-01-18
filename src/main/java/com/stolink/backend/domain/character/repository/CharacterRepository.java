@@ -72,8 +72,11 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         @Query("MATCH (p:Character {id: $primaryId}) " +
                         "MATCH (m:Character {id: $mergedId}) " +
-                        "CALL apoc.refactor.mergeNodes([p, m], {properties: 'discard', mergeRels: true}) YIELD node " +
-                        "RETURN node")
+                        "WITH p, m, properties(m) AS mergedProps " +
+                        "OPTIONAL MATCH (m)-[r]-() " +
+                        "DELETE r " +
+                        "DELETE m " +
+                        "RETURN p")
         Character mergeNodes(@Param("primaryId") String primaryId, @Param("mergedId") String mergedId);
 
         @Query("MATCH (c:Character {id: $characterId}) " +
