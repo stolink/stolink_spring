@@ -60,6 +60,7 @@ public class ProjectService {
                 .genre(request.getGenreEnum())
                 .description(request.getDescription())
                 .status(Project.ProjectStatus.WRITING)
+                .coverImage(request.getCoverImage())
                 .build();
 
         project = projectRepository.save(project);
@@ -99,6 +100,10 @@ public class ProjectService {
                 request.getDescription(),
                 null,
                 request.getStatusEnum());
+
+        if (request.getCoverImage() != null) {
+            project.updateCoverImage(request.getCoverImage());
+        }
 
         return ProjectResponse.from(project);
     }
