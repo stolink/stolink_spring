@@ -841,7 +841,14 @@ public class CharacterService {
 
         // Fetch character to get current image URL (needed for edit)
         Character character = characterRepository.findById(characterId.toString())
-                .filter(c -> c.getProjectId().equals(project.getId().toString()))
+                .filter(c -> {
+                    String charPid = c.getProjectId();
+                    if (charPid == null) {
+                        log.warn("Character {} has null projectId, skipping filter match", c.getId());
+                        return false;
+                    }
+                    return charPid.equals(project.getId().toString());
+                })
                 .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
 
         String jobId = UUID.randomUUID().toString();

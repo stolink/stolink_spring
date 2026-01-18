@@ -25,6 +25,13 @@ public class CharacterRelationship {
     @Property("projectId")
     private String projectId;
 
+    @Property("project_id")
+    private String secondProjectId;
+
+    public String getProjectId() {
+        return projectId != null ? projectId : secondProjectId;
+    }
+
     @Id
     @GeneratedValue
     private Long id;

@@ -33,6 +33,13 @@ public class Character {
     @Property("projectId")
     private String projectId;
 
+    @Property("project_id")
+    private String secondProjectId;
+
+    public String getProjectId() {
+        return projectId != null ? projectId : secondProjectId;
+    }
+
     // AI 생성 ID (예: char-세라-001)
     @Property("characterId")
     private String characterId;

@@ -38,6 +38,13 @@ public class Event {
     @Property("project_id")
     private String projectId;
 
+    @Property("projectId")
+    private String secondProjectId;
+
+    public String getProjectId() {
+        return projectId != null ? projectId : secondProjectId;
+    }
+
     // AI 생성 ID (예: E001)
     @Property("eventId")
     private String eventId;

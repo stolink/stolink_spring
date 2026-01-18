@@ -52,13 +52,16 @@ public class EventService {
         // 2. 프로젝트 조회 및 소유권 검증
         UUID projectId;
         try {
-            if (character.getProjectId() == null) {
-                log.error("Project ID is missing for character: {}", characterId);
-                throw new ResourceNotFoundException("Project ID is missing for character: " + characterId);
+            String projectIdStr = character.getProjectId();
+            if (projectIdStr == null) {
+                log.error("Character {} (id: {}) has no associated projectId/project_id in Neo4j", character.getName(),
+                        characterId);
+                throw new ResourceNotFoundException("Project ID not found for character: " + characterId);
             }
-            projectId = UUID.fromString(character.getProjectId());
+            projectId = UUID.fromString(projectIdStr);
         } catch (IllegalArgumentException e) {
-            throw new ResourceNotFoundException("Invalid Project ID in Character node: " + character.getProjectId());
+            log.error("Invalid UUID format for projectId in character {}: {}", characterId, character.getProjectId());
+            throw new ResourceNotFoundException("Invalid Project ID in Character node");
         }
 
         Project project = projectRepository.findByIdWithUser(projectId)
