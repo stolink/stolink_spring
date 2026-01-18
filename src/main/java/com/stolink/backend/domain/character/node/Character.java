@@ -30,7 +30,7 @@ public class Character {
     @GeneratedValue(generatorClass = UUIDStringGenerator.class)
     private String id;
 
-    @Property("project_id")
+    @Property("projectId")
     private String projectId;
 
     // AI 생성 ID (예: char-세라-001)

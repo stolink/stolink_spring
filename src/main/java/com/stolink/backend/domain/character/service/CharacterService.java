@@ -993,4 +993,85 @@ public class CharacterService {
 
         return prompt.toString().trim();
     }
+
+    /**
+     * 프로젝트 복제: Characters 및 Relationships 복제
+     * 
+     * @param sourceProject 원본 프로젝트
+     * @param targetProject 복제 대상 프로젝트
+     */
+    @Transactional
+    public void cloneCharactersAndRelationships(Project sourceProject, Project targetProject) {
+        String sourceProjectId = sourceProject.getId().toString();
+        String targetProjectId = targetProject.getId().toString();
+        
+        // log.debug("Starting character clone form {} to {}", sourceProjectId, targetProjectId);
+        
+        // 1. 캐릭터 복제
+        List<Character> sourceCharacters = characterRepository.findByProjectId(sourceProjectId);
+        // log.debug("Found {} characters to clone", sourceCharacters.size());
+
+        java.util.Map<String, String> oldToNewCharIdMap = new java.util.HashMap<>();
+        
+        for (Character source : sourceCharacters) {
+            Character newChar = Character.builder()
+                .projectId(targetProjectId)
+                .characterId(source.getCharacterId())
+                .name(source.getName())
+                .role(source.getRole())
+                .status(source.getStatus())
+                .age(source.getAge())
+                .gender(source.getGender())
+                .race(source.getRace())
+                .mbti(source.getMbti())
+                .backstory(source.getBackstory())
+                .faction(source.getFaction())
+                .imageUrl(source.getImageUrl())
+                .positionX(source.getPositionX())
+                .positionY(source.getPositionY())
+                .aliasesJson(source.getAliasesJson())
+                .profileJson(source.getProfileJson())
+                .appearanceJson(source.getAppearanceJson())
+                .personalityJson(source.getPersonalityJson())
+                .relationsJson(source.getRelationsJson())
+                .currentMoodJson(source.getCurrentMoodJson())
+                .metaJson(source.getMetaJson())
+                .embeddingJson(source.getEmbeddingJson())
+                .inventoryJson(source.getInventoryJson())
+                .visualJson(source.getVisualJson())
+                .motivation(source.getMotivation())
+                .firstAppearance(source.getFirstAppearance())
+                .extrasJson(source.getExtrasJson())
+                .build();
+            
+            newChar = characterRepository.save(newChar);
+            oldToNewCharIdMap.put(source.getId(), newChar.getId());
+        }
+        
+        // 2. 관계 복제 (Neo4j 쿼리 사용)
+        try (var session = driver.session()) {
+            session.executeWrite(tx -> {
+                tx.run("""
+                    MATCH (source:Character)-[r:RELATED_TO]->(target:Character)
+                    WHERE source.projectId = $sourceProjectId
+                    WITH source, r, target
+                    MATCH (newSource:Character), (newTarget:Character)
+                    WHERE newSource.projectId = $targetProjectId
+                      AND newSource.name = source.name
+                      AND newTarget.name = target.name
+                    CREATE (newSource)-[newR:RELATED_TO]->(newTarget)
+                    SET newR = properties(r),
+                        newR.projectId = $targetProjectId
+                    """,
+                    java.util.Map.of(
+                        "sourceProjectId", sourceProjectId,
+                        "targetProjectId", targetProjectId
+                    ));
+                return null;
+            });
+        }
+        
+        log.info("Cloned {} characters and relationships from project {} to {}", 
+            oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
+    }
 }
