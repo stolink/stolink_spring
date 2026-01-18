@@ -19,8 +19,11 @@ public class CreateProjectRequest {
     private String manuscript; // 기존 원고 불러오기용
 
     public Project.Genre getGenreEnum() {
+        if (genre == null) {
+            return null;
+        }
         try {
-            return genre != null ? Project.Genre.valueOf(genre.toUpperCase()) : Project.Genre.OTHER;
+            return Project.Genre.valueOf(genre.toUpperCase());
         } catch (IllegalArgumentException e) {
             return Project.Genre.OTHER;
         }

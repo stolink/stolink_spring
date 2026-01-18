@@ -38,6 +38,7 @@ public class DocumentService {
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
     private final com.stolink.backend.domain.ai.service.ChatbotIngestionService chatbotIngestionService;
+    private final com.stolink.backend.domain.document.repository.SectionRepository sectionRepository;
 
     // ... (helper method to be added later or inline)
     private void triggerChatbotIngestion(Document document) {
@@ -546,5 +547,108 @@ public class DocumentService {
         }
         builder.setLength(0);
         return created;
+    }
+
+    /**
+     * 프로젝트 복제: Document 트리 구조 복제
+     * BFS 순회로 부모-자식 관계 유지하며 복제
+     * 
+     * @param sourceProject 원본 프로젝트
+     * @param targetProject 복제 대상 프로젝트
+     * @return documentIdMapping (원본 ID -> 복제본 ID)
+     */
+    @Transactional
+    public Map<UUID, UUID> cloneDocuments(Project sourceProject, Project targetProject) {
+        List<Document> sourceDocs = documentRepository.findByProjectWithParent(sourceProject);
+        
+        // Document ID mapping (원본 -> 복제본)
+        Map<UUID, UUID> oldToNewIdMap = new HashMap<>();
+        Map<UUID, Document> oldToNewDocMap = new HashMap<>();
+        
+        // 루트 문서 필터링 및 정렬
+        List<Document> rootDocs = sourceDocs.stream()
+            .filter(doc -> doc.getParent() == null)
+            .sorted((a, b) -> a.getOrder().compareTo(b.getOrder()))
+            .toList();
+        
+        // BFS 큐 초기화
+        java.util.Queue<Document> queue = new java.util.LinkedList<>(rootDocs);
+        
+        while (!queue.isEmpty()) {
+            Document source = queue.poll();
+            
+            // 복제본 생성
+            Document newDoc = Document.builder()
+                .project(targetProject)
+                .parent(source.getParent() != null ? 
+                    oldToNewDocMap.get(source.getParent().getId()) : null)
+                .type(source.getType())
+                .title(source.getTitle())
+                .content(source.getContent())
+                .synopsis(source.getSynopsis())
+                .order(source.getOrder())
+                .status(source.getStatus())
+                .label(source.getLabel())
+                .labelColor(source.getLabelColor())
+                .wordCount(source.getWordCount())
+                .targetWordCount(source.getTargetWordCount())
+                .includeInCompile(source.getIncludeInCompile())
+                .keywords(source.getKeywords())
+                .notes(source.getNotes())
+                .build();
+            
+            // ⭐ AI 분석 상태도 함께 복제 (재분석 방지)
+            newDoc.updateAnalysisStatus(source.getAnalysisStatus());
+            
+            // 저장
+            newDoc = documentRepository.save(newDoc);
+            oldToNewIdMap.put(source.getId(), newDoc.getId());
+            oldToNewDocMap.put(source.getId(), newDoc);
+            
+            // 자식 문서들을 큐에 추가
+            List<Document> children = sourceDocs.stream()
+                .filter(doc -> doc.getParent() != null && doc.getParent().getId().equals(source.getId()))
+                .sorted((a, b) -> a.getOrder().compareTo(b.getOrder()))
+                .toList();
+            queue.addAll(children);
+        }
+        
+        log.info("Cloned {} documents from project {} to {}", 
+            oldToNewIdMap.size(), sourceProject.getId(), targetProject.getId());
+        
+        // 4. Sections 복제 (AI 임베딩 데이터 포함)
+        int totalSections = 0;
+        for (java.util.Map.Entry<UUID, UUID> entry : oldToNewIdMap.entrySet()) {
+            UUID oldDocId = entry.getKey();
+            UUID newDocId = entry.getValue();
+            
+            Document oldDoc = oldToNewDocMap.get(oldDocId);
+            Document newDoc = documentRepository.findById(newDocId).orElse(null);
+            if (oldDoc == null || newDoc == null) continue;
+            
+            java.util.List<com.stolink.backend.domain.document.entity.Section> sections = 
+                sectionRepository.findByDocument(oldDoc);
+            
+            for (com.stolink.backend.domain.document.entity.Section srcSection : sections) {
+                com.stolink.backend.domain.document.entity.Section newSection = 
+                    com.stolink.backend.domain.document.entity.Section.builder()
+                        .document(newDoc)
+                        .content(srcSection.getContent())
+                        .sequenceOrder(srcSection.getSequenceOrder())
+                        .navTitle(srcSection.getNavTitle())
+                        .relatedCharactersJson(srcSection.getRelatedCharactersJson())
+                        .relatedEventsJson(srcSection.getRelatedEventsJson())
+                        .embedding(srcSection.getEmbedding())  // float[] 복사
+                        .contentHash(srcSection.getContentHash())
+                        .build();
+                sectionRepository.save(newSection);
+                totalSections++;
+            }
+        }
+        
+        log.info("Cloned {} sections from project {} to {}", 
+            totalSections, sourceProject.getId(), targetProject.getId());
+        
+        return oldToNewIdMap;
     }
 }

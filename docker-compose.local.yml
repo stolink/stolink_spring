@@ -214,14 +214,8 @@ services:
 
 volumes:
   postgres_data:
-    external: true
-    name: stolink_fastapi_agent_postgres_data
   neo4j_data:
-    external: true
-    name: stolink_fastapi_agent_neo4j_data
   neo4j_logs:
-    external: true
-    name: stolink_fastapi_agent_neo4j_logs
   rabbitmq_data:
   rabbitmq_agent_data:
   redis_data:

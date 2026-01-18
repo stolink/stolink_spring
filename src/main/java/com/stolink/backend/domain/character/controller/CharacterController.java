@@ -70,22 +70,6 @@ public class CharacterController {
         return ApiResponse.created(characterMapper.toResponse(created));
     }
 
-    @PostMapping("/relationships")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Void> createRelationship(
-            @AuthenticationPrincipal UUID userId,
-            @RequestBody Map<String, Object> body) {
-        characterService.createRelationship(
-                userId,
-                (String) body.get("sourceId"),
-                (String) body.get("targetId"),
-                extractStringList(body.get("types")),
-                (Integer) body.get("strength"),
-                (String) body.get("description"),
-                (Boolean) body.getOrDefault("bidirectional", false));
-        return ApiResponse.created(null);
-    }
-
     @SuppressWarnings("unchecked")
     private List<String> extractStringList(Object obj) {
         if (obj instanceof List<?>) {

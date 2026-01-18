@@ -211,4 +211,20 @@ public class ProjectController {
 
                 return ApiResponse.ok(report);
         }
+
+        /**
+         * 프로젝트 복제
+         */
+        @PostMapping("/{id}/clone")
+        public ApiResponse<ProjectResponse> cloneProject(
+                        @AuthenticationPrincipal UUID userId,
+                        @PathVariable UUID id,
+                        @RequestBody com.stolink.backend.domain.project.dto.ProjectCloneRequest request) {
+                
+                log.info("Clone Project request for: {} by user: {} with title: {}", 
+                        id, userId, request.getNewTitle());
+                
+                ProjectResponse clonedProject = projectService.cloneProject(userId, id, request);
+                return ApiResponse.ok(clonedProject);
+        }
 }
