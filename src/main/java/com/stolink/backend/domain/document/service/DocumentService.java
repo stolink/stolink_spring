@@ -37,6 +37,29 @@ public class DocumentService {
     private final DocumentRepository documentRepository;
     private final ProjectRepository projectRepository;
     private final UserRepository userRepository;
+    private final com.stolink.backend.domain.ai.service.ChatbotIngestionService chatbotIngestionService;
+
+    // ... (helper method to be added later or inline)
+    private void triggerChatbotIngestion(Document document) {
+        if (document.getType() != Document.DocumentType.TEXT) {
+            return;
+        }
+
+        try {
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("documentId", document.getId().toString());
+            payload.put("projectId", document.getProject().getId().toString());
+            payload.put("title", document.getTitle());
+            payload.put("content", document.getContent());
+            payload.put("order", document.getOrder());
+            payload.put("type", document.getType().toString());
+            payload.put("updatedAt", java.time.LocalDateTime.now().toString());
+
+            chatbotIngestionService.ingestDocument(payload);
+        } catch (Exception e) {
+            log.warn("Failed to prepare chatbot ingestion payload for doc: {}", document.getId(), e);
+        }
+    }
 
     public List<DocumentTreeResponse> getDocumentTree(UUID userId, UUID projectId) {
         User user = getUserOrThrow(userId);
@@ -134,6 +157,9 @@ public class DocumentService {
         document = documentRepository.save(document);
         log.info("Document created: {} in project: {}", document.getId(), request.getProjectId());
 
+        // Chatbot Ingestion Trigger
+        triggerChatbotIngestion(document);
+
         return DocumentTreeResponse.from(document);
     }
 
@@ -193,6 +219,10 @@ public class DocumentService {
         Document document = getDocument(userId, documentId);
         document.updateContent(content);
         log.info("Document content updated: {}", documentId);
+
+        // Chatbot Ingestion Trigger
+        triggerChatbotIngestion(document);
+
         return document;
     }
 
@@ -516,5 +546,75 @@ public class DocumentService {
         }
         builder.setLength(0);
         return created;
+    }
+
+    /**
+     * 프로젝트 복제: Document 트리 구조 복제
+     * BFS 순회로 부모-자식 관계 유지하며 복제
+     * 
+     * @param sourceProject 원본 프로젝트
+     * @param targetProject 복제 대상 프로젝트
+     * @return documentIdMapping (원본 ID -> 복제본 ID)
+     */
+    @Transactional
+    public Map<UUID, UUID> cloneDocuments(Project sourceProject, Project targetProject) {
+        List<Document> sourceDocs = documentRepository.findByProjectWithParent(sourceProject);
+        
+        // Document ID mapping (원본 -> 복제본)
+        Map<UUID, UUID> oldToNewIdMap = new HashMap<>();
+        Map<UUID, Document> oldToNewDocMap = new HashMap<>();
+        
+        // 루트 문서 필터링 및 정렬
+        List<Document> rootDocs = sourceDocs.stream()
+            .filter(doc -> doc.getParent() == null)
+            .sorted((a, b) -> a.getOrder().compareTo(b.getOrder()))
+            .toList();
+        
+        // BFS 큐 초기화
+        java.util.Queue<Document> queue = new java.util.LinkedList<>(rootDocs);
+        
+        while (!queue.isEmpty()) {
+            Document source = queue.poll();
+            
+            // 복제본 생성
+            Document newDoc = Document.builder()
+                .project(targetProject)
+                .parent(source.getParent() != null ? 
+                    oldToNewDocMap.get(source.getParent().getId()) : null)
+                .type(source.getType())
+                .title(source.getTitle())
+                .content(source.getContent())
+                .synopsis(source.getSynopsis())
+                .order(source.getOrder())
+                .status(source.getStatus())
+                .label(source.getLabel())
+                .labelColor(source.getLabelColor())
+                .wordCount(source.getWordCount())
+                .targetWordCount(source.getTargetWordCount())
+                .includeInCompile(source.getIncludeInCompile())
+                .keywords(source.getKeywords())
+                .notes(source.getNotes())
+                .build();
+            
+            // ⭐ AI 분석 상태도 함께 복제 (재분석 방지)
+            newDoc.updateAnalysisStatus(source.getAnalysisStatus());
+            
+            // 저장
+            newDoc = documentRepository.save(newDoc);
+            oldToNewIdMap.put(source.getId(), newDoc.getId());
+            oldToNewDocMap.put(source.getId(), newDoc);
+            
+            // 자식 문서들을 큐에 추가
+            List<Document> children = sourceDocs.stream()
+                .filter(doc -> doc.getParent() != null && doc.getParent().getId().equals(source.getId()))
+                .sorted((a, b) -> a.getOrder().compareTo(b.getOrder()))
+                .toList();
+            queue.addAll(children);
+        }
+        
+        log.info("Cloned {} documents from project {} to {}", 
+            oldToNewIdMap.size(), sourceProject.getId(), targetProject.getId());
+        
+        return oldToNewIdMap;
     }
 }
