@@ -17,7 +17,7 @@ RUN addgroup -S spring && adduser -S spring -G spring
 USER spring:spring
 
 # Copy built jar from builder stage
-COPY --from=builder --chown=spring:spring /app/build/libs/app.jar /app/app.jar
+COPY --from=builder /app/build/libs/*.jar app.jar
 
 # Expose port
 EXPOSE 8080
@@ -34,10 +34,10 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
 # -XX:+UseContainerSupport: Detect container memory limits
 # -XX:MaxMetaspaceSize: Limit Metaspace to 256MB
 ENTRYPOINT ["java", \
-  "-Xms1536m", \
-  "-Xmx2560m", \
-  "-XX:+UseG1GC", \
-  "-XX:MaxGCPauseMillis=200", \
-  "-XX:+UseContainerSupport", \
-  "-XX:MaxMetaspaceSize=256m", \
-  "-jar", "/app/app.jar"]
+    "-Xms1536m", \
+    "-Xmx2560m", \
+    "-XX:+UseG1GC", \
+    "-XX:MaxGCPauseMillis=200", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxMetaspaceSize=256m", \
+    "-jar", "app.jar"]
