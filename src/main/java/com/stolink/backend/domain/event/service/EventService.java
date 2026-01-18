@@ -68,20 +68,23 @@ public class EventService {
             throw new ResourceNotFoundException("Project not found");
         }
 
-        // 3. relationsJson에서 event_refs 파싱
-        List<String> eventRefs = parseEventRefsFromRelationsJson(character.getRelationsJson());
+        // 3. relationsJson에서 event_refs 파싱 및 캐릭터 이름/별명 추출
+        String relationsJson = character.getRelationsJson();
+        List<String> eventRefs = parseEventRefsFromRelationsJson(relationsJson);
         log.info("Parsed event_refs for character {}: {}", character.getName(), eventRefs);
 
-        if (eventRefs.isEmpty()) {
-            log.info("No event_refs found for character {}", character.getName());
-            return List.of();
+        List<String> characterNames = new ArrayList<>();
+        if (character.getName() != null) {
+            characterNames.add(character.getName());
         }
+        characterNames.addAll(parseAliasesFromAliasesJson(character.getAliasesJson()));
+        log.info("Names/Aliases for character {}: {}", character.getName(), characterNames);
 
-        // 4. Neo4j에서 직접 eventId 리스트로 필터링 (최적화)
-        List<Event> events = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
-                projectId.toString(), eventRefs);
+        // 4. Neo4j에서 다각도 통합 조회 (Robust Query)
+        List<Event> events = eventNeo4jRepository.findEventsByCharacterRobust(
+                projectId.toString(), character.getId(), characterNames, eventRefs);
 
-        log.info("Found {} events for character {} (using optimized query)",
+        log.info("Found {} events for character {} (using robust query)",
                 events.size(), character.getName());
 
         return events.stream()
@@ -116,6 +119,30 @@ public class EventService {
             return refs;
         } catch (Exception e) {
             log.warn("Failed to parse relationsJson: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * aliasesJson에서 별명 리스트 추출
+     */
+    private List<String> parseAliasesFromAliasesJson(String aliasesJson) {
+        if (aliasesJson == null || aliasesJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(aliasesJson);
+            if (root == null || !root.isArray()) {
+                return List.of();
+            }
+            List<String> aliases = new ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : root) {
+                aliases.add(node.asText());
+            }
+            return aliases;
+        } catch (Exception e) {
+            log.warn("Failed to parse aliasesJson: {}", e.getMessage());
             return List.of();
         }
     }

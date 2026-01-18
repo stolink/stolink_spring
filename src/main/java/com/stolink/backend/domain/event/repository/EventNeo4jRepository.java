@@ -77,5 +77,26 @@ public interface EventNeo4jRepository extends Neo4jRepository<Event, String> {
                         @org.springframework.data.repository.query.Param("projectId") String projectId,
                         @org.springframework.data.repository.query.Param("eventRefs") List<String> eventRefs);
 
+        // 캐릭터 관련 이벤트 다각도 통합 조회 (Robust Query)
+        @org.springframework.data.neo4j.repository.query.Query("MATCH (e:Event) " +
+                        "WHERE (e.project_id = $projectId OR e.projectId = $projectId) " +
+                        "AND (" +
+                        "  ANY(name IN $characterNames WHERE name IN e.participants) " +
+                        "  OR ANY(ref IN $eventRefs WHERE e.eventId = ref OR e.eventId ENDS WITH '_' + ref) " +
+                        "  OR EXISTS { MATCH (c:Character {id: $characterId})-[:PARTICIPATED_IN|PARTICIPATES_IN]->(e) } "
+                        +
+                        ") " +
+                        "RETURN e.id as id, e.eventId as eventId, e.narrativeSummary as narrativeSummary, " +
+                        "e.eventType as eventType, e.description as description, e.participants as participants, " +
+                        "e.chapter as chapter, e.sequenceOrder as sequenceOrder, e.importance as importance, " +
+                        "e.locationRef as locationRef, e.documentId as documentId, coalesce(e.project_id, e.projectId) as projectId "
+                        +
+                        "ORDER BY e.chapter ASC, e.sequenceOrder ASC")
+        List<Event> findEventsByCharacterRobust(
+                        @org.springframework.data.repository.query.Param("projectId") String projectId,
+                        @org.springframework.data.repository.query.Param("characterId") String characterId,
+                        @org.springframework.data.repository.query.Param("characterNames") List<String> characterNames,
+                        @org.springframework.data.repository.query.Param("eventRefs") List<String> eventRefs);
+
         void deleteByProjectId(String projectId);
 }
