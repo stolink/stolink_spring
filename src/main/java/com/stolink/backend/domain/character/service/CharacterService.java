@@ -1054,13 +1054,15 @@ public class CharacterService {
                 session.executeWrite(tx -> {
                     tx.run("""
                         UNWIND keys($idMap) AS sourceId
-                        MATCH (source:Character {id: sourceId})-[r:RELATED_TO]->(target:Character)
+                        MATCH (source:Character {id: sourceId})-[r:RELATED_TO]-(target:Character)
                         WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
                           AND target.id IN keys($idMap)
-                        WITH source, r, target, $idMap[sourceId] AS newSourceId, $idMap[target.id] AS newTargetId
-                        MATCH (newSource:Character {id: newSourceId})
-                        MATCH (newTarget:Character {id: newTargetId})
-                        CREATE (newSource)-[newR:RELATED_TO]->(newTarget)
+                          AND source.id < target.id
+                        WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
+                        WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
+                        MATCH (newStart:Character {id: newStartId})
+                        MATCH (newEnd:Character {id: newTargetId})
+                        CREATE (newStart)-[newR:RELATED_TO]->(newEnd)
                         SET newR = properties(r),
                             newR.projectId = $targetProjectId,
                             newR.id = randomUUID()
