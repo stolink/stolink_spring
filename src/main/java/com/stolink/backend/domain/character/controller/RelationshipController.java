@@ -131,24 +131,6 @@ public class RelationshipController {
     // =========== Global Relationship Endpoints (No projectId in path) ===========
 
     /**
-     * 관계 생성 (Global - projectId를 sourceId에서 유추)
-     * POST /api/relationships
-     *
-     * @apiNote projectId는 sourceId 캐릭터에서 자동으로 추론됨
-     * @apiNote sourceId와 targetId가 동일한 프로젝트에 속하는지 검증
-     * @apiNote bidirectional: true면 역방향 관계도 자동 생성
-     */
-    @PostMapping("/api/relationships")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<RelationshipResponse> createRelationshipGlobal(
-            @AuthenticationPrincipal UUID userId,
-            @Valid @RequestBody RelationshipCreateRequest request) {
-
-        RelationshipResponse response = characterService.createRelationshipWithResponse(userId, request);
-        return ApiResponse.created(response);
-    }
-
-    /**
      * 관계 수정 (Global)
      * PATCH /api/relationships/{id}
      */

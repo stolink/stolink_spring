@@ -62,7 +62,6 @@ public class ProjectService {
                 .genre(request.getGenreEnum())
                 .description(request.getDescription())
                 .status(Project.ProjectStatus.WRITING)
-                .coverImage(request.getCoverImage())
                 .build();
 
         project = projectRepository.save(project);
@@ -103,13 +102,6 @@ public class ProjectService {
                 null,
                 request.getStatusEnum());
 
-        if (request.getCoverImage() != null) {
-            log.debug("Updating cover image for project: {}. Size: {}", projectId, request.getCoverImage().length());
-            project.updateCoverImage(request.getCoverImage());
-        }
-
-        project = projectRepository.save(project);
-        log.info("Project updated: {} by user: {}", projectId, userId);
         return ProjectResponse.from(project);
     }
 
@@ -152,52 +144,52 @@ public class ProjectService {
 
     /**
      * 프로젝트 복제
-     *
-     * @param userId          사용자 ID
+     * 
+     * @param userId 사용자 ID
      * @param sourceProjectId 원본 프로젝트 ID
-     * @param request         복제 요청 (새 제목)
+     * @param request 복제 요청 (새 제목)
      * @return 복제된 프로젝트 정보
      */
     @Transactional
-    public ProjectResponse cloneProject(UUID userId, UUID sourceProjectId,
+    public ProjectResponse cloneProject(UUID userId, UUID sourceProjectId, 
             com.stolink.backend.domain.project.dto.ProjectCloneRequest request) {
         // 1. 권한 확인
         User user = getUserOrThrow(userId);
         Project sourceProject = projectRepository.findByIdAndUser(sourceProjectId, user)
-                .orElseThrow(() -> new ResourceNotFoundException("Project", "id", sourceProjectId));
-
+            .orElseThrow(() -> new ResourceNotFoundException("Project", "id", sourceProjectId));
+        
         // 2. 새 프로젝트 생성
         Project newProject = Project.builder()
-                .user(user)
-                .title(request.getNewTitle())
-                .genre(sourceProject.getGenre())
-                .description(sourceProject.getDescription())
-                .author(sourceProject.getAuthor())
-                .status(Project.ProjectStatus.WRITING)
-                .build();
+            .user(user)
+            .title(request.getNewTitle())
+            .genre(sourceProject.getGenre())
+            .description(sourceProject.getDescription())
+            .author(sourceProject.getAuthor())
+            .status(Project.ProjectStatus.WRITING)
+            .build();
         newProject = projectRepository.save(newProject);
-
+        
         // 3. 도메인별 복제 (핵심 데이터만 우선 복제)
         try {
             // Document 복제 (트리 구조 + 내용)
             documentService.cloneDocuments(sourceProject, newProject);
-
+            
             // Foreshadowing 복제
             foreshadowingService.cloneForeshadowings(sourceProject, newProject);
-
+            
             // Character + Relationship 복제 (Neo4j)
             characterService.cloneCharactersAndRelationships(sourceProject, newProject);
-
-            log.info("Project cloned successfully: {} -> {} by user: {}",
-                    sourceProjectId, newProject.getId(), userId);
-
+            
+            log.info("Project cloned successfully: {} -> {} by user: {}", 
+                sourceProjectId, newProject.getId(), userId);
+            
         } catch (Exception e) {
             log.error("Failed to clone project: {}", sourceProjectId, e);
             // 실패 시 생성한 프로젝트 삭제
             projectRepository.delete(newProject);
             throw new RuntimeException("프로젝트 복제 중 오류가 발생했습니다: " + e.getMessage(), e);
         }
-
+        
         return ProjectResponse.from(newProject);
     }
 }
