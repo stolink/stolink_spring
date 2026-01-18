@@ -1054,18 +1054,17 @@ public class CharacterService {
                 session.executeWrite(tx -> {
                     tx.run("""
                         UNWIND keys($idMap) AS sourceId
-                        MATCH (source:Character {id: sourceId})-[r:RELATED_TO]-(target:Character)
+                        MATCH (source:Character {id: sourceId})-[r]-(target:Character)
                         WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
                           AND target.id IN keys($idMap)
                           AND source.id < target.id
-                        WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
-                        WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
+                        WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap, type(r) AS relType
+                        WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId, relType
                         MATCH (newStart:Character {id: newStartId})
                         MATCH (newEnd:Character {id: newTargetId})
-                        CREATE (newStart)-[newR:RELATED_TO]->(newEnd)
-                        SET newR = properties(r),
-                            newR.projectId = $targetProjectId,
-                            newR.id = randomUUID()
+                        CALL apoc.create.relationship(newStart, relType, properties(r), newEnd) YIELD rel
+                        SET rel.projectId = $targetProjectId,
+                            rel.id = randomUUID()
                         """,
                         java.util.Map.of(
                             "sourceProjectId", sourceProjectId,
