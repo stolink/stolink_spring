@@ -210,6 +210,7 @@ public class CharacterService {
                 }
 
                 CharacterRelationship charRel = CharacterRelationship.builder()
+                        .id(rel.id())
                         .source(sourceId)
                         .target(targetChar)
                         .types(typesList)
@@ -299,7 +300,85 @@ public class CharacterService {
     // =========== Relationship CRUD Operations ===========
 
     /**
-     * 관계 생성 (프론트엔드 API용)
+     * 관계 생성 (Global API용 - projectId 자동 추론)
+     * - sourceId 캐릭터에서 projectId 추론
+     * - sourceId와 targetId가 동일 프로젝트에 속하는지 검증
+     * - 중복 확인 후 관계 생성
+     * - bidirectional: true면 역방향 관계도 생성
+     *
+     * @return 생성된 관계 정보
+     */
+    @Transactional
+    public com.stolink.backend.domain.character.dto.RelationshipResponse createRelationshipWithResponse(
+            UUID userId,
+            com.stolink.backend.domain.character.dto.RelationshipCreateRequest request) {
+
+        User user = getUserOrThrow(userId);
+
+        String sourceId = request.sourceId();
+        String targetId = request.targetId();
+
+        // 소스 캐릭터에서 projectId 추론
+        Character sourceChar = characterRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", sourceId));
+        String pId = sourceChar.getProjectId();
+
+        if (pId == null || pId.isBlank()) {
+            throw new IllegalArgumentException("Source character does not belong to any project");
+        }
+
+        // 타겟 캐릭터 존재 및 동일 프로젝트 검증
+        Character targetChar = characterRepository.findById(targetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", targetId));
+
+        if (!pId.equals(targetChar.getProjectId())) {
+            throw new IllegalArgumentException(
+                    "Source and target characters must belong to the same project. " +
+                            "Source project: " + pId + ", Target project: " + targetChar.getProjectId());
+        }
+
+        // 프로젝트 소유권 검증
+        Project project = getProjectOrThrow(UUID.fromString(pId), user);
+
+        // 중복 관계 확인
+        Boolean exists = characterRepository.existsRelationship(sourceId, targetId);
+        if (Boolean.TRUE.equals(exists)) {
+            throw new com.stolink.backend.global.common.exception.DuplicateRelationshipException(sourceId, targetId);
+        }
+
+        // 관계 생성
+        Long relId = characterRepository.createRelationshipReturningId(
+                sourceId, targetId, pId,
+                request.types(), request.strength(),
+                request.description(), request.bidirectional());
+
+        log.info("Relationship created (global): {} -> {} (id={})", sourceId, targetId, relId);
+
+        // 양방향 관계 처리
+        if (Boolean.TRUE.equals(request.bidirectional())) {
+            Boolean reverseExists = characterRepository.existsRelationship(targetId, sourceId);
+            if (!Boolean.TRUE.equals(reverseExists)) {
+                Long reverseRelId = characterRepository.createRelationshipReturningId(
+                        targetId, sourceId, pId,
+                        request.types(), request.strength(),
+                        request.description(), true);
+                log.info("Reverse relationship created: {} -> {} (id={})", targetId, sourceId, reverseRelId);
+            }
+        }
+
+        return com.stolink.backend.domain.character.dto.RelationshipResponse.builder()
+                .id(String.valueOf(relId))
+                .sourceId(sourceId)
+                .targetId(targetId)
+                .types(request.types())
+                .strength(request.strength())
+                .description(request.description())
+                .bidirectional(request.bidirectional())
+                .build();
+    }
+
+    /**
+     * 관계 생성 (프로젝트 지정 API용)
      * - 중복 확인 후 관계 생성
      * - bidirectional: true면 역방향 관계도 생성
      *
@@ -324,12 +403,22 @@ public class CharacterService {
             throw new com.stolink.backend.global.common.exception.DuplicateRelationshipException(sourceId, targetId);
         }
 
-        // 소스/타겟 캐릭터 존재 확인
-        if (!characterRepository.existsById(sourceId)) {
-            throw new ResourceNotFoundException("Character", "id", sourceId);
+        // 소스/타겟 캐릭터 존재 및 프로젝트 소속 확인
+        Character sourceChar = characterRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", sourceId));
+        Character targetChar = characterRepository.findById(targetId)
+                .orElseThrow(() -> new ResourceNotFoundException("Character", "id", targetId));
+
+        // 캐릭터가 지정된 프로젝트에 속하는지 검증
+        if (!pId.equals(sourceChar.getProjectId())) {
+            throw new IllegalArgumentException(
+                    "Source character does not belong to the specified project. " +
+                            "Expected: " + pId + ", Actual: " + sourceChar.getProjectId());
         }
-        if (!characterRepository.existsById(targetId)) {
-            throw new ResourceNotFoundException("Character", "id", targetId);
+        if (!pId.equals(targetChar.getProjectId())) {
+            throw new IllegalArgumentException(
+                    "Target character does not belong to the specified project. " +
+                            "Expected: " + pId + ", Actual: " + targetChar.getProjectId());
         }
 
         // 관계 생성
@@ -543,6 +632,7 @@ public class CharacterService {
         try {
             return Long.parseLong(s);
         } catch (NumberFormatException e) {
+            log.debug("Failed to parse relationship ID '{}' as Long, assuming composite ID", s);
             return null;
         }
     }
@@ -996,7 +1086,7 @@ public class CharacterService {
 
     /**
      * 프로젝트 복제: Characters 및 Relationships 복제
-     * 
+     *
      * @param sourceProject 원본 프로젝트
      * @param targetProject 복제 대상 프로젝트
      */
@@ -1004,85 +1094,88 @@ public class CharacterService {
     public void cloneCharactersAndRelationships(Project sourceProject, Project targetProject) {
         String sourceProjectId = sourceProject.getId().toString();
         String targetProjectId = targetProject.getId().toString();
-        
-        // log.debug("Starting character clone form {} to {}", sourceProjectId, targetProjectId);
-        
+
+        // log.debug("Starting character clone form {} to {}", sourceProjectId,
+        // targetProjectId);
+
         // 1. 캐릭터 복제
         List<Character> sourceCharacters = characterRepository.findByProjectId(sourceProjectId);
         // log.debug("Found {} characters to clone", sourceCharacters.size());
 
         java.util.Map<String, String> oldToNewCharIdMap = new java.util.HashMap<>();
-        
+
         for (Character source : sourceCharacters) {
             Character newChar = Character.builder()
-                .projectId(targetProjectId)
-                .characterId(source.getCharacterId())
-                .name(source.getName())
-                .role(source.getRole())
-                .status(source.getStatus())
-                .age(source.getAge())
-                .gender(source.getGender())
-                .race(source.getRace())
-                .mbti(source.getMbti())
-                .backstory(source.getBackstory())
-                .faction(source.getFaction())
-                .imageUrl(source.getImageUrl())
-                .positionX(source.getPositionX())
-                .positionY(source.getPositionY())
-                .aliasesJson(source.getAliasesJson())
-                .profileJson(source.getProfileJson())
-                .appearanceJson(source.getAppearanceJson())
-                .personalityJson(source.getPersonalityJson())
-                .relationsJson(source.getRelationsJson())
-                .currentMoodJson(source.getCurrentMoodJson())
-                .metaJson(source.getMetaJson())
-                .embeddingJson(source.getEmbeddingJson())
-                .inventoryJson(source.getInventoryJson())
-                .visualJson(source.getVisualJson())
-                .motivation(source.getMotivation())
-                .firstAppearance(source.getFirstAppearance())
-                .extrasJson(source.getExtrasJson())
-                .build();
-            
+                    .projectId(targetProjectId)
+                    .characterId(source.getCharacterId())
+                    .name(source.getName())
+                    .role(source.getRole())
+                    .status(source.getStatus())
+                    .age(source.getAge())
+                    .gender(source.getGender())
+                    .race(source.getRace())
+                    .mbti(source.getMbti())
+                    .backstory(source.getBackstory())
+                    .faction(source.getFaction())
+                    .imageUrl(source.getImageUrl())
+                    .positionX(source.getPositionX())
+                    .positionY(source.getPositionY())
+                    .aliasesJson(source.getAliasesJson())
+                    .profileJson(source.getProfileJson())
+                    .appearanceJson(source.getAppearanceJson())
+                    .personalityJson(source.getPersonalityJson())
+                    .relationsJson(source.getRelationsJson())
+                    .currentMoodJson(source.getCurrentMoodJson())
+                    .metaJson(source.getMetaJson())
+                    .embeddingJson(source.getEmbeddingJson())
+                    .inventoryJson(source.getInventoryJson())
+                    .visualJson(source.getVisualJson())
+                    .motivation(source.getMotivation())
+                    .firstAppearance(source.getFirstAppearance())
+                    .extrasJson(source.getExtrasJson())
+                    .build();
+
             newChar = characterRepository.save(newChar);
             oldToNewCharIdMap.put(source.getId(), newChar.getId());
         }
-        
+
         // 2. 관계 복제 (모든 관계 타입 지원 - APOC 없이)
+        // 🔧 버그 수정: 유향 매칭 `-[r]->` 사용, `source.id < target.id` 조건 제거
+        // 이전 코드의 문제: 무방향 매칭 + source.id < target.id 조건으로 절반의 관계가 누락됨
         if (!oldToNewCharIdMap.isEmpty()) {
             try (var session = driver.session()) {
                 // 지원하는 모든 관계 타입
-                String[] relationshipTypes = {"RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY", "NEUTRAL"};
-                
+                String[] relationshipTypes = { "RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY",
+                        "NEUTRAL" };
+
                 for (String relType : relationshipTypes) {
                     session.executeWrite(tx -> {
+                        // 유향 매칭 `-[r]->` 으로 각 관계가 한 번만 처리되어 중복 방지
                         tx.run("""
-                            UNWIND keys($idMap) AS sourceId
-                            MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
-                            WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
-                              AND target.id IN keys($idMap)
-                              AND source.id < target.id
-                            WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
-                            WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
-                            MATCH (newStart:Character {id: newStartId})
-                            MATCH (newEnd:Character {id: newTargetId})
-                            CREATE (newStart)-[newR:%s]->(newEnd)
-                            SET newR = properties(r),
-                                newR.projectId = $targetProjectId,
-                                newR.id = randomUUID()
-                            """.formatted(relType, relType),
-                            java.util.Map.of(
-                                "sourceProjectId", sourceProjectId,
-                                "targetProjectId", targetProjectId,
-                                "idMap", oldToNewCharIdMap
-                            ));
+                                UNWIND keys($idMap) AS sourceId
+                                MATCH (source:Character {id: sourceId})-[r:%s]->(target:Character)
+                                WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
+                                  AND target.id IN keys($idMap)
+                                WITH r, source.id AS srcId, target.id AS tgtId, $idMap AS idMap
+                                WITH idMap[srcId] AS newStartId, idMap[tgtId] AS newTargetId, r
+                                MATCH (newStart:Character {id: newStartId})
+                                MATCH (newEnd:Character {id: newTargetId})
+                                CREATE (newStart)-[newR:%s]->(newEnd)
+                                SET newR = properties(r),
+                                    newR.projectId = $targetProjectId,
+                                    newR.id = randomUUID()
+                                """.formatted(relType, relType),
+                                java.util.Map.of(
+                                        "sourceProjectId", sourceProjectId,
+                                        "targetProjectId", targetProjectId,
+                                        "idMap", oldToNewCharIdMap));
                         return null;
                     });
                 }
             }
         }
-        
-        log.info("Cloned {} characters and relationships from project {} to {}", 
-            oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
+
+        log.info("Cloned {} characters and relationships from project {} to {}",
+                oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
     }
 }

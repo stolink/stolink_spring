@@ -91,6 +91,18 @@ public class GlobalExceptionHandler {
                                                 .build());
         }
 
+        @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+        public ResponseEntity<ApiResponse<Void>> handleMaxUploadSizeExceeded(
+                        org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+                log.error("Max upload size exceeded: {}", ex.getMessage());
+                return ResponseEntity
+                                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                                .body(ApiResponse.<Void>builder()
+                                                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                                                .message("파일 크기가 너무 큽니다. (최대 50MB)")
+                                                .build());
+        }
+
         @ExceptionHandler(IllegalArgumentException.class)
         public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
                 log.error("Illegal argument: {}", ex.getMessage());

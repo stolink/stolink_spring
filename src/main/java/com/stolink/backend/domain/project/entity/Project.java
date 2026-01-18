@@ -75,7 +75,7 @@ public class Project extends BaseEntity {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Column(length = 500)
+    @Column(columnDefinition = "TEXT")
     private String coverImage;
 
     @Enumerated(EnumType.STRING)

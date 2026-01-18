@@ -32,6 +32,7 @@ server:
   port: 8080
   forward-headers-strategy: framework
   tomcat:
+    max-http-post-size: 50MB
     remote-ip-header: x-forwarded-for
     protocol-header: x-forwarded-proto
     internal-proxies: ".*"
