@@ -12,7 +12,9 @@ import com.stolink.backend.domain.character.node.Character;
 @Repository
 public interface CharacterRepository extends Neo4jRepository<Character, String> {
 
-        List<Character> findByProjectId(String projectId);
+        @Query("MATCH (c:Character) WHERE (c.projectId = $projectId OR c.project_id = $projectId) RETURN c")
+        List<Character> findByProjectId(@Param("projectId") String projectId);
+
 
         List<Character> findAll();
 
