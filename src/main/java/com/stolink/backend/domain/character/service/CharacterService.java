@@ -751,7 +751,7 @@ public class CharacterService {
 
         // Fetch character to get current image URL (needed for edit)
         Character character = characterRepository.findById(characterId.toString())
-                .filter(c -> c.getProjectId().equals(project.getId().toString()))
+                .filter(c -> project.getId().toString().equals(c.getProjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
 
         String jobId = UUID.randomUUID().toString();
@@ -996,7 +996,7 @@ public class CharacterService {
 
     /**
      * 프로젝트 복제: Characters 및 Relationships 복제
-     * 
+     *
      * @param sourceProject 원본 프로젝트
      * @param targetProject 복제 대상 프로젝트
      */
@@ -1004,85 +1004,86 @@ public class CharacterService {
     public void cloneCharactersAndRelationships(Project sourceProject, Project targetProject) {
         String sourceProjectId = sourceProject.getId().toString();
         String targetProjectId = targetProject.getId().toString();
-        
-        // log.debug("Starting character clone form {} to {}", sourceProjectId, targetProjectId);
-        
+
+        // log.debug("Starting character clone form {} to {}", sourceProjectId,
+        // targetProjectId);
+
         // 1. 캐릭터 복제
         List<Character> sourceCharacters = characterRepository.findByProjectId(sourceProjectId);
         // log.debug("Found {} characters to clone", sourceCharacters.size());
 
         java.util.Map<String, String> oldToNewCharIdMap = new java.util.HashMap<>();
-        
+
         for (Character source : sourceCharacters) {
             Character newChar = Character.builder()
-                .projectId(targetProjectId)
-                .characterId(source.getCharacterId())
-                .name(source.getName())
-                .role(source.getRole())
-                .status(source.getStatus())
-                .age(source.getAge())
-                .gender(source.getGender())
-                .race(source.getRace())
-                .mbti(source.getMbti())
-                .backstory(source.getBackstory())
-                .faction(source.getFaction())
-                .imageUrl(source.getImageUrl())
-                .positionX(source.getPositionX())
-                .positionY(source.getPositionY())
-                .aliasesJson(source.getAliasesJson())
-                .profileJson(source.getProfileJson())
-                .appearanceJson(source.getAppearanceJson())
-                .personalityJson(source.getPersonalityJson())
-                .relationsJson(source.getRelationsJson())
-                .currentMoodJson(source.getCurrentMoodJson())
-                .metaJson(source.getMetaJson())
-                .embeddingJson(source.getEmbeddingJson())
-                .inventoryJson(source.getInventoryJson())
-                .visualJson(source.getVisualJson())
-                .motivation(source.getMotivation())
-                .firstAppearance(source.getFirstAppearance())
-                .extrasJson(source.getExtrasJson())
-                .build();
-            
+                    .projectId(targetProjectId)
+                    .characterId(source.getCharacterId())
+                    .name(source.getName())
+                    .role(source.getRole())
+                    .status(source.getStatus())
+                    .age(source.getAge())
+                    .gender(source.getGender())
+                    .race(source.getRace())
+                    .mbti(source.getMbti())
+                    .backstory(source.getBackstory())
+                    .faction(source.getFaction())
+                    .imageUrl(source.getImageUrl())
+                    .positionX(source.getPositionX())
+                    .positionY(source.getPositionY())
+                    .aliasesJson(source.getAliasesJson())
+                    .profileJson(source.getProfileJson())
+                    .appearanceJson(source.getAppearanceJson())
+                    .personalityJson(source.getPersonalityJson())
+                    .relationsJson(source.getRelationsJson())
+                    .currentMoodJson(source.getCurrentMoodJson())
+                    .metaJson(source.getMetaJson())
+                    .embeddingJson(source.getEmbeddingJson())
+                    .inventoryJson(source.getInventoryJson())
+                    .visualJson(source.getVisualJson())
+                    .motivation(source.getMotivation())
+                    .firstAppearance(source.getFirstAppearance())
+                    .extrasJson(source.getExtrasJson())
+                    .build();
+
             newChar = characterRepository.save(newChar);
             oldToNewCharIdMap.put(source.getId(), newChar.getId());
         }
-        
+
         // 2. 관계 복제 (모든 관계 타입 지원 - APOC 없이)
         if (!oldToNewCharIdMap.isEmpty()) {
             try (var session = driver.session()) {
                 // 지원하는 모든 관계 타입
-                String[] relationshipTypes = {"RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY", "NEUTRAL"};
-                
+                String[] relationshipTypes = { "RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY",
+                        "NEUTRAL" };
+
                 for (String relType : relationshipTypes) {
                     session.executeWrite(tx -> {
                         tx.run("""
-                            UNWIND keys($idMap) AS sourceId
-                            MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
-                            WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
-                              AND target.id IN keys($idMap)
-                              AND source.id < target.id
-                            WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
-                            WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
-                            MATCH (newStart:Character {id: newStartId})
-                            MATCH (newEnd:Character {id: newTargetId})
-                            CREATE (newStart)-[newR:%s]->(newEnd)
-                            SET newR = properties(r),
-                                newR.projectId = $targetProjectId,
-                                newR.id = randomUUID()
-                            """.formatted(relType, relType),
-                            java.util.Map.of(
-                                "sourceProjectId", sourceProjectId,
-                                "targetProjectId", targetProjectId,
-                                "idMap", oldToNewCharIdMap
-                            ));
+                                UNWIND keys($idMap) AS sourceId
+                                MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
+                                WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
+                                  AND target.id IN keys($idMap)
+                                  AND source.id < target.id
+                                WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
+                                WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
+                                MATCH (newStart:Character {id: newStartId})
+                                MATCH (newEnd:Character {id: newTargetId})
+                                CREATE (newStart)-[newR:%s]->(newEnd)
+                                SET newR = properties(r),
+                                    newR.projectId = $targetProjectId,
+                                    newR.id = randomUUID()
+                                """.formatted(relType, relType),
+                                java.util.Map.of(
+                                        "sourceProjectId", sourceProjectId,
+                                        "targetProjectId", targetProjectId,
+                                        "idMap", oldToNewCharIdMap));
                         return null;
                     });
                 }
             }
         }
-        
-        log.info("Cloned {} characters and relationships from project {} to {}", 
-            oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
+
+        log.info("Cloned {} characters and relationships from project {} to {}",
+                oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
     }
 }

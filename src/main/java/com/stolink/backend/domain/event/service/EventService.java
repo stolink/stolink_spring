@@ -49,12 +49,19 @@ public class EventService {
                     return new ResourceNotFoundException("Character not found: " + characterId);
                 });
 
-        // 2. 프로젝트 조회 및 소유권 검증
+        // 2. 프로젝트 조회 및 소유권 검증 (Project ID Validation)
+        String projectIdStr = character.getProjectId();
+        if (projectIdStr == null || projectIdStr.isBlank()) {
+            log.error("Character {} has null or empty projectId", characterId);
+            throw new ResourceNotFoundException("Project ID is null/empty for character: " + characterId);
+        }
+
         UUID projectId;
         try {
-            projectId = UUID.fromString(character.getProjectId());
+            projectId = UUID.fromString(projectIdStr);
         } catch (IllegalArgumentException e) {
-            throw new ResourceNotFoundException("Invalid Project ID in Character node");
+            log.error("Invalid Project ID format for character {}: {}", characterId, projectIdStr);
+            throw new ResourceNotFoundException("Invalid Project ID (UUID) in Character node: " + projectIdStr);
         }
 
         Project project = projectRepository.findByIdWithUser(projectId)

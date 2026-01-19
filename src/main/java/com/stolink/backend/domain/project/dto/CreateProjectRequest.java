@@ -14,6 +14,7 @@ public class CreateProjectRequest {
     private String title;
     private String genre;
     private String description;
+    private String coverImage;
     private String status;
     private String manuscript; // 기존 원고 불러오기용
 
