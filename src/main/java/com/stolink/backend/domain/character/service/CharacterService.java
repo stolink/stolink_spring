@@ -750,9 +750,21 @@ public class CharacterService {
         Project project = getProjectOrThrow(projectId, user);
 
         // Fetch character to get current image URL (needed for edit)
+        // Fetch character to get current image URL (needed for edit)
         Character character = characterRepository.findById(characterId.toString())
-                .filter(c -> project.getId().toString().equals(c.getProjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
+
+        // Robust Project ID Validation (Handles snake_case vs camelCase in Neo4j)
+        String storedProjectId = character.getProjectId();
+        if (storedProjectId == null) {
+            storedProjectId = characterRepository.findProjectIdById(characterId.toString()).orElse(null);
+        }
+
+        if (storedProjectId == null || !project.getId().toString().equals(storedProjectId)) {
+            log.warn("Project ownership mismatch for character {}: expected {}, found {}",
+                    characterId, project.getId(), storedProjectId);
+            throw new ResourceNotFoundException("Character", "id", characterId);
+        }
 
         String jobId = UUID.randomUUID().toString();
         String safeAction = (action == null || action.isBlank()) ? "create" : action;
