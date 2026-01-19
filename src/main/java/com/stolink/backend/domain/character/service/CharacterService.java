@@ -452,7 +452,7 @@ public class CharacterService {
         String pIdInDb = null;
         if (details != null) {
             // Project 소유권 검증 (If exists)
-            pIdInDb = details.projectId();
+            pIdInDb = details.getProjectId();
             if (projectId != null && !projectId.toString().equals(pIdInDb)) {
                 throw new IllegalArgumentException("Relationship does not belong to the specified project");
             }
@@ -468,7 +468,7 @@ public class CharacterService {
 
         switch (operation) {
             case "GET":
-                return buildRelationshipResponse(details, String.valueOf(details.relId()));
+                return buildRelationshipResponse(details, String.valueOf(details.getRelId()));
 
             case "PATCH":
                 com.stolink.backend.domain.character.repository.RelationshipProjection updated = null;
@@ -514,12 +514,12 @@ public class CharacterService {
                 }
 
                 log.info("Relationship updated (created={}): {} ({})", isCreated, relationshipId, operation);
-                return buildRelationshipResponse(updated, String.valueOf(updated.relId()));
+                return buildRelationshipResponse(updated, String.valueOf(updated.getRelId()));
 
             case "DELETE":
-                Boolean bidirectional = details.bidirectional();
-                String sourceId = details.sourceId();
-                String targetId = details.targetId();
+                Boolean bidirectional = details.getBidirectional();
+                String sourceId = details.getSourceId();
+                String targetId = details.getTargetId();
 
                 if (Boolean.TRUE.equals(bidirectional)) {
                     characterRepository.deleteRelationshipBySourceTarget(targetId, sourceId, pIdInDb);
@@ -579,13 +579,13 @@ public class CharacterService {
             com.stolink.backend.domain.character.repository.RelationshipProjection data, String relationshipId) {
         return com.stolink.backend.domain.character.dto.RelationshipResponse.builder()
                 .id(relationshipId)
-                .sourceId(data.sourceId())
-                .targetId(data.targetId())
-                .types(data.types())
-                .strength(data.strength())
-                .description(data.description())
-                .bidirectional(data.bidirectional())
-                .since(data.since())
+                .sourceId(data.getSourceId())
+                .targetId(data.getTargetId())
+                .types(data.getTypes())
+                .strength(data.getStrength())
+                .description(data.getDescription())
+                .bidirectional(data.getBidirectional())
+                .since(data.getSince())
                 .build();
     }
 

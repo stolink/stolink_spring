@@ -39,7 +39,7 @@ public class PublishService {
                     .workTitle(draft.getWorkTitle())
                     .workSynopsis(draft.getWorkSynopsis())
                     .workGenre(draft.getWorkGenre())
-                    .workCoverUrl(draft.getWorkCoverUrl())
+                    .workCoverImage(draft.getWorkCoverImage())
                     .chapterTitle(draft.getTitle())
                     .chapterContent(draft.getContent())
                     .build();
@@ -49,7 +49,7 @@ public class PublishService {
 
             // 4. 결과 반영 (트랜잭션 분리)
             draftService.updatePublishResult(draftId, response.workId(), response.chapterId());
-            log.info("Successfully published draft {} to Storead. WorkId: {}, ChapterId: {}", 
+            log.info("Successfully published draft {} to Storead. WorkId: {}, ChapterId: {}",
                     draftId, response.workId(), response.chapterId());
 
         } catch (Exception e) {
@@ -59,4 +59,3 @@ public class PublishService {
         }
     }
 }
-
