@@ -63,7 +63,7 @@ public interface EventNeo4jRepository extends Neo4jRepository<Event, String> {
                 "UNION " +
                 "MATCH (c:Character {id: $characterId}) " +
                 "MATCH (e:Event) " +
-                "WHERE c.name IN e.participants AND (e.project_id = c.project_id OR e.projectId = c.project_id OR e.project_id = c.projectId OR e.projectId = c.projectId) " +
+                "WHERE e.participants IS NOT NULL AND c.name IN e.participants AND (e.project_id = c.project_id OR e.projectId = c.project_id OR e.project_id = c.projectId OR e.projectId = c.projectId) " +
                 "RETURN e")
         List<Event> findEventsByCharacterId(
                         @org.springframework.data.repository.query.Param("characterId") String characterId);

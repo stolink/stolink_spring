@@ -82,9 +82,11 @@ public class EventService {
             List<Event> additionalEvents = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
                     projectId.toString(), eventRefs);
             
-            // 중복 제거하며 병합
+            // 중복 제거하며 병합 (null-safe)
             for (Event e : additionalEvents) {
-                if (events.stream().noneMatch(existing -> existing.getId().equals(e.getId()))) {
+                if (e.getId() == null) continue; // ID 없는 이벤트 스킵
+                String eId = e.getId();
+                if (events.stream().noneMatch(existing -> eId.equals(existing.getId()))) {
                     events.add(e);
                 }
             }
