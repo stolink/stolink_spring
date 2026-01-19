@@ -82,11 +82,23 @@ public class EventService {
             List<Event> additionalEvents = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
                     projectId.toString(), eventRefs);
             
-            // 중복 제거하며 병합 (null-safe)
+            // 중복 제거하며 병합 (null-safe & eventId fallback)
             for (Event e : additionalEvents) {
-                if (e.getId() == null) continue; // ID 없는 이벤트 스킵
-                String eId = e.getId();
-                if (events.stream().noneMatch(existing -> eId.equals(existing.getId()))) {
+                String uniqueKey = e.getEventId(); // eventId를 고유 키로 사용 (Python이 생성한 노드는 id가 없을 수 있음)
+                if (uniqueKey == null) {
+                    uniqueKey = e.getId(); // eventId가 없으면 id 사용
+                }
+                
+                if (uniqueKey == null) continue; // 식별자 없는 이벤트 스킵
+
+                String finalKey = uniqueKey;
+                boolean exists = events.stream().anyMatch(existing -> {
+                    String existingKey = existing.getEventId();
+                    if (existingKey == null) existingKey = existing.getId();
+                    return finalKey.equals(existingKey);
+                });
+
+                if (!exists) {
                     events.add(e);
                 }
             }
