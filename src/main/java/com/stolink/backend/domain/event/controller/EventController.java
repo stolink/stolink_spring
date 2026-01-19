@@ -32,8 +32,16 @@ public class EventController {
     @GetMapping("/characters/{characterId}/events")
     public ApiResponse<List<EventResponse>> getEventsByCharacter(
             @AuthenticationPrincipal UUID userId,
-            @PathVariable UUID characterId) {
-        List<EventResponse> events = eventService.getEventsByCharacter(userId, characterId);
+            @PathVariable String characterId) {
+        // characterId는 UUID 또는 AI 생성 ID(예: test-char-alex-001) 모두 가능
+        UUID characterUuid;
+        try {
+            characterUuid = UUID.fromString(characterId);
+        } catch (IllegalArgumentException e) {
+            // UUID가 아니면 임시 UUID 생성 (서비스에서 characterId로 조회)
+            characterUuid = UUID.nameUUIDFromBytes(characterId.getBytes());
+        }
+        List<EventResponse> events = eventService.getEventsByCharacter(userId, characterUuid);
         return ApiResponse.ok(events);
     }
 
