@@ -56,12 +56,15 @@ public interface EventNeo4jRepository extends Neo4jRepository<Event, String> {
                         @org.springframework.data.repository.query.Param("eventId") String eventId,
                         @org.springframework.data.repository.query.Param("settingName") String settingName);
 
-        // Character -> Event: participants 속성 기반 필터링 (Edge 데이터 대신 속성 사용)
-        @org.springframework.data.neo4j.repository.query.Query("MATCH (c:Character {id: $characterId}) " +
-                        "MATCH (e:Event) " +
-                        "WHERE c.name IN e.participants AND (e.project_id = c.project_id OR e.projectId = c.project_id OR e.project_id = c.projectId OR e.projectId = c.projectId) "
-                        +
-                        "RETURN e")
+        // Character -> Event: PARTICIPATED_IN 관계 기반 조회 (우선) + participants 속성 (폴백)
+        @org.springframework.data.neo4j.repository.query.Query(
+                "MATCH (c:Character {id: $characterId})-[:PARTICIPATED_IN]->(e:Event) " +
+                "RETURN e " +
+                "UNION " +
+                "MATCH (c:Character {id: $characterId}) " +
+                "MATCH (e:Event) " +
+                "WHERE c.name IN e.participants AND (e.project_id = c.project_id OR e.projectId = c.project_id OR e.project_id = c.projectId OR e.projectId = c.projectId) " +
+                "RETURN e")
         List<Event> findEventsByCharacterId(
                         @org.springframework.data.repository.query.Param("characterId") String characterId);
 

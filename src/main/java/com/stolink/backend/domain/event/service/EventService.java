@@ -68,21 +68,27 @@ public class EventService {
             throw new ResourceNotFoundException("Project not found");
         }
 
-        // 3. relationsJson에서 event_refs 파싱
-        List<String> eventRefs = parseEventRefsFromRelationsJson(character.getRelationsJson());
-        log.info("Parsed event_refs for character {}: {}", character.getName(), eventRefs);
 
-        if (eventRefs.isEmpty()) {
-            log.info("No event_refs found for character {}", character.getName());
-            return List.of();
-        }
-
-        // 4. Neo4j에서 직접 eventId 리스트로 필터링 (최적화)
-        List<Event> events = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
-                projectId.toString(), eventRefs);
-
-        log.info("Found {} events for character {} (using optimized query)",
+        // 3. Neo4j 관계 그래프에서 직접 이벤트 조회 (PARTICIPATED_IN 관계)
+        List<Event> events = eventNeo4jRepository.findEventsByCharacterId(character.getId());
+        
+        log.info("Found {} events for character {} via PARTICIPATED_IN relationship",
                 events.size(), character.getName());
+
+        // 4. relationsJson에서 event_refs도 추가로 확인 (하위 호환성)
+        List<String> eventRefs = parseEventRefsFromRelationsJson(character.getRelationsJson());
+        if (!eventRefs.isEmpty()) {
+            log.info("Additional event_refs from relationsJson: {}", eventRefs);
+            List<Event> additionalEvents = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
+                    projectId.toString(), eventRefs);
+            
+            // 중복 제거하며 병합
+            for (Event e : additionalEvents) {
+                if (events.stream().noneMatch(existing -> existing.getId().equals(e.getId()))) {
+                    events.add(e);
+                }
+            }
+        }
 
         return events.stream()
                 .map(this::toResponse)
