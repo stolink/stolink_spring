@@ -1048,27 +1048,38 @@ public class CharacterService {
             oldToNewCharIdMap.put(source.getId(), newChar.getId());
         }
         
-        // 2. 관계 복제 (Neo4j 쿼리 사용)
-        try (var session = driver.session()) {
-            session.executeWrite(tx -> {
-                tx.run("""
-                    MATCH (source:Character)-[r:RELATED_TO]->(target:Character)
-                    WHERE source.projectId = $sourceProjectId
-                    WITH source, r, target
-                    MATCH (newSource:Character), (newTarget:Character)
-                    WHERE newSource.projectId = $targetProjectId
-                      AND newSource.name = source.name
-                      AND newTarget.name = target.name
-                    CREATE (newSource)-[newR:RELATED_TO]->(newTarget)
-                    SET newR = properties(r),
-                        newR.projectId = $targetProjectId
-                    """,
-                    java.util.Map.of(
-                        "sourceProjectId", sourceProjectId,
-                        "targetProjectId", targetProjectId
-                    ));
-                return null;
-            });
+        // 2. 관계 복제 (모든 관계 타입 지원 - APOC 없이)
+        if (!oldToNewCharIdMap.isEmpty()) {
+            try (var session = driver.session()) {
+                // 지원하는 모든 관계 타입
+                String[] relationshipTypes = {"RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY", "NEUTRAL"};
+                
+                for (String relType : relationshipTypes) {
+                    session.executeWrite(tx -> {
+                        tx.run("""
+                            UNWIND keys($idMap) AS sourceId
+                            MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
+                            WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
+                              AND target.id IN keys($idMap)
+                              AND source.id < target.id
+                            WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
+                            WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
+                            MATCH (newStart:Character {id: newStartId})
+                            MATCH (newEnd:Character {id: newTargetId})
+                            CREATE (newStart)-[newR:%s]->(newEnd)
+                            SET newR = properties(r),
+                                newR.projectId = $targetProjectId,
+                                newR.id = randomUUID()
+                            """.formatted(relType, relType),
+                            java.util.Map.of(
+                                "sourceProjectId", sourceProjectId,
+                                "targetProjectId", targetProjectId,
+                                "idMap", oldToNewCharIdMap
+                            ));
+                        return null;
+                    });
+                }
+            }
         }
         
         log.info("Cloned {} characters and relationships from project {} to {}", 
