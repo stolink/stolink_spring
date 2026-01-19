@@ -32,5 +32,5 @@ public record DraftBulkCreateRequest(
 
         String workSynopsis,
         String workGenre,
-        String workCoverUrl) {
+        String workCoverImage) {
 }
