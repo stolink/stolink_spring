@@ -1050,8 +1050,20 @@ public class CharacterService {
 
         List<Character> savedCharacters = characterRepository.saveAll(newCharacters);
 
-        for (int i = 0; i < sourceCharacters.size(); i++) {
-            oldToNewCharIdMap.put(sourceCharacters.get(i).getId(), savedCharacters.get(i).getId());
+        // Map saved characters by business key (characterId) to ensure correct ID
+        // mapping
+        java.util.Map<String, Character> savedCharMap = savedCharacters.stream()
+                .filter(c -> c.getCharacterId() != null)
+                .collect(java.util.stream.Collectors.toMap(Character::getCharacterId,
+                        java.util.function.Function.identity(), (a, b) -> a));
+
+        for (Character source : sourceCharacters) {
+            Character saved = savedCharMap.get(source.getCharacterId());
+            if (saved != null) {
+                oldToNewCharIdMap.put(source.getId(), saved.getId());
+            } else {
+                log.warn("Failed to map saved character for source ID: {}", source.getId());
+            }
         }
 
         // 2. 관계 복제 (모든 관계 타입 지원 - APOC 없이)
@@ -1090,5 +1102,27 @@ public class CharacterService {
 
         log.info("Cloned {} characters and relationships from project {} to {}",
                 oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
+    }
+
+    /**
+     * 프로젝트 ID로 모든 캐릭터 및 관계 삭제 (보상 트랜잭션용)
+     */
+    @Transactional
+    public void deleteCharactersByProjectId(UUID projectId) {
+        String pid = projectId.toString();
+        characterRepository.deleteAllByProjectId(pid);
+
+        // 관계도 삭제가 필요한 경우 Cypher 실행 (deleteAllByProjectId가 노드 삭제 시 관계도 삭제하는지 확인 필요)
+        // Spring Data Neo4j repositories usually detach delete.
+
+        // Manual cleanup just in case
+        try (var session = driver.session()) {
+            session.executeWrite(tx -> {
+                tx.run("MATCH (n:Character) WHERE n.projectId = $pid OR n.project_id = $pid DETACH DELETE n",
+                        java.util.Map.of("pid", pid));
+                return null;
+            });
+        }
+        log.info("Deleted characters for project {} (Compensation)", pid);
     }
 }

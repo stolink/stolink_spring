@@ -190,8 +190,16 @@ public class ProjectService {
 
         } catch (Exception e) {
             log.error("Failed to clone project: {}", sourceProjectId, e);
-            // 실패 시 생성한 프로젝트 삭제
+            // 실패 시 생성한 프로젝트 삭제 (Postgres Rollback alternative/complementary)
             projectRepository.delete(newProject);
+
+            // [Compensation] Neo4j 데이터 롤백 (별도 트랜잭션으로 커밋되었을 가능성 대비)
+            try {
+                characterService.deleteCharactersByProjectId(newProject.getId());
+            } catch (Exception neo4jEx) {
+                log.error("Failed to rollback Neo4j data for project {}", newProject.getId(), neo4jEx);
+            }
+
             throw new RuntimeException("프로젝트 복제 중 오류가 발생했습니다: " + e.getMessage(), e);
         }
 

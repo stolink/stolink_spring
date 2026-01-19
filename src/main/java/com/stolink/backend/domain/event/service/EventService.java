@@ -77,29 +77,13 @@ public class EventService {
         // [RESTORED] Minimum security check is required to prevent BOLA
         // If PostgreSQL data is missing, we log it but still enforce ownership if
         // project exists
-        try {
-            Project project = projectRepository.findByIdWithUser(projectId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
+        // [STRICT CHECK] Enforce project ownership verification
+        Project project = projectRepository.findByIdWithUser(projectId)
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
 
-            if (!project.getUser().getId().equals(userId)) {
-                log.error("Project access denied. Project Owner: {}, Requester: {}", project.getUser().getId(), userId);
-                throw new ResourceNotFoundException("Project not found");
-            }
-        } catch (ResourceNotFoundException e) {
-            // If Project entity is missing in Postgres but exists in Neo4j (Inconsistent
-            // state),
-            // We might want to allow read if we are sure about the ownership (e.g. via
-            // Project-User Check)
-            // But for now, strict consistency is safer.
-            // However, to support the "Relaxed" requirement partially, we can catch and
-            // log,
-            // BUT ONLY IF we can't verify. If we verified and it failed (owner mismatch),
-            // we must throw.
-            if (e.getMessage().equals("Project not found")) {
-                throw e; // Access Denied or really not found
-            }
-            log.warn("Project missing in Postgres but referenced in Neo4j. Allowing access with caution. ID: {}",
-                    projectId);
+        if (!project.getUser().getId().equals(userId)) {
+            log.error("Project access denied. Project Owner: {}, Requester: {}", project.getUser().getId(), userId);
+            throw new ResourceNotFoundException("Project not found");
         }
 
         // 3. relationsJson에서 event_refs 파싱 및 캐릭터 이름/별명 추출
