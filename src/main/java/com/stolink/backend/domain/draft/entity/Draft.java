@@ -65,8 +65,8 @@ public class Draft {
     @Column(name = "work_genre", length = 50)
     private String workGenre;
 
-    @Column(name = "work_cover_url", length = 512)
-    private String workCoverUrl;
+    @Column(name = "work_cover_url", columnDefinition = "TEXT")
+    private String workCoverImage;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

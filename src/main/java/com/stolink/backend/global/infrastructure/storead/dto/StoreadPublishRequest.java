@@ -8,7 +8,7 @@ public record StoreadPublishRequest(
     String workTitle,
     String workSynopsis,
     String workGenre,
-    String workCoverUrl,
+    String workCoverImage,
     String chapterTitle,
     String chapterContent
 ) {}

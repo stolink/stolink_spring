@@ -45,7 +45,7 @@ public class DraftService {
                                 .workTitle(request.workTitle())
                                 .workSynopsis(request.workSynopsis())
                                 .workGenre(request.workGenre())
-                                .workCoverUrl(request.workCoverUrl())
+                                .workCoverImage(request.workCoverImage())
                                 .build();
 
                 Draft savedDraft = draftRepository.save(draft);
@@ -80,7 +80,7 @@ public class DraftService {
 
         /**
          * Bulk Draft 생성 - 다중 섹션을 한 번에 배포하거나 병합하여 배포
-         * 
+         *
          * @param userId  사용자 ID
          * @param request Bulk 생성 요청 (documentIds 배열 포함)
          * @return 생성된 Draft 응답
@@ -139,7 +139,7 @@ public class DraftService {
                                 .workTitle(request.workTitle())
                                 .workSynopsis(request.workSynopsis())
                                 .workGenre(request.workGenre())
-                                .workCoverUrl(request.workCoverUrl())
+                                .workCoverImage(request.workCoverImage())
                                 .build();
 
                 Draft savedDraft = draftRepository.save(draft);

@@ -15,9 +15,6 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         @Query("MATCH (c:Character) WHERE (c.projectId = $projectId OR c.project_id = $projectId) RETURN c")
         List<Character> findByProjectId(@Param("projectId") String projectId);
 
-
-        List<Character> findAll();
-
         @Query("MATCH (c:Character) " +
                         "WHERE (c.projectId = $projectId OR c.project_id = $projectId) " +
                         "OPTIONAL MATCH (c)-[r]-(other:Character) " +
@@ -56,9 +53,14 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         void deleteByProjectId(String projectId);
 
+        void deleteAllByProjectId(String projectId);
+
         java.util.Optional<Character> findByNameAndProjectId(String name, String projectId);
 
         java.util.Optional<Character> findByCharacterId(String characterId);
+
+        @Query("MATCH (c:Character {id: $id}) RETURN coalesce(c.projectId, c.project_id)")
+        java.util.Optional<String> findProjectIdById(@Param("id") String id);
 
         // 중복 안전 조회 - 여러 결과가 있을 수 있는 경우 사용
         List<Character> findAllByNameAndProjectId(String name, String projectId);
