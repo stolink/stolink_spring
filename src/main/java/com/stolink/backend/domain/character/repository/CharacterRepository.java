@@ -60,6 +60,9 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
 
         java.util.Optional<Character> findByCharacterId(String characterId);
 
+        @Query("MATCH (c:Character {id: $id}) RETURN coalesce(c.projectId, c.project_id)")
+        java.util.Optional<String> findProjectIdById(@Param("id") String id);
+
         // 중복 안전 조회 - 여러 결과가 있을 수 있는 경우 사용
         List<Character> findAllByNameAndProjectId(String name, String projectId);
 
