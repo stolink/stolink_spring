@@ -1073,8 +1073,10 @@ public class CharacterService {
                 String[] relationshipTypes = { "RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY",
                         "NEUTRAL" };
 
-                for (String relType : relationshipTypes) {
-                    session.executeWrite(tx -> {
+                // [OPTIMIZATION] Execute all queries in a SINGLE transaction to reduce network
+                // overhead
+                session.executeWrite(tx -> {
+                    for (String relType : relationshipTypes) {
                         tx.run("""
                                 UNWIND keys($idMap) AS sourceId
                                 MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
@@ -1094,9 +1096,9 @@ public class CharacterService {
                                         "sourceProjectId", sourceProjectId,
                                         "targetProjectId", targetProjectId,
                                         "idMap", oldToNewCharIdMap));
-                        return null;
-                    });
-                }
+                    }
+                    return null;
+                });
             }
         }
 

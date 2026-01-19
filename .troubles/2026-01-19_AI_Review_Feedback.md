@@ -42,6 +42,17 @@ Map<String, Character> savedCharMap = savedCharacters.stream()
 
 - **Compensation Logic**: Postgres 트랜잭션 롤백(Catch Block) 시 `characterService.deleteCharactersByProjectId`를 호출하여 생성된 Neo4j 데이터도 명시적으로 삭제.
 
-## 4. Repository Method
+## 4. Neo4j Index & Query Performance (Round 3)
 
-- **Method Addition**: `CharacterRepository`에 `deleteAllByProjectId`가 없어 추가함.
+### 이슈 설명
+
+- `EventNeo4jRepository`에서 `toLower(p) = toLower(name)` 사용 시 인덱스를 타지 못하고 Full Scan 발생 (Critical).
+- `CharacterService` 복제 로직에서 관계 타입별로 별도 트랜잭션(`session.executeWrite`)을 실행하여 네트워크 오버헤드 발생 (Warning).
+
+### 해결책
+
+- **Schema Optimization**: `Event` 노드에 정규화된 `participants_normalized` 속성 추가 및 저장 시 자동 처리.
+- **Manual Migration**: 기존 데이터를 위해 Cypher 쿼리 실행.
+  `MATCH (e:Event) SET e.participants_normalized = [p IN e.participants | toLower(p)]`
+- **Query Optimization**: `CharacterService` 루프 내 쿼리들을 단일 트랜잭션으로 묶어 배치 처리.
+- **Clean Code**: 사용하지 않는 `findAll()` 제거.

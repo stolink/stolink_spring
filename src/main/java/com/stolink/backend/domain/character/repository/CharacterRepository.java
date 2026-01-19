@@ -15,8 +15,6 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
         @Query("MATCH (c:Character) WHERE (c.projectId = $projectId OR c.project_id = $projectId) RETURN c")
         List<Character> findByProjectId(@Param("projectId") String projectId);
 
-        List<Character> findAll();
-
         @Query("MATCH (c:Character) " +
                         "WHERE (c.projectId = $projectId OR c.project_id = $projectId) " +
                         "OPTIONAL MATCH (c)-[r]-(other:Character) " +

@@ -56,6 +56,10 @@ public class Event {
     @Property("participants")
     private List<String> participants;
 
+    // 검색 최적화를 위한 소문자 정규화 리스트
+    @Property("participants_normalized")
+    private List<String> participantsNormalized;
+
     // 그래프 관계를 통한 실제 참여자들 (INCOMING)
     @Relationship(type = "PARTICIPATES_IN", direction = Relationship.Direction.INCOMING)
     private List<Character> participantNodes;
