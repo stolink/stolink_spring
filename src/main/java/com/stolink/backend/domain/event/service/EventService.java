@@ -49,60 +49,65 @@ public class EventService {
                     return new ResourceNotFoundException("Character not found: " + characterId);
                 });
 
-        // 2. 프로젝트 조회 및 소유권 검증
-        UUID projectId;
-        try {
-            projectId = UUID.fromString(character.getProjectId());
-        } catch (IllegalArgumentException e) {
-            throw new ResourceNotFoundException("Invalid Project ID in Character node");
+        // 2. 프로젝트 조회 및 소유권 검증 (Project ID Validation)
+        // 2. 프로젝트 조회 및 소유권 검증 (Project ID Validation)
+        String projectIdStr = character.getProjectId();
+        if (projectIdStr == null || projectIdStr.isBlank()) {
+            // [Fallback] Try to find projectId using robust query (handles snake_case
+            // project_id)
+            projectIdStr = characterRepository.findProjectIdById(character.getId()).orElse(null);
+
+            if (projectIdStr == null || projectIdStr.isBlank()) {
+                log.error("Character {} has null or empty projectId (checked both camelCase and snake_case)",
+                        characterId);
+                throw new ResourceNotFoundException("Project ID is null/empty for character: " + characterId);
+            }
+            // Temporarily set it for this scope
+            character.setProjectId(projectIdStr);
         }
 
+        UUID projectId;
+        try {
+            projectId = UUID.fromString(projectIdStr);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid Project ID format for character {}: {}", characterId, projectIdStr);
+            throw new ResourceNotFoundException("Invalid Project ID (UUID) in Character node: " + projectIdStr);
+        }
+
+        // [RESTORED] Minimum security check is required to prevent BOLA
+        // If PostgreSQL data is missing, we log it but still enforce ownership if
+        // project exists
+        // [STRICT CHECK] Enforce project ownership verification
         Project project = projectRepository.findByIdWithUser(projectId)
-                .orElseThrow(() -> {
-                    log.error("Project not found: {}", projectId);
-                    return new ResourceNotFoundException("Project not found: " + projectId);
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
 
         if (!project.getUser().getId().equals(userId)) {
             log.error("Project access denied. Project Owner: {}, Requester: {}", project.getUser().getId(), userId);
             throw new ResourceNotFoundException("Project not found");
         }
 
+        // 3. relationsJson에서 event_refs 파싱 및 캐릭터 이름/별명 추출
+        String relationsJson = character.getRelationsJson();
+        List<String> eventRefs = parseEventRefsFromRelationsJson(relationsJson);
+        log.info("Parsed event_refs for character {}: {}", character.getName(), eventRefs);
 
-        // 3. Neo4j 관계 그래프에서 직접 이벤트 조회 (PARTICIPATED_IN 관계)
-        List<Event> events = eventNeo4jRepository.findEventsByCharacterId(character.getId());
-        
-        log.info("Found {} events for character {} via PARTICIPATED_IN relationship",
-                events.size(), character.getName());
-
-        // 4. relationsJson에서 event_refs도 추가로 확인 (하위 호환성)
-        List<String> eventRefs = parseEventRefsFromRelationsJson(character.getRelationsJson());
-        if (!eventRefs.isEmpty()) {
-            log.info("Additional event_refs from relationsJson: {}", eventRefs);
-            List<Event> additionalEvents = eventNeo4jRepository.findEventsByProjectIdAndEventRefs(
-                    projectId.toString(), eventRefs);
-            
-            // 중복 제거하며 병합 (null-safe & eventId fallback)
-            for (Event e : additionalEvents) {
-                String uniqueKey = e.getEventId(); // eventId를 고유 키로 사용 (Python이 생성한 노드는 id가 없을 수 있음)
-                if (uniqueKey == null) {
-                    uniqueKey = e.getId(); // eventId가 없으면 id 사용
-                }
-                
-                if (uniqueKey == null) continue; // 식별자 없는 이벤트 스킵
-
-                String finalKey = uniqueKey;
-                boolean exists = events.stream().anyMatch(existing -> {
-                    String existingKey = existing.getEventId();
-                    if (existingKey == null) existingKey = existing.getId();
-                    return finalKey.equals(existingKey);
-                });
-
-                if (!exists) {
-                    events.add(e);
-                }
-            }
+        List<String> characterNames = new ArrayList<>();
+        if (character.getName() != null) {
+            characterNames.add(character.getName());
         }
+        characterNames.addAll(parseAliasesFromAliasesJson(character.getAliasesJson()));
+        log.info("Names/Aliases for character {}: {}", character.getName(), characterNames);
+
+        // Debug logging for query parameters
+        log.debug("Querying events with - ProjectId: {}, CharacterId: {}, Names: {}, EventRefs: {}",
+                projectId, character.getId(), characterNames, eventRefs);
+
+        // 4. Neo4j에서 다각도 통합 조회 (Robust Query)
+        List<Event> events = eventNeo4jRepository.findEventsByCharacterRobust(
+                projectId.toString(), character.getId(), characterNames, eventRefs);
+
+        log.info("Found {} events for character {} (using robust query)",
+                events.size(), character.getName());
 
         return events.stream()
                 .map(this::toResponse)
@@ -111,6 +116,7 @@ public class EventService {
 
     /**
      * relationsJson에서 event_refs 배열 추출 (snake_case/camelCase 모두 지원)
+     * 구조: { "event_refs": [...] } 또는 { "relations": { "event_refs": [...] } } 모두 대응
      */
     private List<String> parseEventRefsFromRelationsJson(String relationsJson) {
         if (relationsJson == null || relationsJson.isBlank()) {
@@ -120,10 +126,17 @@ public class EventService {
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(relationsJson);
 
-            // snake_case 또는 camelCase 키 모두 체크
+            // 1. Check root level
             com.fasterxml.jackson.databind.JsonNode eventRefsNode = root.get("event_refs");
-            if (eventRefsNode == null) {
+            if (eventRefsNode == null)
                 eventRefsNode = root.get("eventRefs");
+
+            // 2. Check nested 'relations' object just in case
+            if (eventRefsNode == null && root.has("relations")) {
+                com.fasterxml.jackson.databind.JsonNode relationsNode = root.get("relations");
+                eventRefsNode = relationsNode.get("event_refs");
+                if (eventRefsNode == null)
+                    eventRefsNode = relationsNode.get("eventRefs");
             }
 
             if (eventRefsNode == null || !eventRefsNode.isArray()) {
@@ -136,6 +149,30 @@ public class EventService {
             return refs;
         } catch (Exception e) {
             log.warn("Failed to parse relationsJson: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * aliasesJson에서 별명 리스트 추출
+     */
+    private List<String> parseAliasesFromAliasesJson(String aliasesJson) {
+        if (aliasesJson == null || aliasesJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(aliasesJson);
+            if (root == null || !root.isArray()) {
+                return List.of();
+            }
+            List<String> aliases = new ArrayList<>();
+            for (com.fasterxml.jackson.databind.JsonNode node : root) {
+                aliases.add(node.asText());
+            }
+            return aliases;
+        } catch (Exception e) {
+            log.warn("Failed to parse aliasesJson: {}", e.getMessage());
             return List.of();
         }
     }

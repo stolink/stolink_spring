@@ -751,7 +751,7 @@ public class CharacterService {
 
         // Fetch character to get current image URL (needed for edit)
         Character character = characterRepository.findById(characterId.toString())
-                .filter(c -> c.getProjectId().equals(project.getId().toString()))
+                .filter(c -> project.getId().toString().equals(c.getProjectId()))
                 .orElseThrow(() -> new ResourceNotFoundException("Character", "id", characterId));
 
         String jobId = UUID.randomUUID().toString();
@@ -996,7 +996,7 @@ public class CharacterService {
 
     /**
      * 프로젝트 복제: Characters 및 Relationships 복제
-     * 
+     *
      * @param sourceProject 원본 프로젝트
      * @param targetProject 복제 대상 프로젝트
      */
@@ -1004,85 +1004,127 @@ public class CharacterService {
     public void cloneCharactersAndRelationships(Project sourceProject, Project targetProject) {
         String sourceProjectId = sourceProject.getId().toString();
         String targetProjectId = targetProject.getId().toString();
-        
-        // log.debug("Starting character clone form {} to {}", sourceProjectId, targetProjectId);
-        
+
+        // log.debug("Starting character clone form {} to {}", sourceProjectId,
+        // targetProjectId);
+
         // 1. 캐릭터 복제
         List<Character> sourceCharacters = characterRepository.findByProjectId(sourceProjectId);
         // log.debug("Found {} characters to clone", sourceCharacters.size());
 
         java.util.Map<String, String> oldToNewCharIdMap = new java.util.HashMap<>();
-        
+
+        List<Character> newCharacters = new java.util.ArrayList<>();
         for (Character source : sourceCharacters) {
             Character newChar = Character.builder()
-                .projectId(targetProjectId)
-                .characterId(source.getCharacterId())
-                .name(source.getName())
-                .role(source.getRole())
-                .status(source.getStatus())
-                .age(source.getAge())
-                .gender(source.getGender())
-                .race(source.getRace())
-                .mbti(source.getMbti())
-                .backstory(source.getBackstory())
-                .faction(source.getFaction())
-                .imageUrl(source.getImageUrl())
-                .positionX(source.getPositionX())
-                .positionY(source.getPositionY())
-                .aliasesJson(source.getAliasesJson())
-                .profileJson(source.getProfileJson())
-                .appearanceJson(source.getAppearanceJson())
-                .personalityJson(source.getPersonalityJson())
-                .relationsJson(source.getRelationsJson())
-                .currentMoodJson(source.getCurrentMoodJson())
-                .metaJson(source.getMetaJson())
-                .embeddingJson(source.getEmbeddingJson())
-                .inventoryJson(source.getInventoryJson())
-                .visualJson(source.getVisualJson())
-                .motivation(source.getMotivation())
-                .firstAppearance(source.getFirstAppearance())
-                .extrasJson(source.getExtrasJson())
-                .build();
-            
-            newChar = characterRepository.save(newChar);
-            oldToNewCharIdMap.put(source.getId(), newChar.getId());
+                    .projectId(targetProjectId)
+                    .characterId(source.getCharacterId())
+                    .name(source.getName())
+                    .role(source.getRole())
+                    .status(source.getStatus())
+                    .age(source.getAge())
+                    .gender(source.getGender())
+                    .race(source.getRace())
+                    .mbti(source.getMbti())
+                    .backstory(source.getBackstory())
+                    .faction(source.getFaction())
+                    .imageUrl(source.getImageUrl())
+                    .positionX(source.getPositionX())
+                    .positionY(source.getPositionY())
+                    .aliasesJson(source.getAliasesJson())
+                    .profileJson(source.getProfileJson())
+                    .appearanceJson(source.getAppearanceJson())
+                    .personalityJson(source.getPersonalityJson())
+                    .relationsJson(source.getRelationsJson())
+                    .currentMoodJson(source.getCurrentMoodJson())
+                    .metaJson(source.getMetaJson())
+                    .embeddingJson(source.getEmbeddingJson())
+                    .inventoryJson(source.getInventoryJson())
+                    .visualJson(source.getVisualJson())
+                    .motivation(source.getMotivation())
+                    .firstAppearance(source.getFirstAppearance())
+                    .extrasJson(source.getExtrasJson())
+                    .build();
+            newCharacters.add(newChar);
         }
-        
+
+        List<Character> savedCharacters = characterRepository.saveAll(newCharacters);
+
+        // Map saved characters by business key (characterId) to ensure correct ID
+        // mapping
+        java.util.Map<String, Character> savedCharMap = savedCharacters.stream()
+                .filter(c -> c.getCharacterId() != null)
+                .collect(java.util.stream.Collectors.toMap(Character::getCharacterId,
+                        java.util.function.Function.identity(), (a, b) -> a));
+
+        for (Character source : sourceCharacters) {
+            Character saved = savedCharMap.get(source.getCharacterId());
+            if (saved != null) {
+                oldToNewCharIdMap.put(source.getId(), saved.getId());
+            } else {
+                log.warn("Failed to map saved character for source ID: {}", source.getId());
+            }
+        }
+
         // 2. 관계 복제 (모든 관계 타입 지원 - APOC 없이)
         if (!oldToNewCharIdMap.isEmpty()) {
             try (var session = driver.session()) {
                 // 지원하는 모든 관계 타입
-                String[] relationshipTypes = {"RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY", "NEUTRAL"};
-                
-                for (String relType : relationshipTypes) {
-                    session.executeWrite(tx -> {
+                String[] relationshipTypes = { "RELATED_TO", "ALLY", "ENEMY", "RIVAL", "ROMANTIC", "FAMILY",
+                        "NEUTRAL" };
+
+                // [OPTIMIZATION] Execute all queries in a SINGLE transaction to reduce network
+                // overhead
+                session.executeWrite(tx -> {
+                    for (String relType : relationshipTypes) {
                         tx.run("""
-                            UNWIND keys($idMap) AS sourceId
-                            MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
-                            WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
-                              AND target.id IN keys($idMap)
-                              AND source.id < target.id
-                            WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
-                            WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
-                            MATCH (newStart:Character {id: newStartId})
-                            MATCH (newEnd:Character {id: newTargetId})
-                            CREATE (newStart)-[newR:%s]->(newEnd)
-                            SET newR = properties(r),
-                                newR.projectId = $targetProjectId,
-                                newR.id = randomUUID()
-                            """.formatted(relType, relType),
-                            java.util.Map.of(
-                                "sourceProjectId", sourceProjectId,
-                                "targetProjectId", targetProjectId,
-                                "idMap", oldToNewCharIdMap
-                            ));
-                        return null;
-                    });
-                }
+                                UNWIND keys($idMap) AS sourceId
+                                MATCH (source:Character {id: sourceId})-[r:%s]-(target:Character)
+                                WHERE (source.projectId = $sourceProjectId OR source.project_id = $sourceProjectId)
+                                  AND target.id IN keys($idMap)
+                                  AND source.id < target.id
+                                WITH r, startNode(r) AS relStart, endNode(r) AS relEnd, $idMap AS idMap
+                                WITH r, idMap[relStart.id] AS newStartId, idMap[relEnd.id] AS newTargetId
+                                MATCH (newStart:Character {id: newStartId})
+                                MATCH (newEnd:Character {id: newTargetId})
+                                CREATE (newStart)-[newR:%s]->(newEnd)
+                                SET newR = properties(r),
+                                    newR.projectId = $targetProjectId,
+                                    newR.id = randomUUID()
+                                """.formatted(relType, relType),
+                                java.util.Map.of(
+                                        "sourceProjectId", sourceProjectId,
+                                        "targetProjectId", targetProjectId,
+                                        "idMap", oldToNewCharIdMap));
+                    }
+                    return null;
+                });
             }
         }
-        
-        log.info("Cloned {} characters and relationships from project {} to {}", 
-            oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
+
+        log.info("Cloned {} characters and relationships from project {} to {}",
+                oldToNewCharIdMap.size(), sourceProjectId, targetProjectId);
+    }
+
+    /**
+     * 프로젝트 ID로 모든 캐릭터 및 관계 삭제 (보상 트랜잭션용)
+     */
+    @Transactional
+    public void deleteCharactersByProjectId(UUID projectId) {
+        String pid = projectId.toString();
+        characterRepository.deleteAllByProjectId(pid);
+
+        // 관계도 삭제가 필요한 경우 Cypher 실행 (deleteAllByProjectId가 노드 삭제 시 관계도 삭제하는지 확인 필요)
+        // Spring Data Neo4j repositories usually detach delete.
+
+        // Manual cleanup just in case
+        try (var session = driver.session()) {
+            session.executeWrite(tx -> {
+                tx.run("MATCH (n:Character) WHERE n.projectId = $pid OR n.project_id = $pid DETACH DELETE n",
+                        java.util.Map.of("pid", pid));
+                return null;
+            });
+        }
+        log.info("Deleted characters for project {} (Compensation)", pid);
     }
 }
