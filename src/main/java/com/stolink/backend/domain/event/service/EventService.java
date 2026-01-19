@@ -53,11 +53,13 @@ public class EventService {
         // 2. 프로젝트 조회 및 소유권 검증 (Project ID Validation)
         String projectIdStr = character.getProjectId();
         if (projectIdStr == null || projectIdStr.isBlank()) {
-            // [Fallback] Try to find projectId using robust query (handles snake_case project_id)
+            // [Fallback] Try to find projectId using robust query (handles snake_case
+            // project_id)
             projectIdStr = characterRepository.findProjectIdById(character.getId()).orElse(null);
 
             if (projectIdStr == null || projectIdStr.isBlank()) {
-                log.error("Character {} has null or empty projectId (checked both camelCase and snake_case)", characterId);
+                log.error("Character {} has null or empty projectId (checked both camelCase and snake_case)",
+                        characterId);
                 throw new ResourceNotFoundException("Project ID is null/empty for character: " + characterId);
             }
             // Temporarily set it for this scope
@@ -72,22 +74,33 @@ public class EventService {
             throw new ResourceNotFoundException("Invalid Project ID (UUID) in Character node: " + projectIdStr);
         }
 
-        /*
-         * [RELAXED CHECK]
-         * CharacterService와 동일하게, PostgreSQL 데이터 불일치 상황에서도
-         * Neo4j에 데이터가 있다면 조회가 가능하도록 엄격한 검증을 건너뜁니다.
-         *
-        Project project = projectRepository.findByIdWithUser(projectId)
-                .orElseThrow(() -> {
-                    log.error("Project not found: {}", projectId);
-                    return new ResourceNotFoundException("Project not found: " + projectId);
-                });
+        // [RESTORED] Minimum security check is required to prevent BOLA
+        // If PostgreSQL data is missing, we log it but still enforce ownership if
+        // project exists
+        try {
+            Project project = projectRepository.findByIdWithUser(projectId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Project not found: " + projectId));
 
-        if (!project.getUser().getId().equals(userId)) {
-            log.error("Project access denied. Project Owner: {}, Requester: {}", project.getUser().getId(), userId);
-            throw new ResourceNotFoundException("Project not found");
+            if (!project.getUser().getId().equals(userId)) {
+                log.error("Project access denied. Project Owner: {}, Requester: {}", project.getUser().getId(), userId);
+                throw new ResourceNotFoundException("Project not found");
+            }
+        } catch (ResourceNotFoundException e) {
+            // If Project entity is missing in Postgres but exists in Neo4j (Inconsistent
+            // state),
+            // We might want to allow read if we are sure about the ownership (e.g. via
+            // Project-User Check)
+            // But for now, strict consistency is safer.
+            // However, to support the "Relaxed" requirement partially, we can catch and
+            // log,
+            // BUT ONLY IF we can't verify. If we verified and it failed (owner mismatch),
+            // we must throw.
+            if (e.getMessage().equals("Project not found")) {
+                throw e; // Access Denied or really not found
+            }
+            log.warn("Project missing in Postgres but referenced in Neo4j. Allowing access with caution. ID: {}",
+                    projectId);
         }
-        */
 
         // 3. relationsJson에서 event_refs 파싱 및 캐릭터 이름/별명 추출
         String relationsJson = character.getRelationsJson();
@@ -117,7 +130,6 @@ public class EventService {
                 .collect(Collectors.toList());
     }
 
-
     /**
      * relationsJson에서 event_refs 배열 추출 (snake_case/camelCase 모두 지원)
      * 구조: { "event_refs": [...] } 또는 { "relations": { "event_refs": [...] } } 모두 대응
@@ -132,13 +144,15 @@ public class EventService {
 
             // 1. Check root level
             com.fasterxml.jackson.databind.JsonNode eventRefsNode = root.get("event_refs");
-            if (eventRefsNode == null) eventRefsNode = root.get("eventRefs");
+            if (eventRefsNode == null)
+                eventRefsNode = root.get("eventRefs");
 
             // 2. Check nested 'relations' object just in case
             if (eventRefsNode == null && root.has("relations")) {
                 com.fasterxml.jackson.databind.JsonNode relationsNode = root.get("relations");
                 eventRefsNode = relationsNode.get("event_refs");
-                if (eventRefsNode == null) eventRefsNode = relationsNode.get("eventRefs");
+                if (eventRefsNode == null)
+                    eventRefsNode = relationsNode.get("eventRefs");
             }
 
             if (eventRefsNode == null || !eventRefsNode.isArray()) {

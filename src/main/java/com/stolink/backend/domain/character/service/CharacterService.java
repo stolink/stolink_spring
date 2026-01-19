@@ -1014,6 +1014,7 @@ public class CharacterService {
 
         java.util.Map<String, String> oldToNewCharIdMap = new java.util.HashMap<>();
 
+        List<Character> newCharacters = new java.util.ArrayList<>();
         for (Character source : sourceCharacters) {
             Character newChar = Character.builder()
                     .projectId(targetProjectId)
@@ -1044,9 +1045,13 @@ public class CharacterService {
                     .firstAppearance(source.getFirstAppearance())
                     .extrasJson(source.getExtrasJson())
                     .build();
+            newCharacters.add(newChar);
+        }
 
-            newChar = characterRepository.save(newChar);
-            oldToNewCharIdMap.put(source.getId(), newChar.getId());
+        List<Character> savedCharacters = characterRepository.saveAll(newCharacters);
+
+        for (int i = 0; i < sourceCharacters.size(); i++) {
+            oldToNewCharIdMap.put(sourceCharacters.get(i).getId(), savedCharacters.get(i).getId());
         }
 
         // 2. 관계 복제 (모든 관계 타입 지원 - APOC 없이)
