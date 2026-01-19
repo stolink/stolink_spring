@@ -82,9 +82,7 @@ public interface EventNeo4jRepository extends Neo4jRepository<Event, String> {
         @org.springframework.data.neo4j.repository.query.Query("MATCH (e:Event) " +
                         "WHERE (e.project_id = $projectId OR e.projectId = $projectId) " +
                         "AND (" +
-                        "  ANY(p IN e.participants_normalized WHERE p = toLower(name)) " + // Changed to normalized
-                                                                                           // field
-                        "  OR ANY(name IN $characterNames WHERE ANY(p IN e.participants_normalized WHERE p = toLower(name))) "
+                        "  ANY(name IN $characterNames WHERE ANY(p IN e.participants WHERE toLower(p) = toLower(name))) "
                         +
                         "  OR ANY(ref IN $eventRefs WHERE e.eventId = ref OR e.eventId ENDS WITH '_' + ref) " +
                         "  OR EXISTS { MATCH (c:Character {id: $characterId})-[:PARTICIPATED_IN|PARTICIPATES_IN]->(e) } "
