@@ -86,6 +86,9 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         "    c.positionY = COALESCE($positionY, c.positionY), " +
                         "    c.name = COALESCE($name, c.name), " +
                         "    c.role = COALESCE($role, c.role), " +
+                        "    c.gender = COALESCE($gender, c.gender), " +
+                        "    c.age = COALESCE($age, c.age), " +
+                        "    c.race = COALESCE($race, c.race), " +
                         "    c.imageUrl = COALESCE($imageUrl, c.imageUrl), " +
                         "    c.appearanceJson = COALESCE($appearanceJson, c.appearanceJson), " +
                         "    c.profileJson = COALESCE($profileJson, c.profileJson), " +
@@ -97,6 +100,9 @@ public interface CharacterRepository extends Neo4jRepository<Character, String> 
                         @Param("characterId") String characterId,
                         @Param("name") String name,
                         @Param("role") String role,
+                        @Param("gender") String gender,
+                        @Param("age") Integer age,
+                        @Param("race") String race,
                         @Param("imageUrl") String imageUrl,
                         @Param("positionX") Double positionX,
                         @Param("positionY") Double positionY,
