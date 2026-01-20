@@ -921,10 +921,34 @@ public class CharacterService {
         String currentMoodJson = toJson(request.getCurrentMood());
         String inventoryJson = toJson(request.getInventory());
 
+        // Extract first-class properties from profile map if available
+        String gender = null;
+        Integer age = null;
+        String race = null;
+
+        if (request.getProfile() != null) {
+            gender = (String) request.getProfile().get("gender");
+            race = (String) request.getProfile().get("race");
+
+            Object ageObj = request.getProfile().get("age");
+            if (ageObj instanceof Number) {
+                age = ((Number) ageObj).intValue();
+            } else if (ageObj instanceof String) {
+                try {
+                    age = Integer.parseInt((String) ageObj);
+                } catch (NumberFormatException e) {
+                    // Ignore invalid age string
+                }
+            }
+        }
+
         Character updated = characterRepository.updateCharacterFull(
                 characterId,
                 request.getName(),
                 request.getRole(),
+                gender,
+                age,
+                race,
                 request.getImageUrl(),
                 request.getPositionX(),
                 request.getPositionY(),
