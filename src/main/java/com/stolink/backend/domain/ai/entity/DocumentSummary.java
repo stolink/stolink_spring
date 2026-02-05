@@ -30,9 +30,9 @@ import lombok.Setter;
  */
 @Entity
 @Table(name = "document_summaries", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "document_id", "level" })
+                @UniqueConstraint(columnNames = { "document_id", "level" })
 }, indexes = {
-        @Index(name = "idx_summaries_project_level", columnList = "project_id, level")
+                @Index(name = "idx_summaries_project_level", columnList = "project_id, level")
 })
 @Getter
 @Setter
@@ -41,38 +41,38 @@ import lombok.Setter;
 @AllArgsConstructor
 public class DocumentSummary {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.UUID)
+        private UUID id;
 
-    @Column(name = "document_id", nullable = false)
-    private UUID documentId;
+        @Column(name = "document_id", nullable = false)
+        private UUID documentId;
 
-    @Column(name = "project_id", nullable = false)
-    private UUID projectId;
+        @Column(name = "project_id", nullable = false)
+        private UUID projectId;
 
-    /**
-     * 요약 레벨
-     * 1 = 전체 소설
-     * 2 = 권/파트
-     * 3 = 챕터 (기본값)
-     */
-    @Column(nullable = false)
-    @Builder.Default
-    private Integer level = 3;
+        /**
+         * 요약 레벨
+         * 1 = 전체 소설
+         * 2 = 권/파트
+         * 3 = 챕터 (기본값)
+         */
+        @Column(nullable = false)
+        @Builder.Default
+        private Integer level = 3;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String summary;
+        @Column(nullable = false, columnDefinition = "TEXT")
+        private String summary;
 
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "key_characters", columnDefinition = "text[]")
-    private String[] keyCharacters;
+        @JdbcTypeCode(SqlTypes.ARRAY)
+        @Column(name = "key_characters")
+        private String[] keyCharacters;
 
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "key_events", columnDefinition = "text[]")
-    private String[] keyEvents;
+        @JdbcTypeCode(SqlTypes.ARRAY)
+        @Column(name = "key_events")
+        private String[] keyEvents;
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Timestamp createdAt;
+        @CreationTimestamp
+        @Column(name = "created_at", nullable = false, updatable = false)
+        private Timestamp createdAt;
 }

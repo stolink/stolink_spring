@@ -10,7 +10,9 @@ import com.stolink.backend.global.common.entity.BaseEntity;
 import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.Type;
+import org.hibernate.type.SqlTypes;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -85,8 +87,8 @@ public class Project extends BaseEntity {
     @Column(length = 100)
     private String author;
 
-    @Type(JsonType.class)
-    @Column(columnDefinition = "jsonb")
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "extras")
     private Map<String, Object> extras = new HashMap<>();
 
     @Builder
