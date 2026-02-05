@@ -33,7 +33,7 @@ public class Draft {
 
     // 다중 Document ID 배열 (신규 Bulk 배포용)
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "document_ids", columnDefinition = "jsonb")
+    @Column(name = "document_ids")
     private List<String> documentIds;
 
     // 병합 배포 여부 (true: 여러 섹션을 하나의 에피소드로 병합)
@@ -52,7 +52,7 @@ public class Draft {
 
     // 인물관계도 데이터 (JSONB)
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
+    @Column(name = "graph_snapshot")
     private Map<String, Object> graphSnapshot;
 
     // Work 생성용 필드 (storead에서 사용)
