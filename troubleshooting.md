@@ -14,3 +14,4 @@
 | 2025-12-28 | Round 4 AI Review Refinement    | ✅ Solved   | [.troubles/2025-12-28_Round4-Cleanup.md](.troubles/2025-12-28_Round4-Cleanup.md)                             |
 | 2025-12-28 | Password Feature Removal        | ✅ Solved   | [.troubles/2025-12-28_Password-Feature-Removal.md](.troubles/2025-12-28_Password-Feature-Removal.md)         |
 | 2026-01-04 | AI Handoff Integration          | ✅ Solved   | [docs/SPRING_TO_AI_UPDATES/SPRING_IMPLEMENTATION_COMPLETE.md](docs/SPRING_TO_AI_UPDATES/SPRING_IMPLEMENTATION_COMPLETE.md) |
+| 2026-01-09 | Login/OAuth2 500 Error Fix      | ✅ Solved   | [.troubles/2026-01-09_login-oauth2-500-error.md](.troubles/2026-01-09_login-oauth2-500-error.md)             |

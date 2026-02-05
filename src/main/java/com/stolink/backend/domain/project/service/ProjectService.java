@@ -62,6 +62,7 @@ public class ProjectService {
                 .genre(request.getGenreEnum())
                 .coverImage(request.getCoverImage())
                 .description(request.getDescription())
+                .author(user.getNickname())
                 .status(Project.ProjectStatus.WRITING)
                 .build();
 

@@ -33,10 +33,10 @@ import lombok.Setter;
  */
 @Entity
 @Table(name = "character_timeline", uniqueConstraints = {
-        @UniqueConstraint(columnNames = { "project_id", "character_name", "chapter" })
+                @UniqueConstraint(columnNames = { "project_id", "character_name", "chapter" })
 }, indexes = {
-        @Index(name = "idx_timeline_character", columnList = "project_id, character_name"),
-        @Index(name = "idx_timeline_chapter", columnList = "project_id, chapter")
+                @Index(name = "idx_timeline_character", columnList = "project_id, character_name"),
+                @Index(name = "idx_timeline_chapter", columnList = "project_id, chapter")
 })
 @Getter
 @Setter
@@ -45,39 +45,39 @@ import lombok.Setter;
 @AllArgsConstructor
 public class CharacterTimeline {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.UUID)
+        private UUID id;
 
-    @Column(name = "project_id", nullable = false)
-    private UUID projectId;
+        @Column(name = "project_id", nullable = false)
+        private UUID projectId;
 
-    @Column(name = "character_name", nullable = false, length = 255)
-    private String characterName;
+        @Column(name = "character_name", nullable = false, length = 255)
+        private String characterName;
 
-    @Column(nullable = false)
-    private Integer chapter;
+        @Column(nullable = false)
+        private Integer chapter;
 
-    @Column(name = "document_id")
-    private UUID documentId;
+        @Column(name = "document_id")
+        private UUID documentId;
 
-    // 상태 추적 필드
-    @Column(name = "health_status", length = 50)
-    private String healthStatus;
+        // 상태 추적 필드
+        @Column(name = "health_status", length = 50)
+        private String healthStatus;
 
-    @Column(name = "emotional_state", length = 50)
-    private String emotionalState;
+        @Column(name = "emotional_state", length = 50)
+        private String emotionalState;
 
-    @Column(name = "current_location", length = 255)
-    private String currentLocation;
+        @Column(name = "current_location", length = 255)
+        private String currentLocation;
 
-    // 변화 기록 (JSONB)
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "state_changes", columnDefinition = "jsonb")
-    @Builder.Default
-    private Map<String, String> stateChanges = new HashMap<>();
+        // 변화 기록 (JSONB)
+        @JdbcTypeCode(SqlTypes.JSON)
+        @Column(name = "state_changes")
+        @Builder.Default
+        private Map<String, String> stateChanges = new HashMap<>();
 
-    @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private Timestamp createdAt;
+        @CreationTimestamp
+        @Column(name = "created_at", nullable = false, updatable = false)
+        private Timestamp createdAt;
 }
